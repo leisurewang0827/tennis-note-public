@@ -3,7 +3,32 @@
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace = {}) {
+// 비동기 호출의 계정 범위를 고정한다. 다음 계정으로 이전 응답을 재해석하지 않는다.
+function captureCoachAsyncOwner(continuation = null) {
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const profileId = state.liveProfileId;
+  const authUserId = state.coach?.authUserId;
+  const coachRoleId = state.coach?.coachRoleId;
+  const branchId = state.coach?.branchId;
+  const role = state.coach?.role;
+  const requestId = coachSettlementHistory.coachSettlementReconciliationRequestId;
+  const isCurrent = () => {
+    try {
+      return Boolean(token && profileId && authUserId && coachRoleId && branchId)
+        && window.TennisNoteDataClient === client
+        && token === client.getSession?.()?.access_token
+        && profileId === state.liveProfileId && authUserId === state.coach?.authUserId
+        && coachRoleId === state.coach?.coachRoleId && branchId === state.coach?.branchId
+        && role === state.coach?.role
+        && requestId === coachSettlementHistory.coachSettlementReconciliationRequestId
+        && (continuation === null || (typeof continuation === "function" && continuation() === true));
+    } catch { return false; }
+  };
+  return Object.freeze({ client, token, profileId, authUserId, coachRoleId, branchId, isCurrent });
+}
+
+async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace = {}, isCurrent = () => true) {
   const lessonIds = [...new Set((workspace.lessons || []).map((lesson) => String(lesson.id || "")).filter(Boolean))];
   if (!lessonIds.length || !client?.selectRows) return workspace;
   try {
@@ -14,6 +39,7 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
       filters: { lesson_id: { in: ids } },
       limit: Math.max(100, ids.length * 4),
     })))).flat();
+    if (!isCurrent()) return workspace;
     const recordsByLessonAndUser = new Map(rows.map((record) => [
       `${record.lesson_id}:${record.user_id}`,
       record,
@@ -45,15 +71,18 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
 }
 
 async function syncCoachScheduleV2(options = {}) {
-  const client = window.TennisNoteDataClient;
+  const owner = captureCoachAsyncOwner(options.isCurrent || null);
+  const client = owner.client;
   const requestId = ++coachScheduleV2RequestSequence;
-  const branchId = state.coach?.branchId || "";
-  if (!client?.rpc || !client.getSession?.()?.access_token || !branchId) return false;
+  const branchId = owner.branchId || "";
+  const isCurrent = () => owner.isCurrent() && requestId === coachScheduleV2RequestSequence;
+  if (!client?.rpc || !isCurrent()) return false;
   const week = activeScheduleWeek();
   const syncRange = coachScheduleV2SyncRange(week);
   const cacheKey = `${branchId}:${syncRange.startDate}:${syncRange.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
+    if (!isCurrent()) return false;
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
   }
   try {
@@ -84,10 +113,10 @@ async function syncCoachScheduleV2(options = {}) {
         limit: 300,
       }).catch(() => [])),
     ]);
-    if (requestId !== coachScheduleV2RequestSequence) return false;
+    if (!isCurrent()) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
-    await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
-    if (requestId !== coachScheduleV2RequestSequence) return false;
+    await hydrateCoachWorkspaceParticipantProcessingState(client, workspace, isCurrent);
+    if (!isCurrent()) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,
@@ -104,6 +133,7 @@ async function syncCoachScheduleV2(options = {}) {
       coachScheduleV2WorkspaceCache.legacyChangeRequests,
     );
   } catch (error) {
+    if (!isCurrent()) return false;
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_schedule_v2_coach_workspace|PGRST202|42883|schema cache/i.test(text)) {
       console.warn("Tennis Note Schedule V2 coach feed failed; using the compatible feed.", error);
@@ -169,14 +199,17 @@ async function syncLegacyCoachSchedulePreview() {
   return true;
 }
 
-async function syncCoachLessonsFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc) return false;
+async function syncCoachLessonsFromServer(continuation = null) {
+  const owner = captureCoachAsyncOwner(continuation);
+  const client = owner.client;
+  if (!client?.rpc || !owner.isCurrent()) return false;
   const activeSession = client.ensureSession
     ? await client.ensureSession().catch(() => client.getSession?.())
     : client.getSession?.();
-  if (!activeSession?.access_token || !state.coach?.branchId) return false;
-  if (await syncCoachScheduleV2({ force: true })) return true;
+  if (!activeSession?.access_token || !owner.isCurrent()) return false;
+  const ready = await syncCoachScheduleV2({ force: true, isCurrent: owner.isCurrent });
+  if (!owner.isCurrent()) return false;
+  if (ready) return true;
   // Keep the last confirmed schedule and member cache during a transient read
   // failure. The visible error and retry action explain that it may be stale.
   state.liveLessonsLoaded = true;
@@ -609,9 +642,10 @@ async function syncLegacyCoachLessonsFromServer() {
   }
 }
 
-async function syncCoachJournalEntriesFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
+async function syncCoachJournalEntriesFromServer(continuation = null) {
+  const owner = captureCoachAsyncOwner(continuation);
+  const client = owner.client;
+  if (!client?.selectRows || !owner.isCurrent()) return false;
   try {
     const [journalRows, recordRows, userRows, mediaRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
@@ -631,6 +665,7 @@ async function syncCoachJournalEntriesFromServer() {
         limit: 300,
       }).catch(() => []),
     ]);
+    if (!owner.isCurrent()) return false;
     const recordsByLesson = new Map((recordRows || []).map((record) => [record.lesson_id, record]));
     const namesByUser = new Map((userRows || []).map((user) => [user.id, user.name]));
     for (const row of (journalRows || []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))) {
@@ -643,6 +678,7 @@ async function syncCoachJournalEntriesFromServer() {
       const mediaItems = (await Promise.all(mediaForJournal.map((media, index) => (
         downloadCoachJournalMedia(client, media, payload.mediaNames?.[index] || `첨부 ${index + 1}`).catch(() => null)
       )))).filter(Boolean);
+      if (!owner.isCurrent()) return false;
       const serverLog = {
         id: payload.clientLogId || `server-journal-${row.id}`,
         serverJournalId: row.id,
@@ -701,14 +737,15 @@ async function liveCurriculumRefId(step = {}) {
 
 let coachSettlementRequestSequence = 0;
 async function syncCoachSettlementFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!state.coach?.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+  const owner = captureCoachAsyncOwner();
+  const client = owner.client;
+  if (!client?.rpc || !owner.isCurrent()) return false;
   const requestSequence = ++coachSettlementRequestSequence;
   state.coachSettlementLoading = true;
   state.coachSettlementError = "";
   renderCoachSettlement();
   const scope = coachSettlementReconciliationScope();
-  const stillCurrent = () => requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)
+  const stillCurrent = () => owner.isCurrent() && requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)
     === coachSettlementReconciliationScopeSignature();
   try {
     const result = await client.rpc("tn_coach_settlement_scope_v2", {
@@ -789,17 +826,41 @@ async function refreshCoachLiveSchedule(options = {}) {
     coachLiveScheduleRefreshInFlight = false;
   }
 }
+
 // Never persisted: historical ledger state is authoritative only for this live session/scope.
 const coachSettlementHistory = {
+  continuationIsCurrent: null,
   coachSettlementReconciliationRequestId: 0,
   coachSettlementReconciliation: null,
   coachSettlementReconciliationUiState: "EMPTY",
   coachSettlementReconciliationLoading: false,
   coachSettlementReconciliationMessage: "",
+  coachSettlementReconciliationSubmitting: false,
+  coachSettlementReconciliationChoice: "",
+  coachSettlementReconciliationReason: "",
+  coachSettlementReconciliationValidation: "",
+  coachSettlementReconciliationOperation: null,
 };
 let coachSettlementHistoryPending = null;
 
-function resetCoachSettlementHistory() {
+function resetCoachSettlementHistory(force = false) {
+  // A closed-modal renderer can revisit an already-cleared history. It is not
+  // a new auth/owner transition and must not cancel independent live reads.
+  // Active/pending history and explicit auth transitions still invalidate it.
+  const alreadyEmpty = !coachSettlementHistoryPending
+    && !coachSettlementHistory.continuationIsCurrent
+    && coachSettlementHistory.coachSettlementReconciliation === null
+    && coachSettlementHistory.coachSettlementReconciliationUiState === "EMPTY"
+    && !coachSettlementHistory.coachSettlementReconciliationLoading
+    && !coachSettlementHistory.coachSettlementReconciliationSubmitting
+    && !coachSettlementHistory.coachSettlementReconciliationChoice
+    && !coachSettlementHistory.coachSettlementReconciliationReason
+    && !coachSettlementHistory.coachSettlementReconciliationValidation
+    && !coachSettlementHistory.coachSettlementReconciliationOperation
+    && !coachSettlementHistory.coachSettlementReconciliationMessage;
+  if (!force && alreadyEmpty) return;
+  Object.assign(coachSettlementHistory, { coachSettlementReconciliationSubmitting: false, coachSettlementReconciliationChoice: "", coachSettlementReconciliationReason: "", coachSettlementReconciliationValidation: "", coachSettlementReconciliationOperation: null });
+  coachSettlementHistory.continuationIsCurrent = null;
   coachSettlementHistory.coachSettlementReconciliationRequestId += 1;
   coachSettlementHistory.coachSettlementReconciliation = null;
   coachSettlementHistory.coachSettlementReconciliationUiState = "EMPTY";
@@ -817,26 +878,27 @@ async function readCoachSettlementHistory(scope = coachSettlementReconciliationS
 }
 
 async function syncCoachSettlementHistoryFromServer() {
+  if (coachSettlementHistory.coachSettlementReconciliationSubmitting) return false;
   const client = window.TennisNoteDataClient;
   const scope = coachSettlementReconciliationScope();
   const profileId = String(state.liveProfileId || "");
   const session = client?.getSession?.()?.access_token;
   const signature = coachSettlementReconciliationScopeSignature(scope);
-  // Token stays in memory and is never logged, serialized or attached to a receipt.
-  const isCurrent = () => profileId === String(state.liveProfileId || "")
-    && signature === coachSettlementReconciliationScopeSignature()
-    && session === client?.getSession?.()?.access_token;
-  if (!profileId || !scope.branchId || !scope.coachRoleId || !client?.rpc || !session) {
+  // Canonical live/profile/auth/role/client/token/scope fence; memory only.
+  const continuationIsCurrent = coachSettlementReconciliationContinuation(scope);
+  const isCurrent = () => Boolean(continuationIsCurrent?.());
+  if (!continuationIsCurrent || $("#coachSettlementModal")?.hidden !== false) {
     resetCoachSettlementHistory();
     coachSettlementHistory.coachSettlementReconciliationUiState = "ERROR";
     coachSettlementHistory.coachSettlementReconciliationMessage = "현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.";
     renderCoachSettlementHistory();
     return false;
   }
-  if (coachSettlementHistoryPending?.signature === signature
+  if (coachSettlementHistoryPending?.continuationIsCurrent?.() && coachSettlementHistoryPending?.signature === signature
     && coachSettlementHistoryPending.profileId === profileId
     && coachSettlementHistoryPending.session === session) return coachSettlementHistoryPending.promise;
   const requestId = ++coachSettlementHistory.coachSettlementReconciliationRequestId;
+  coachSettlementHistory.continuationIsCurrent = continuationIsCurrent;
   coachSettlementHistory.coachSettlementReconciliation = null;
   coachSettlementHistory.coachSettlementReconciliationLoading = true;
   coachSettlementHistory.coachSettlementReconciliationUiState = "LOADING";
@@ -869,6 +931,143 @@ async function syncCoachSettlementHistoryFromServer() {
       }
     }
   })();
-  coachSettlementHistoryPending = { signature, profileId, session, promise };
+  coachSettlementHistoryPending = { signature, profileId, session, continuationIsCurrent, promise };
   return promise;
+}
+
+function finishCoachSettlementReconciliation(readback, recoveredAfterResponseLoss = false) {
+  coachSettlementHistory.coachSettlementReconciliation = readback;
+  coachSettlementHistory.coachSettlementReconciliationUiState = String(readback.state || "").toUpperCase();
+  coachSettlementHistory.coachSettlementReconciliationMessage = recoveredAfterResponseLoss
+    ? "응답이 끊겼지만 서버 기록을 다시 읽어 완료 상태를 확인했습니다."
+    : coachSettlementHistory.coachSettlementReconciliationUiState === "DISPUTED"
+      ? "이의 사유를 관리자에게 전달했습니다."
+      : "관리자 확정 정산을 확인했다고 응답했습니다.";
+  coachSettlementHistory.coachSettlementReconciliationValidation = "";
+  coachSettlementHistory.coachSettlementReconciliationChoice = "";
+  coachSettlementHistory.coachSettlementReconciliationReason = "";
+  coachSettlementHistory.coachSettlementReconciliationOperation = null;
+}
+
+async function submitCoachSettlementReconciliation() {
+  if (coachSettlementHistory.coachSettlementReconciliationSubmitting || coachSettlementHistory.coachSettlementReconciliationLoading) return false;
+  const scope = coachSettlementReconciliationScope();
+  const continuationIsCurrent = coachSettlementReconciliationContinuation(scope);
+  if (!continuationIsCurrent) {
+    resetCoachSettlementHistory();
+    coachSettlementHistory.coachSettlementReconciliationUiState = "ERROR";
+    coachSettlementHistory.coachSettlementReconciliationMessage = "현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.";
+    renderCoachSettlementHistory();
+    return false;
+  }
+  const payload = coachSettlementHistory.coachSettlementReconciliation;
+  const targetStatus = String(coachSettlementHistory.coachSettlementReconciliationChoice || "");
+  const targetReason = targetStatus === "disputed"
+    ? normalizeCoachSettlementReconciliationReason(coachSettlementHistory.coachSettlementReconciliationReason)
+    : "";
+  if (
+    coachSettlementHistory.coachSettlementReconciliationUiState !== "PENDING"
+    || !coachSettlementReconciliationPayloadIsExact(payload, scope)
+    || payload.reconciliation
+  ) return false;
+  if (!["acknowledged", "disputed"].includes(targetStatus)) {
+    coachSettlementHistory.coachSettlementReconciliationValidation = "확인 또는 이의 중 하나를 선택해 주세요.";
+    renderCoachSettlementHistory();
+    return false;
+  }
+  const reasonError = targetStatus === "disputed" ? coachSettlementReconciliationReasonError(targetReason) : "";
+  if (reasonError) {
+    coachSettlementHistory.coachSettlementReconciliationValidation = reasonError;
+    renderCoachSettlementHistory();
+    $("#coachSettlementReconciliationReason")?.focus();
+    return false;
+  }
+  const expected = {
+    confirmationId: payload.confirmation.confirmationId,
+    snapshotId: payload.snapshot.snapshotId,
+    revision: Number(payload.snapshot.revision),
+    sourceFingerprint: payload.snapshot.sourceFingerprint,
+  };
+  const operationKey = coachSettlementReconciliationOperationKey(expected, targetStatus, targetReason);
+  const submitRequestId = ++coachSettlementHistory.coachSettlementReconciliationRequestId;
+  const submitIsCurrent = () => submitRequestId === coachSettlementHistory.coachSettlementReconciliationRequestId
+    && continuationIsCurrent();
+  coachSettlementHistory.coachSettlementReconciliationSubmitting = true;
+  coachSettlementHistory.coachSettlementReconciliationMessage = "확정 계산본과 담당 범위를 서버에서 다시 확인하고 있습니다.";
+  coachSettlementHistory.coachSettlementReconciliationValidation = "";
+  renderCoachSettlementHistory();
+  try {
+    const rawResponse = await window.TennisNoteDataClient.rpc("tn_coach_respond_monthly_settlement_confirmation", {
+      target_confirmation_id: expected.confirmationId,
+      target_snapshot_id: expected.snapshotId,
+      target_branch_id: scope.branchId,
+      target_coach_role_id: scope.coachRoleId,
+      target_month: scope.settlementMonth,
+      expected_snapshot_revision: expected.revision,
+      expected_source_fingerprint: expected.sourceFingerprint,
+      target_status: targetStatus,
+      target_reason: targetReason || null,
+      target_operation_key: operationKey,
+    });
+    const response = Array.isArray(rawResponse) ? rawResponse[0] || null : rawResponse;
+    if (!submitIsCurrent()) return false;
+    if (!coachSettlementReconciliationResponseMatches(response, expected, targetStatus, targetReason, scope)) {
+      throw new Error("settlement_reconciliation_response_mismatch");
+    }
+    const rawReadback = await readCoachSettlementHistory(scope);
+    const readback = Array.isArray(rawReadback) ? rawReadback[0] || null : rawReadback;
+    if (!submitIsCurrent()) return false;
+    if (!coachSettlementReconciliationResponseMatches(readback, expected, targetStatus, targetReason, scope)) {
+      throw new Error("settlement_reconciliation_readback_mismatch");
+    }
+    finishCoachSettlementReconciliation(readback, false);
+    return true;
+  } catch (error) {
+    if (!submitIsCurrent()) return false;
+    let recovered = null;
+    try {
+      const rawRecovered = await readCoachSettlementHistory(scope);
+      recovered = Array.isArray(rawRecovered) ? rawRecovered[0] || null : rawRecovered;
+    } catch (_) {
+      recovered = null;
+    }
+    if (!submitIsCurrent()) return false;
+    if (coachSettlementReconciliationResponseMatches(recovered, expected, targetStatus, targetReason, scope)) {
+      finishCoachSettlementReconciliation(recovered, true);
+      return true;
+    }
+    if (
+      recovered
+      && coachSettlementReconciliationPayloadIsExact(recovered, scope)
+      && ["ACKNOWLEDGED", "DISPUTED"].includes(String(recovered.state || "").toUpperCase())
+    ) {
+      coachSettlementHistory.coachSettlementReconciliation = recovered;
+      coachSettlementHistory.coachSettlementReconciliationUiState = "CONFLICT";
+      coachSettlementHistory.coachSettlementReconciliationMessage = "다른 화면에서 이미 응답했습니다. 서버에 저장된 상태를 다시 확인해 주세요.";
+      coachSettlementHistory.coachSettlementReconciliationValidation = "";
+      coachSettlementHistory.coachSettlementReconciliationChoice = "";
+      coachSettlementHistory.coachSettlementReconciliationReason = "";
+      coachSettlementHistory.coachSettlementReconciliationOperation = null;
+      return false;
+    }
+    if (recovered && coachSettlementReconciliationPayloadIsExact(recovered, scope)) {
+      coachSettlementHistory.coachSettlementReconciliation = recovered;
+    }
+    const contract = coachSettlementReconciliationErrorContract(error);
+    coachSettlementHistory.coachSettlementReconciliationUiState = contract.state;
+    coachSettlementHistory.coachSettlementReconciliationMessage = contract.message;
+    coachSettlementHistory.coachSettlementReconciliationValidation = contract.validation;
+    return false;
+  } finally {
+    if (submitRequestId === coachSettlementHistory.coachSettlementReconciliationRequestId) {
+      if (!continuationIsCurrent()) resetCoachSettlementHistory();
+      coachSettlementHistory.coachSettlementReconciliationSubmitting = false;
+      renderCoachSettlementHistory();
+      // Response drafts and operation keys remain in memory only.
+    }
+  }
+}
+function coachManualSettlementLedgerRpc(name, payload) {
+  if (!coachManualSettlementLedgerReady() || name !== "tn_coach_monthly_settlement_payment_state") throw Error("ledger_scope_identity_denied");
+  return window.TennisNoteDataClient.rpc(name, payload);
 }

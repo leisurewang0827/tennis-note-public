@@ -156,6 +156,50 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!profileEditor && (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear())) throw new Error("birth_year_invalid");
   if (!profileEditor && !["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
   const client = window.TennisNoteDataClient;
+  // 토큰 자체는 기록하지 않는다. 회전 허용은 같은 Auth 세션/세대 증명이 있을 때만.
+  const signupSessionIdentity = (session) => {
+    try {
+      const encoded = String(session?.access_token || "").split(".")[1];
+      if (!encoded) return null;
+      const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const claims = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
+      return claims.sub && claims.session_id ? { authId: String(claims.sub), sessionId: String(claims.session_id) } : null;
+    } catch { return null; }
+  };
+  const signupSessionGeneration = () => typeof curriculumSessionAttempt === "number" ? curriculumSessionAttempt : null;
+  const signupOwner = !profileEditor && hasLiveMemberSession() ? {
+    authId: String(state.member?.authUserId || ""),
+    profileId: String(state.member?.profileId || ""),
+    sessionToken: client?.getSession?.()?.access_token || "",
+    sessionIdentity: signupSessionIdentity(client?.getSession?.()),
+    sessionGeneration: signupSessionGeneration(),
+  } : null;
+  const signupContextCurrent = (profileIds = [signupOwner?.profileId], acceptRefresh = false,
+    expectedGeneration = signupOwner?.sessionGeneration) => {
+    if (!signupOwner || window.TennisNoteDataClient !== client || !hasLiveMemberSession()
+      || signupOwner.authId !== String(state.member?.authUserId || "")
+      || !profileIds.includes(String(state.member?.profileId || ""))
+      || state.member?.role !== "member" || state.member?.status !== "active"
+      || signupSessionGeneration() !== expectedGeneration) return false;
+    const session = client.getSession?.();
+    if (!session?.access_token) return false;
+    if (session.access_token === signupOwner.sessionToken) return true;
+    const current = signupSessionIdentity(session);
+    if (!acceptRefresh || expectedGeneration === null || !signupOwner.sessionIdentity || !current
+      || current.authId !== signupOwner.authId || current.authId !== signupOwner.sessionIdentity.authId
+      || current.sessionId !== signupOwner.sessionIdentity.sessionId) return false;
+    // 동일한 세션의 정상 refresh만 다음 retry의 정확 token fence로 승계한다.
+    signupOwner.sessionToken = session.access_token;
+    return true;
+  };
+  if (!profileEditor) {
+    if (signupOwner && (!signupOwner.authId || !signupOwner.profileId || !client?.rpc)) throw new Error("login_required");
+    if (signupOwner && (state.member?.role !== "member" || state.member?.status !== "active")) throw new Error("signup_profile_required");
+    // Legacy production also requires verified contact before an offline preview.
+    await requireVerifiedIdentityPhone(normalizedPhone);
+    if (signupOwner && !signupContextCurrent()) throw new Error("signup_identity_context_changed");
+    if (!signupOwner && hasLiveMemberSession()) throw new Error("signup_identity_context_changed");
+  }
   if (profileEditor && (!hasLiveMemberSession() || !client?.rpc)) throw new Error("login_required");
   if (hasLiveMemberSession() && client?.rpc) {
     if (profileEditor) {
@@ -188,7 +232,6 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       else setIdentityPhoneStatus("저장된 번호를 그대로 유지했습니다. 새 번호로 바꾸려면 인증해 주세요.", "", "profile");
       return result;
     }
-    await requireVerifiedIdentityPhone(normalizedPhone);
     const targetProfile = {
       name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,
       birthYear: normalizedBirthYear, neighborhood: normalizedNeighborhood,
@@ -196,24 +239,48 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
     };
     // Memory-only draft/key: a lost response retries the same operation. Raw
     // contact is never written to console, URL, analytics or a new storage key.
-    const fingerprint = JSON.stringify(targetProfile);
+    // A successful server link may update the visible profile before a later
+    // readback fails. Only that exact acknowledged transition retains its key.
+    const operationProfileId = signupProfileOperation.authId === signupOwner.authId
+      && signupProfileOperation.linkedProfileId === signupOwner.profileId
+      ? signupProfileOperation.sourceProfileId : signupOwner.profileId;
+    const fingerprint = JSON.stringify([signupOwner.authId, operationProfileId, targetProfile]);
     if (signupProfileOperation.fingerprint !== fingerprint) {
-      signupProfileOperation = { fingerprint, key: crypto.randomUUID() };
+      signupProfileOperation = { fingerprint, key: crypto.randomUUID(), authId: signupOwner.authId,
+        sourceProfileId: signupOwner.profileId, linkedProfileId: "" };
     }
-    const signupAuthUserId = String(state.member?.authUserId || "");
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_signup_profile", {
-      target_profile: targetProfile,
-      target_operation_key: signupProfileOperation.key,
-    }));
+    const signupOperation = signupProfileOperation;
+    const signupOperationKey = signupOperation.key;
+    const rawResult = await retryTransientNetwork(async () => {
+      if (signupProfileOperation !== signupOperation || !signupContextCurrent()) throw new Error("signup_identity_context_changed");
+      try {
+        return await client.rpc("tn_save_my_signup_profile", {
+          target_profile: targetProfile,
+          target_operation_key: signupOperationKey,
+        });
+      } catch (error) {
+        if (signupProfileOperation !== signupOperation || !signupContextCurrent(undefined, true)) throw new Error("signup_identity_context_changed");
+        throw error;
+      }
+    });
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
+    if (!["linked", "approval_pending"].includes(result.linkStatus)
+      || !result.profile.id || (result.linkStatus === "approval_pending" && result.profile.id !== signupOwner.profileId)) {
+      throw new Error("signup_link_readback_unconfirmed");
+    }
+    const allowedProfiles = result.linkStatus === "linked" ? [signupOwner.profileId, String(result.profile.id)] : [signupOwner.profileId];
+    if (signupProfileOperation !== signupOperation || !signupContextCurrent(allowedProfiles, true)) throw new Error("signup_identity_context_changed");
     if (result.linkStatus === "linked") {
+      signupOperation.linkedProfileId = result.profile.id;
+      const readbackGeneration = signupOwner.sessionGeneration === null ? null : signupOwner.sessionGeneration + 1;
       const restored = await applySupabaseMemberSession(false, {
         expectedProfileId: result.profile.id,
-        expectedAuthUserId: signupAuthUserId,
+        expectedAuthUserId: signupOwner.authId,
         requireSignupReadback: true,
       });
-      if (!restored) throw new Error("signup_link_readback_unconfirmed");
+      if (!restored || signupProfileOperation !== signupOperation
+        || !signupContextCurrent([String(result.profile.id)], true, readbackGeneration)) throw new Error("signup_link_readback_unconfirmed");
     } else applySavedIdentity(result.profile);
     return result;
   }

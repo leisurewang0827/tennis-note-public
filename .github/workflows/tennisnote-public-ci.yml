@@ -13,6 +13,8 @@ on:
       - "scripts/check_tennisnote_dev_prod_alignment.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
+      - "docs/tennisnote-dev-prod-alignment-20260916.json"
       - "scripts/check_tennisnote_renewal_hold_browser.cjs"
       - "scripts/check_tennisnote_renewal_hold_member.cjs"
       - "scripts/check_tennisnote_r3_effective_browser.cjs"
@@ -33,6 +35,8 @@ on:
       - "scripts/check_tennisnote_dev_prod_alignment.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
+      - "docs/tennisnote-dev-prod-alignment-20260916.json"
       - "scripts/check_tennisnote_renewal_hold_browser.cjs"
       - "scripts/check_tennisnote_renewal_hold_member.cjs"
       - "scripts/check_tennisnote_r3_effective_browser.cjs"
@@ -79,4 +83,18 @@ jobs:
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify
         timeout-minutes: 4
-        run: ./scripts/verify.sh
+        run: ./scripts/verify.sh --phase unit
+      - name: Verify general browser
+        timeout-minutes: 4
+        run: |
+          ./scripts/verify.sh --phase general-browser
+      - name: Verify profile
+        timeout-minutes: 4
+        id: profile
+        run: |
+          ./scripts/verify.sh --phase profile
+      - name: Verify build
+        timeout-minutes: 4
+        if: ${{ success() && steps.profile.outcome == 'success' }}
+        run: |
+          ./scripts/verify.sh --phase build

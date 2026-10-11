@@ -517,11 +517,6 @@ async function initCoachApp() {
   if (oauthReturnPending) document.body.classList.add("coach-session-restoring");
   if (hasStoredSession && state.coach) openCoachApp(false);
   hideCoachBrandSplash();
-  void (async () => {
-    await syncLiveSchedulePolicy(state.coach?.branchId || "");
-    renderAll();
-  })().catch(() => {});
-
   const coachAccessResult = await Promise.race([
     applySupabaseCoachSession(false),
     new Promise((resolve) => window.setTimeout(() => resolve("timeout"), 8_000)),
@@ -560,7 +555,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.546",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.548",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

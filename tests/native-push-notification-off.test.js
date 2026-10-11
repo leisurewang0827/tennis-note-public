@@ -34,7 +34,10 @@ function nativeContext(kind, readiness) {
     },
     state: kind === "member"
       ? { member: { profileId: "member-fixture" }, accountDeletionRequest: null }
-      : { liveProfileId: "coach-fixture" },
+      : { liveProfileId: "coach-fixture", coach: {authUserId:"synthetic-auth",role:"coach",coachRoleId:"synthetic-role",branchId:"synthetic-branch"} },
+    coachSettlementHistory: {coachSettlementReconciliationRequestId:0},
+    coachPushProfileId: "",
+    currentCoachPushDeviceId: () => "synthetic-device",
     nativeAppPlatform: () => "android",
     nativeCoachAppPlatform: () => "android",
     nativePushPlugin: () => plugin,
@@ -49,6 +52,16 @@ function nativeContext(kind, readiness) {
     scheduleNativeCoachPushPrimer: () => undefined,
   };
   vm.createContext(context);
+  if (kind === "coach") {
+    // Actual HTML loads sync before push: use its real owner guard, not an always-current stub.
+    const sync = readFileSync(join(root, "app/tennis-note-coach-app/data/sync.js"), "utf8");
+    const owner = sync.match(/^function captureCoachAsyncOwner\([\s\S]*?^}/m);
+    assert(owner, "actual owner guard missing");
+    const push = readFileSync(join(root, "app/tennis-note-coach-app/data/push.js"), "utf8");
+    const declarations = push.slice(push.indexOf("let coachPushRegistrationSequence"), push.indexOf("async function registerCoachPushToken"));
+    assert.match(declarations, /let coachPushRegistrationSequence = 0;/);
+    vm.runInContext(owner[0] + "\n" + declarations, context);
+  }
   const relativePath = kind === "member"
     ? "app/tennis-note-member-app/data/push.js"
     : "app/tennis-note-coach-app/data/push.js";
@@ -56,6 +69,22 @@ function nativeContext(kind, readiness) {
   vm.runInContext(functionSource(relativePath, name), context);
   return { context, states, calls, name };
 }
+
+test("coach: incomplete owner is denied before readiness or registration", async () => {
+  for (const field of ["profile", "auth", "roleId", "branch", "token", "client"]) {
+    const fixture = nativeContext("coach", {ready:true});let readinessCalls=0;
+    fixture.context.window.TennisNoteNativePushReadiness=async()=>{readinessCalls++;return {ready:true};};
+    if(field==="profile")fixture.context.state.liveProfileId="";
+    if(field==="auth")fixture.context.state.coach.authUserId="";
+    if(field==="roleId")fixture.context.state.coach.coachRoleId="";
+    if(field==="branch")fixture.context.state.coach.branchId="";
+    if(field==="token")fixture.context.window.TennisNoteDataClient.getSession=()=>null;
+    if(field==="client")fixture.context.window.TennisNoteDataClient=null;
+    assert.equal(await fixture.context[fixture.name]({id:"coach-fixture"}),false,field);
+    assert.equal(readinessCalls,0,field);assert.equal(fixture.states.length,0,field);
+    assert.deepEqual(fixture.calls,{bind:0,channel:0,permission:0,register:0,rpc:0});
+  }
+});
 
 for (const kind of ["member", "coach"]) {
   test(`${kind}: Android 12 이하에서 OS 알림 OFF를 구성 오류보다 먼저 안내한다`, async () => {

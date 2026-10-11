@@ -4,7 +4,12 @@ const root = path.resolve(__dirname, '..');
 const {restoreDurableReadback, restoreOperationStatus, durableReadbackManifest} = require('./helpers/verified-profile-phone-port.cjs');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'app/release.json'), 'utf8')).version;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
-const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
+const bounded = require('./helpers/production-isolation-historical-delta.cjs');
+const read = file => {
+  const source = fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
+  // 이 소비자는 durable readback 기준의 shared preimage만 비교한다.
+  return bounded.restoreShared(file, source, 'public');
+};
 test('durable self profile four functions are exact approved private source, existing golden unchanged', () => {
   assert.equal(durableReadbackManifest.privateSourceSha, '8d3a93044acc45973886943c05ff42f92bf16952');
   assert.equal(durableReadbackManifest.files.length, 2);

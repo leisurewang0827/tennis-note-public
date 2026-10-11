@@ -24,7 +24,7 @@ test("정산·첨부·표시명은 최신 private 권위 함수 9개와 공용 �
   assert.equal(manifest.privateMainSha, "f408dae5c6918139c4d95067808b221439eb14da");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
-    assert.equal(hash(extract(historyPort.restore(item.publicModule, read(item.publicModule)), item.function)), item.sha256, item.function);
+    assert.equal(hash(extract(historyPort.restore(item.publicModule, createRequire(import.meta.url)("./helpers/legacy-integrated-source.cjs").read(item.publicModule)), item.function)), item.sha256, item.function);
   }
   for (const item of manifest.sharedFiles) assert.equal(hash(read(item.publicModule)), item.sha256);
 });

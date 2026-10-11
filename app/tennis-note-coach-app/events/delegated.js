@@ -616,6 +616,7 @@ function bindDelegatedEvents() {
     }
     if (event.key === "Escape" && activeCoachModalId) {
       event.preventDefault();
+      if (activeCoachModalId === "coachSettlementModal") { resetCoachSettlementHistory(); renderCoachSettlementHistory(); }
       if (activeCoachModalId === "lessonEditModal") requestCloseLessonEditor();
       else closeCoachModal(activeCoachModalId);
       return;
@@ -647,6 +648,7 @@ function bindDelegatedEvents() {
   });
   window.addEventListener("popstate", (event) => {
     if (activeCoachModalId) {
+      if (activeCoachModalId === "coachSettlementModal") { resetCoachSettlementHistory(); renderCoachSettlementHistory(); }
       if (activeCoachModalId === "lessonEditModal") closeLessonEditor(true);
       else closeCoachModal(activeCoachModalId, true);
       restorePendingCoachModalReturnContext();
@@ -657,3 +659,20 @@ function bindDelegatedEvents() {
     restorePendingCoachModalReturnContext();
   });
 }
+
+// Bound once during module load, before the existing startup flow.
+$("#coachSettlementReconciliationForm")?.addEventListener("submit", (event) => { event.preventDefault(); void submitCoachSettlementReconciliation(); });
+$("#coachSettlementReconciliationForm")?.addEventListener("change", (event) => {
+  if (coachSettlementHistory.coachSettlementReconciliationSubmitting) return;
+  if (event.target.name === "coachSettlementReconciliationChoice") {
+    coachSettlementHistory.coachSettlementReconciliationChoice = event.target.value;
+    coachSettlementHistory.coachSettlementReconciliationValidation = "";
+    renderCoachSettlementHistory();
+  }
+});
+$("#coachSettlementReconciliationReason")?.addEventListener("input", (event) => {
+  if (coachSettlementHistory.coachSettlementReconciliationSubmitting) return;
+  coachSettlementHistory.coachSettlementReconciliationReason = event.target.value;
+  coachSettlementHistory.coachSettlementReconciliationValidation = "";
+  renderCoachSettlementHistory();
+});

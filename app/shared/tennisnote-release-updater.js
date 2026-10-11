@@ -58,6 +58,22 @@
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  function nativeStoreUrl(platform) {
+    return platform === "ios"
+      ? "https://apps.apple.com/app/id6790994818"
+      : "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote";
+  }
+
+  function updateDismissalKey(candidate, nativeDecision = activeNativeUpdate) {
+    if (isNativeWebView()) {
+      if (!nativeDecision?.policy?.storeAvailable || !nativeDecision?.platform) return "";
+      const policy = nativeDecision.policy;
+      // A web release cannot suppress or retrigger a different native release.
+      return `tennis-note-native-update-dismissed:${nativeDecision.platform}:${policy.latestVersion}:${policy.latestBuild || "unverified"}`;
+    }
+    return candidate?.releaseId ? `tennis-note-update-dismissed:${candidate.releaseId}` : "";
+  }
+
   function nativePlatformPolicy(candidate, platform) {
     const explicit = candidate?.nativePlatforms?.[platform] || {};
     const current = currentRelease().nativeShell || {};
@@ -73,9 +89,7 @@
       minimumBuild: normalizeBuild(explicit.minimumBuild),
       latestVersion: storeAvailable ? availableVersion : "0",
       latestBuild: storeAvailable ? normalizeBuild(explicit.availableBuild ?? explicit.latestBuild) : 0,
-      storeUrl: explicit.storeUrl || (platform === "ios"
-        ? "https://apps.apple.com/app/id6790994818"
-        : "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"),
+      storeUrl: nativeStoreUrl(platform),
     };
   }
 
@@ -166,8 +180,9 @@
       void applyUpdate(remoteRelease, { manual: true, remoteAppUrl: activeRemoteAppUrl });
     });
     notice.querySelector("[data-tennisnote-update-dismiss]")?.addEventListener("click", () => {
-      if (remoteRelease?.releaseId) {
-        sessionStorage.setItem(`tennis-note-update-dismissed:${remoteRelease.releaseId}`, "done");
+      const dismissalKey = updateDismissalKey(remoteRelease);
+      if (dismissalKey && activeNativeUpdate?.status !== "required") {
+        sessionStorage.setItem(dismissalKey, "done");
       }
       hideUpdateNotice();
     });
@@ -177,16 +192,16 @@
 
   function showUpdateNotice(candidate, options = {}) {
     if (candidate) remoteRelease = candidate;
-    const releaseId = remoteRelease?.releaseId;
-    if (!options.force && releaseId && sessionStorage.getItem(`tennis-note-update-dismissed:${releaseId}`) === "done") {
+    const nativeDecision = options.nativeDecision || activeNativeUpdate;
+    const nativeStoreUpdate = nativeDecision?.status === "required" || nativeDecision?.status === "optional";
+    const required = nativeDecision?.status === "required";
+    const dismissalKey = updateDismissalKey(remoteRelease, nativeDecision);
+    if (!required && !options.force && dismissalKey && sessionStorage.getItem(dismissalKey) === "done") {
       hideUpdateNotice();
       return;
     }
     const notice = ensureUpdateNotice();
     const deferred = options.deferred === true || hasUnsavedChanges();
-    const nativeDecision = options.nativeDecision || activeNativeUpdate;
-    const nativeStoreUpdate = nativeDecision?.status === "required" || nativeDecision?.status === "optional";
-    const required = nativeDecision?.status === "required";
     notice.dataset.updateKind = nativeStoreUpdate ? "native-store" : "web";
     notice.dataset.updateRequired = required ? "true" : "false";
     const title = notice.querySelector("strong");
@@ -555,6 +570,13 @@
       // A signed store app must learn about its replacement before login or
       // schedule restoration finishes, so the store gate starts immediately.
       update();
+      const appPlugin = window.Capacitor?.Plugins?.App;
+      if (appPlugin?.addListener) {
+        // Capacitor resume is distinct from browser focus/visibility events.
+        Promise.resolve(appPlugin.addListener("resume", () => {
+          void checkForUpdate(manifestUrl, { force: true, remoteAppUrl });
+        })).catch(() => undefined);
+      }
     } else if (document.readyState === "complete") {
       void boot();
     } else {

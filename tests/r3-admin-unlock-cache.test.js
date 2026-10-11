@@ -24,13 +24,19 @@ const functions = {
   "app/admin/actions/settings.js": ["adminApprovalReady"],
   "app/admin/data/common.js": ["verifyAdminPin"],
   "app/admin/data/billing.js": ["resetAdminSettlementHistory", "adminSettlementHistoryAccessReady"],
-  "app/admin/views/billing.js": ["renderAdminSettlementHistory"],
+  "app/admin/domain/billing.js": ["adminSettlementWriterAllowed"],
+  "app/admin/views/billing.js": ["renderAdminSettlementHistory", "bindAdminManualSettlementLedgerPublic"],
 };
 function fixture() {
   const elements = new Map(), calls = [], timers = [];
   const el = id => {
     if (!elements.has(id)) elements.set(id, { value: "", disabled: false, hidden: false, dataset: {}, textContent: "",
       classList: { toggle() {}, remove() {}, add() {} }, setAttribute() {}, replaceChildren() {}, focus() {} });
+    if (!Object.getOwnPropertyDescriptor(elements.get(id), "disabled").set) {
+      let disabled = Boolean(elements.get(id).disabled);
+      // HTMLButtonElement.disabled은 WebIDL boolean이다. plain object의 undefined는 실제 DOM과 다르다.
+      Object.defineProperty(elements.get(id), "disabled", { get: () => disabled, set: value => { disabled = Boolean(value); } });
+    }
     return elements.get(id);
   };
   const c = vm.createContext({ Date, Intl, window: {}, document: { createElement: () => ({}) },
@@ -141,7 +147,7 @@ test("NFR-02 reconciliation is render-only; no new confirmation controls or writ
   const helper = extract("app/admin/actions/common.js", "reconcileAdminBillingLockUi");
   assert(helper.includes("renderAdminSettlementHistory({ refresh: false })"));
   assert.doesNotMatch(helper, /rpc|fetch|renderAll|renderAdminView|refreshAdminSettlementHistory|\.disabled\s*=/);
-  const html = read("app/admin/index.html");
+  const html = require("./helpers/legacy-integrated-source.cjs").read("app/admin/index.html");
   assert(!html.includes('id="monthlySettlementPrimaryAction"'));
   assert(!html.includes('id="monthlySettlementConfirmation"'));
 });

@@ -1,0 +1,10 @@
+{
+  "contract": "production-excel-release-by-construction/1",
+  "functionalCheckpoint": "f5dbdbdecc659b98cc0b9c0b629cee28f28ea713",
+  "base": "11e8928e369c9d9a4eedaa572102f75d1681602b",
+  "version": "1.0.536",
+  "releaseId": "2026.10.06.04",
+  "deployedAt": "2026-10-06T23:35:38+09:00",
+  "memberCache": "tennis-note-member-pwa-v563",
+  "coachCache": "tennis-note-coach-mode-v536"
+}

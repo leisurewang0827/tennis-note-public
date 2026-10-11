@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const { names, bootstrap, runCases, runRefreshEventCases } = require("./fixtures/member-home-cases.cjs");
 const { restorePhone } = require("./helpers/verified-profile-phone-port.cjs");
-const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
+const read = file => require("./helpers/legacy-integrated-source.cjs").read(file);
 const hash = text => crypto.createHash("sha256").update(text).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
 const version = JSON.parse(read("app/release.json")).version;

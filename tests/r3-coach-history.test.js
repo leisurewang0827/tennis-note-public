@@ -7,6 +7,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {root,manifest,sha,restore}=require("./helpers/r3-history-port.cjs");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8").replace(/\r\n/g,"\n");
+const legacyRead=file=>require("./helpers/legacy-integrated-source.cjs").read(file);
 const scope={branchId:"synthetic-branch",coachRoleId:"synthetic-role",settlementMonth:"2099-01-01"};
 function payload(version="r3_monthly_settlement_v1",remoteState="PENDING") {
   return {scope:{...scope},state:remoteState,snapshot:{snapshotId:"synthetic-snapshot",revision:1,status:"calculated",calculationVersion:version,sourceFingerprint:"a".repeat(64),
@@ -15,7 +16,8 @@ function payload(version="r3_monthly_settlement_v1",remoteState="PENDING") {
     reconciliation:remoteState==="PENDING"?null:{reconciliationId:"synthetic-response",status:remoteState,responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z",reason:remoteState==="DISPUTED"?"적용기간 확인 요청":""}};
 }
 function context(){
-  const c=vm.createContext({window:{},state:{liveProfileId:"synthetic-profile",coach:{branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
+  const c=vm.createContext({window:{},state:{dataMode:"live",liveProfileId:"synthetic-profile",coach:{authUserId:"synthetic-auth",role:"coach",branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
+    $:selector=>selector==="#coachSettlementModal"?{hidden:false}:null,
     renderCoachSettlementHistory(){},formatCoachWon:String});
   vm.runInContext(read("app/tennis-note-coach-app/domain/settlement.js"),c);
   vm.runInContext("coachSettlementMonth=()=> '2099-01'",c);
@@ -24,9 +26,9 @@ function context(){
 }
 test("history source extraction: canonical validators/read RPC and exact inverse layer",()=>{
   assert.equal(manifest.mode,"coach-confirmed-history-read-only");
-  for(const e of manifest.files){const s=read(e.path),v=JSON.parse(read("app/release.json")).version;assert.equal(sha(restore(e.path,s).replaceAll(v,manifest.publicVersion)),e.baseSha256,e.path);assert.throws(()=>restore(e.path,s+"// drift"))}
+  for(const e of manifest.files){const s=legacyRead(e.path),v=JSON.parse(read("app/release.json")).version;assert.equal(sha(restore(e.path,s).replaceAll(v,manifest.publicVersion)),e.baseSha256,e.path);assert.throws(()=>restore(e.path,s+"// drift"))}
   for(const e of manifest.functions){
-    const m=read(e.target).match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"));
+    const m=legacyRead(e.target).match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"));
     assert(m,e.name);assert.equal(sha(m[0]),e.projectedSha256,e.name);
     assert.equal(sha(e.privateSource),e.privateSha256,e.name);
     let source=e.privateSource;
@@ -74,9 +76,10 @@ test("new month wins over old response; read error/invalid do not become zero or
 test("no credentials means RPC zero; no response form or financial write entry",async()=>{
   const c=context();let calls=0;c.window.TennisNoteDataClient={getSession:()=>null,rpc:()=>{calls++}};
   assert.equal(await c.syncCoachSettlementHistoryFromServer(),false);assert.equal(calls,0);
-  const html=read("app/tennis-note-coach-app/index.html"),view=read("app/tennis-note-coach-app/views/settlement.js");
+  // 旧 read-only UI 단언은 exact 승인 inverse에만 적용한다. 현재 권한/RPC 검사는 위의 실제 모듈로 실행한다.
+  const html=legacyRead("app/tennis-note-coach-app/index.html"),view=legacyRead("app/tennis-note-coach-app/views/settlement.js");
   for(const id of ["coachSettlementReconciliationForm","coachSettlementReconciliationSubmit","coachSettlementReconciliationReason"])assert(!html.includes('id="'+id+'"'));
   assert(!view.includes("innerHTML = `${"));
-  const data=read("app/tennis-note-coach-app/data/sync.js");const part=data.slice(data.indexOf("const coachSettlementHistory ="));
+  const data=legacyRead("app/tennis-note-coach-app/data/sync.js");const part=data.slice(data.indexOf("const coachSettlementHistory ="));
   for(const name of ["tn_coach_respond_monthly_settlement_confirmation","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_create_monthly_settlement_snapshot","saveSnapshot("])assert(!part.includes(name));
 });

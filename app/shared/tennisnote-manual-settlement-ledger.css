@@ -1,0 +1,16 @@
+.tn-manual-ledger { color: #182230; background: #fff; border-top: 1px solid #d0d5dd; padding: 16px 0; min-width: 0; overflow-wrap: anywhere; }
+.tn-manual-ledger [hidden] { display: none !important; }
+.tn-manual-ledger p { margin: 8px 0; }
+.tn-ledger-help { color: #667085; font-size: 13px; line-height: 1.55; }
+.tn-ledger-amounts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 14px 0; }
+.tn-ledger-amounts dd { margin: 0; text-align: right; }
+.tn-manual-ledger form { display: grid; gap: 12px; margin: 12px 0; }
+.tn-manual-ledger label { display: grid; gap: 6px; min-width: 0; }
+.tn-manual-ledger input, .tn-manual-ledger select { width: 100%; max-width: 100%; box-sizing: border-box; min-height: 44px; font-size: 16px; color: #182230; background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; padding: 10px; }
+.tn-manual-ledger button { min-height: 44px; padding: 10px 14px; font-size: 16px; border-radius: 8px; max-width: 100%; cursor: pointer; }
+.tn-manual-ledger .primary-button { color: #fff; background: #157a5b; border: 1px solid #157a5b; }
+.tn-manual-ledger .ghost-button { color: #182230; background: #fff; border: 1px solid #d0d5dd; margin-top: 8px; }
+.tn-manual-ledger button:disabled { color: #667085; background: #eaecf0; border-color: #d0d5dd; cursor: default; }
+.tn-manual-ledger summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+#adminSettlementHistory button,
+#coachSettlementReconciliation button { min-height: 44px; }

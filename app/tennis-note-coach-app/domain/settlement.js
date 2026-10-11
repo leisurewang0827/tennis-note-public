@@ -239,14 +239,74 @@ function coachSettlementReconciliationTimeLabel(value = "") {
 }
 
 function coachSettlementReconciliationDefaultMessage(uiState) {
+  if (uiState === "PENDING") {
+    const payload = coachSettlementHistory.coachSettlementReconciliation;
+    const continuation = coachSettlementReconciliationContinuation();
+    const canRespond = String(payload?.state || "").toUpperCase() === "PENDING"
+      && coachSettlementReconciliationPayloadIsExact(payload)
+      && !payload.reconciliation
+      && Boolean(continuation?.())
+      && (!coachSettlementHistory.continuationIsCurrent || coachSettlementHistory.continuationIsCurrent());
+    return canRespond
+      ? "관리자가 확정한 계산본입니다. 내용을 확인하고 확인 또는 이의 응답을 남길 수 있습니다. 코치 응답은 정산 확정·지급 처리가 아닙니다."
+      : "현재는 조회 상태이며 응답할 수 없습니다. 로그인·담당 범위·최신 확정 내역을 다시 확인해 주세요. 정산 확정·지급은 코치 응답과 별개입니다.";
+  }
   return ({
     EMPTY: "선택한 월의 관리자 확정 내역이 없습니다. 예상 정산과는 별도입니다.",
     LOADING: "관리자가 확정한 월 정산을 확인하고 있습니다.",
-    PENDING: "관리자가 확정한 계산본입니다. 이 화면은 이력 조회만 제공하며 응답·확정·지급은 하지 않습니다.",
     ACKNOWLEDGED: "관리자 확정 정산을 확인했다고 응답했습니다.",
     DISPUTED: "이의 사유를 관리자에게 전달했습니다.",
     STALE: "관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.",
     CONFLICT: "다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.",
     ERROR: "확정 정산 상태를 불러오지 못했습니다. 다시 확인해 주세요.",
   })[uiState] || "관리자 확정 정산을 확인하고 있습니다.";
+}
+
+function coachSettlementReconciliationContinuation(scope = coachSettlementReconciliationScope()) {
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(state.liveProfileId || "");
+  const authUserId = String(state.coach?.authUserId || "");
+  const signature = coachSettlementReconciliationScopeSignature(scope);
+  if (!client?.rpc || !token || !profileId || !authUserId || state.dataMode !== "live"
+    || state.coach?.role !== "coach" || !scope.branchId || !scope.coachRoleId) return null;
+  return () => window.TennisNoteDataClient === client
+    && token === (client.getSession?.()?.access_token || "")
+    && profileId === String(state.liveProfileId || "")
+    && authUserId === String(state.coach?.authUserId || "")
+    && state.dataMode === "live" && state.coach?.role === "coach"
+    && signature === coachSettlementReconciliationScopeSignature();
+}
+
+function coachSettlementReconciliationResponseMatches(value, expected, targetStatus, targetReason, scope) {
+  if (!coachSettlementReconciliationPayloadIsExact(value, scope)) return false;
+  const snapshot = value.snapshot || {};
+  const confirmation = value.confirmation || {};
+  const reconciliation = value.reconciliation || {};
+  return String(value.state || "").toUpperCase() === targetStatus.toUpperCase()
+    && String(snapshot.snapshotId || "") === String(expected.snapshotId || "")
+    && Number(snapshot.revision || 0) === Number(expected.revision || 0)
+    && String(snapshot.sourceFingerprint || "") === String(expected.sourceFingerprint || "")
+    && String(confirmation.confirmationId || "") === String(expected.confirmationId || "")
+    && String(reconciliation.status || "").toLowerCase() === targetStatus
+    && normalizeCoachSettlementReconciliationReason(reconciliation.reason || "") === targetReason;
+}
+
+function coachSettlementReconciliationOperationKey(expected, targetStatus, targetReason) {
+  const signature = [
+    expected.confirmationId,
+    expected.snapshotId,
+    expected.revision,
+    expected.sourceFingerprint,
+    targetStatus,
+    targetReason,
+  ].join(":");
+  if (coachSettlementHistory.coachSettlementReconciliationOperation?.signature !== signature) {
+    const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    coachSettlementHistory.coachSettlementReconciliationOperation = {
+      signature,
+      key: `settlement-coach-response:${expected.confirmationId}:${random}`.slice(0, 120),
+    };
+  }
+  return coachSettlementHistory.coachSettlementReconciliationOperation.key;
 }

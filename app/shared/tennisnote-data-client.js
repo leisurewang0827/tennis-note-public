@@ -466,20 +466,35 @@
     }))) === true;
   }
 
-  async function clearOfflineResponses(identity = sessionSubject()) {
+  async function clearOfflineResponses(identity = sessionSubject(), ownerIsCurrent = null) {
     if (!identity) return false;
     return (await runOfflineTransaction("readwrite", (transaction) => new Promise((resolve) => {
+      // 로그아웃 소유권은 DB open 이후와 각 cursor 단계에서 재판정한다.
+      // 일반 캐시 정리는 기존 의미를 유지한다.
+      const isCurrent = () => !ownerIsCurrent || ownerIsCurrent();
+      transaction.oncomplete = () => resolve(isCurrent());
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
+      const cancelObsoleteCleanup = () => {
+        transaction.abort();
+        resolve(false);
+      };
+      if (!isCurrent()) {
+        cancelObsoleteCleanup();
+        return;
+      }
       const index = transaction.objectStore(offlineResponseStore).index("identity");
       const request = index.openKeyCursor(window.IDBKeyRange.only(identity));
       request.onsuccess = () => {
+        if (!isCurrent()) {
+          cancelObsoleteCleanup();
+          return;
+        }
         const cursor = request.result;
         if (!cursor) return;
         transaction.objectStore(offlineResponseStore).delete(cursor.primaryKey);
         cursor.continue();
       };
-      transaction.oncomplete = () => resolve(true);
-      transaction.onerror = () => resolve(false);
-      transaction.onabort = () => resolve(false);
     }))) === true;
   }
 
@@ -1968,29 +1983,40 @@
   }
 
   async function signOut() {
-    // Consumers clear protected DOM/player copies before the potentially slow remote logout.
-    window.dispatchEvent(new Event("tennisnote:auth-session-cleared"));
     const session = getSession();
     const identity = sessionSubject(session);
-    if (session?.access_token && readiness().ready) {
+    const stores = authSessionStores();
+    const request = session?.access_token && readiness().ready
+      ? { url: authUrl("logout"), headers: authHeaders({}, session) }
+      : null;
+    let cleanupFailed = false;
+    // 이전 권위는 첫 await와 이벤트 재진입 전에 정리한다.
+    for (const storage of stores) {
+      for (const key of [authStorageKey, `${authStorageKey}-provider`]) {
+        try {
+          storage.removeItem(key);
+        } catch (error) {
+          cleanupFailed = true;
+        }
+      }
+    }
+    if (cleanupFailed || getSession()?.access_token) throw new Error("auth_session_clear_failed");
+    window.dispatchEvent(new Event("tennisnote:auth-session-cleared"));
+    // 같은 사용자라도 새 토큰/세션이 생기면 지연된 이전 정리는 폐기한다.
+    const offlineCleanup = identity
+      ? clearOfflineResponses(identity, () => !getSession()?.access_token)
+      : Promise.resolve(false);
+    if (request) {
       try {
-        await fetch(authUrl("logout"), {
+        await fetch(request.url, {
           method: "POST",
-          headers: authHeaders(),
+          headers: request.headers,
         });
       } catch (error) {
         // Local session cleanup below is still the important browser-side step.
       }
     }
-    removeStoredSession();
-    authSessionStores().forEach((storage) => {
-      try {
-        storage.removeItem(`${authStorageKey}-provider`);
-      } catch (error) {
-        // Keep clearing the other storage area.
-      }
-    });
-    if (identity) await clearOfflineResponses(identity);
+    await offlineCleanup;
   }
 
   recordAuthSessionStartup();

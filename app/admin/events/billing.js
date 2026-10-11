@@ -13,6 +13,7 @@ function bindBillingEvents() {
     renderAdminSettlementHistory();
   });
   $("#adminSettlementHistoryRead")?.addEventListener("click", () => void refreshAdminSettlementHistory());
+  $("#monthlySettlementPrimaryAction")?.addEventListener("click", () => void confirmMonthlySettlementSnapshot());
   $("#openOnsitePaymentButton")?.addEventListener("click", openOnsitePaymentModal);
   $$("[data-close-onsite-payment]").forEach((button) => button.addEventListener("click", closeOnsitePaymentModal));
   $("#onsitePaymentModal")?.addEventListener("click", (event) => {
