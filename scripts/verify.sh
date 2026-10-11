@@ -11,6 +11,18 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# 명령 등록은 한 곳에 유지한다. 인자 없는 로컬 실행은 기존 전체 검사다.
+verify_phase=full
+if [[ $# -ne 0 ]]; then
+  [[ $# -eq 2 && "$1" == --phase ]] || { echo "verify_phase_invalid" >&2; exit 2; }
+  verify_phase="$2"
+fi
+case "$verify_phase" in
+  full|unit|general-browser|profile|build) ;;
+  *) echo "verify_phase_invalid" >&2; exit 2 ;;
+esac
+printf 'verify_phase_start:%s\n' "$verify_phase"
+
 : "${TENNISNOTE_SUPABASE_URL:=https://example.supabase.co}"
 : "${TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:=test-publishable-key-for-ci-only}"
 : "${TENNISNOTE_PORTONE_STORE_ID:=test-store-id}"
@@ -49,10 +61,13 @@ fi
 export PYTHONUTF8="${PYTHONUTF8:-1}"
 export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 
+if [[ "$verify_phase" == full || "$verify_phase" == unit ]]; then
 step "테스트"
 node --test "tests/**/*.test.js"
 node scripts/check_tennisnote_self_profile_a_only_browser.cjs
+fi
 
+if [[ "$verify_phase" == full || "$verify_phase" == general-browser ]]; then
 step "충돌 마커 검사"
 # 병합 충돌을 9곳 세고 8곳만 푼 적이 있다. 남은 마커가 커밋까지 갔고,
 # verify.sh 를 파이프 뒤에서 돌리는 바람에 실패가 가려졌다.
@@ -89,10 +104,12 @@ TENNISNOTE_EXCEL_REFRESH_RACE_ONLY=1 node scripts/check_tennisnote_single_sheet_
 
 step "개발 기존 계정 로그인·가입/재설정 차단 (Chromium/WebKit)"
 node scripts/check_tennisnote_development_signin_browser.cjs
+fi
 
 step "본인 번호 인증·저장 실제 modular entry (Chromium/WebKit)"
 # 독립적인 localhost fixture를 병렬 실행하되 기존 검사·상한·실패 판정은 유지한다.
 # 뒤 단계가 실패하면 이 실행의 정확한 child PID만 정리한다.
+if [[ "${verify_phase:-full}" == full || "${verify_phase:-full}" == profile ]]; then
 profile_pid=""
 cleanup_profile() {
   if [[ -n "$profile_pid" ]]; then
@@ -103,7 +120,9 @@ cleanup_profile() {
 trap cleanup_profile EXIT
 node scripts/check_tennisnote_verified_profile_phone_browser.cjs &
 profile_pid=$!
+fi
 
+if [[ "${verify_phase:-full}" == full || "${verify_phase:-full}" == general-browser ]]; then
 step "개발·운영 제품 정렬 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py
 
@@ -112,18 +131,40 @@ node scripts/check_tennisnote_renewal_hold_browser.cjs
 
 step "R3 적용일별 정산 실제 modular 관리자·코치 화면 (Chromium/WebKit)"
 node scripts/check_tennisnote_r3_effective_browser.cjs
+fi
 
 # 단 한 번 실행한 profile 검사가 성공해야만 배포본 빌드로 넘어간다.
+if [[ "${verify_phase:-full}" == full || "${verify_phase:-full}" == profile ]]; then
+# 이전 실행의 성공 영수증으로 새 실패를 통과시키지 않는다.
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+  [[ -n "${RUNNER_TEMP:-}" && -n "${GITHUB_SHA:-}" ]] || fail "profile_receipt_scope_missing"
+  profile_receipt="$RUNNER_TEMP/tennisnote-profile-${GITHUB_SHA}.pass"
+  rm -f -- "$profile_receipt"
+fi
 wait "$profile_pid"
 profile_pid=""
 trap - EXIT
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+  printf '%s\n' "$GITHUB_SHA" > "$profile_receipt"
+fi
+fi
 
 step "배포본 빌드"
+if [[ "$verify_phase" == full || "$verify_phase" == build ]]; then
+if [[ "$verify_phase" == build ]]; then
+  [[ "${GITHUB_ACTIONS:-}" == true && -n "${RUNNER_TEMP:-}" && -n "${GITHUB_SHA:-}" ]] || fail "build_requires_same_sha_profile_pass"
+  profile_receipt="$RUNNER_TEMP/tennisnote-profile-${GITHUB_SHA}.pass"
+  [[ -f "$profile_receipt" && "$(<"$profile_receipt")" == "$GITHUB_SHA" ]] || fail "build_requires_same_sha_profile_pass"
+fi
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target admin --output dist/admin
 
 step "배포본 검사"
 "$PYTHON_BIN" scripts/check_cloudflare_build.py
+fi
 
+printf 'verify_phase_complete:%s\n' "$verify_phase"
+if [[ "$verify_phase" == full ]]; then
 printf "\n\033[32m✔ 전부 통과했습니다.\033[0m\n"
 printf "  배포본을 띄워보려면: cd dist/member && %s -m http.server 8000\n" "$PYTHON_BIN"
+fi

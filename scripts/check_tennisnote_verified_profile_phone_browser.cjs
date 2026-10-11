@@ -20,6 +20,16 @@ function assert(condition, message) {
 
 const http = require("node:http");
 const root = path.resolve(__dirname, "..");
+// 단계별 진단은 식별자/전화/응답 원문 없이 검사 위치와 경과 시간만 남긴다.
+const profileBudgetMs = 210000; // CI 단계 4분 안에서 정리까지 완료한다.
+async function boundedProfileStage(action, budgetMs, failure) {
+  let timer;
+  try {
+    return await Promise.race([Promise.resolve().then(action), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(failure)), Math.max(1, budgetMs));
+    })]);
+  } finally { clearTimeout(timer); }
+}
 // 실제 modular HTML과 이벤트를 사용하되 외부 Auth/SMS/DB는 차단한다.
 async function profileContracts(page) {
   return page.evaluate(async () => {
@@ -289,7 +299,14 @@ async function profileContracts(page) {
         return revisedReply(parameters,state.profile.serverRevision);
       };
       const pending = first === "ntrp" ? requestNtrpCheck() : saveProfileInfo();
-      while (!releaseMutation) await tick();
+      let mutationSettled = false;
+      pending.then(() => { mutationSettled = true; }, () => { mutationSettled = true; });
+      const acquisitionDeadline = Date.now() + 2000;
+      while (!releaseMutation) {
+        if (mutationSettled) throw new Error(`mutation_rpc_not_reached:${first}`);
+        if (Date.now() >= acquisitionDeadline) throw new Error(`mutation_rpc_acquisition_timeout:${first}`);
+        await tick();
+      }
       check(`review_${first}_both_controls_busy`, document.querySelector("#saveProfileInfo").disabled
         && document.querySelector("#requestNtrpCheck").disabled);
       const blocked = await Promise.all([requestNtrpCheck(),saveProfileInfo()]);
@@ -609,47 +626,61 @@ async function main() {
   assert(!captureOnly || captureDir,"capture_only_requires_private_output_directory");
   if(captureDir)fs.mkdirSync(captureDir,{recursive:true});
   let contexts=0,predicates=0;
+  const startedAt=Date.now();
+  let currentStage={engine:"none",width:0,height:0,theme:"none",contractPhase:"setup"};
+  const progress=event=>console.log(JSON.stringify({type:"profile_progress",...currentStage,event,elapsedMs:Date.now()-startedAt}));
+  const stage=async(contractPhase,action)=>{
+    currentStage.contractPhase=contractPhase;progress("start");
+    try {
+      const result=await boundedProfileStage(action,profileBudgetMs-(Date.now()-startedAt),"profile_phase_budget_exceeded");
+      progress("complete");return result;
+    } catch(error) {progress("failed");throw error;}
+  };
   try {
     for(const selected of ["chromium","webkit"]){
       if(process.env.TENNISNOTE_BROWSER_ENGINE && process.env.TENNISNOTE_BROWSER_ENGINE!==selected)continue;
-      const browser=await (selected==="webkit"?webkit:chromium).launch({headless:true,
-        ...(selected==="chromium" && process.env.TENNISNOTE_CHROMIUM_EXECUTABLE ? {executablePath:process.env.TENNISNOTE_CHROMIUM_EXECUTABLE} : {})});
+      currentStage={engine:selected,width:0,height:0,theme:"none",contractPhase:"launch"};
+      const browser=await stage("launch",()=>(selected==="webkit"?webkit:chromium).launch({headless:true,
+        ...(selected==="chromium" && process.env.TENNISNOTE_CHROMIUM_EXECUTABLE ? {executablePath:process.env.TENNISNOTE_CHROMIUM_EXECUTABLE} : {})}));
       try {
         for(const colorScheme of colorSchemes) for(const viewport of viewports){
           if(ownershipOnly && viewport.width!==390)continue;
           if(statusOnly && ![390,768,1366,844].includes(viewport.width))continue;
           if(captureOnly && ![390,768,1366].includes(viewport.width))continue;
           if(optionalOnly && ![390,768,1366].includes(viewport.width))continue;
-          let context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
+          currentStage={engine:selected,...viewport,theme:colorScheme,contractPhase:"context"};
+          let context;
+          try {
+          context=await stage("context",()=>browser.newContext({viewport,colorScheme,serviceWorkers:"block"}));
           await context.route("**/*",r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
           let page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
-          await page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"});
-          await page.waitForFunction(()=>typeof saveProfileInfoOnce==="function");
-          await page.evaluate(()=>{
+          await stage("load",()=>page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"}));
+          await stage("boot_ready",()=>page.waitForFunction(()=>typeof saveProfileInfoOnce==="function"));
+          await stage("boot",()=>page.evaluate(()=>{
             window.__tennisNoteBootReady?.();document.querySelector("#brandSplash").style.display="none";
             window.TennisNoteDataClient.readiness=()=>({ready:true});
             bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
-          });
-          const legacyResult=optionalOnly || statusOnly || ownershipOnly ? {} : await profileContracts(page);
+          }));
+          const legacyResult=optionalOnly || statusOnly || ownershipOnly ? {} : await stage("legacy",()=>profileContracts(page));
           if(!optionalOnly && !statusOnly && !ownershipOnly){
             // Reload alone retains the legacy snapshot and its editor draft.
             // Isolate the second contract in a genuinely empty browser context.
-            await context.close();
-            context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
+            await boundedProfileStage(()=>context.close(),5000,"profile_context_cleanup_timeout");
+            context=await stage("fresh_context",()=>browser.newContext({viewport,colorScheme,serviceWorkers:"block"}));
             await context.route("**/*",r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
             page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));
-            await page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"});
-            await page.waitForFunction(()=>typeof saveProfileInfoOnce==="function");
-            await page.evaluate(()=>{
+            await stage("fresh_load",()=>page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"}));
+            await stage("fresh_boot_ready",()=>page.waitForFunction(()=>typeof saveProfileInfoOnce==="function"));
+            await stage("fresh_boot",()=>page.evaluate(()=>{
               window.__tennisNoteBootReady?.();document.querySelector("#brandSplash").style.display="none";
               window.TennisNoteDataClient.readiness=()=>({ready:true});
               bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
-            });
+            }));
           }
-          const result=ownershipOnly ? await profileOperationStatusContracts(page,true) : statusOnly ? await profileOperationStatusContracts(page) : {...legacyResult,...await optionalProfileContracts(page)};
-          if(!statusOnly && !captureOnly && !ownershipOnly) Object.assign(result, await profileOperationStatusContracts(page));
+          const result=ownershipOnly ? await stage("ownership",()=>profileOperationStatusContracts(page,true)) : statusOnly ? await stage("status",()=>profileOperationStatusContracts(page)) : {...legacyResult,...await stage("optional",()=>optionalProfileContracts(page))};
+          if(!statusOnly && !captureOnly && !ownershipOnly) Object.assign(result, await stage("status",()=>profileOperationStatusContracts(page)));
           for(const [name,ok] of Object.entries(result))assert(ok,`${selected}/${viewport.width}/${colorScheme}: ${name}`);
-          assert(errors.length===0,`page_errors:${errors.join("|")}`);
+          assert(errors.length===0,`page_errors_count:${errors.length}`);
           if(captureDir && [390,768,1366].includes(viewport.width)){
             await page.evaluate(()=>{
               // All Auth/RPC data are synthetic. Clear even synthetic contact
@@ -657,14 +688,24 @@ async function main() {
               document.querySelector("#profilePhoneInput").value="";
               document.querySelector("#profilePhoneCode").value="";
             });
-            await page.screenshot({path:path.join(captureDir,`atomic-profile-${selected}-${viewport.width}-${colorScheme}.png`)});
+            await stage("capture",()=>page.screenshot({path:path.join(captureDir,`atomic-profile-${selected}-${viewport.width}-${colorScheme}.png`)}));
           }
           predicates+=Object.keys(result).length;contexts++;
-          await context.close();
+          progress("context_complete");
+          } finally {
+            if(context)await boundedProfileStage(()=>context.close(),5000,"profile_context_cleanup_timeout");
+          }
         }
-      } finally {await browser.close();}
+      } finally {await boundedProfileStage(()=>browser.close(),5000,"profile_browser_cleanup_timeout");}
     }
     console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,optionalOnly,statusOnly,ownershipOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
-  } finally {await new Promise(resolve=>server.close(resolve));}
+  } finally {
+    server.closeAllConnections();
+    await boundedProfileStage(()=>new Promise(resolve=>server.close(resolve)),1000,"profile_server_cleanup_timeout");
+    progress("cleanup_complete");
+  }
 }
-main().catch(e=>{console.error("FAIL "+e.message);process.exitCode=1;});
+main().catch(e=>{
+  const safeReason=String(e.message).match(/(?:mutation_rpc_(?:not_reached|acquisition_timeout):(?:ntrp|save)|profile_[a-z_]+|page_errors_count:\d+|review_[a-z_]+)/)?.[0] || "profile_contract_failed";
+  console.error("FAIL "+safeReason);process.exitCode=1;
+});
