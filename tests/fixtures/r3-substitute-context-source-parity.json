@@ -1,0 +1,24 @@
+{
+  "contract": "r3-substitute-context-repair-v1",
+  "path": "app/admin/views/billing.js",
+  "priorCandidateSha256": "5d8fa0645bc912cfa7568b4af48511cb2fe678cda13998ad85bc5ccc0e985866",
+  "repairedCandidateSha256": "13ef1d50d2093ee1ed9f9a4088fea64bdd2fae31bb31612f152e28c027df96a0",
+  "nonPayableTrace": {
+    "contract": "r3-substitute-nonpayable-trace-v1",
+    "authorityCommit": "527c0924d9a98d091ec986741934d2798b4f53f1",
+    "privateSharedSha256": "5566c78e27ea201298294dbd673caa7c899c8f7598006ba9072879e8260a4317",
+    "privateCoachAppSha256": "0155f39998b9fff39323f3a078a23e04f8eb1e1f1f202b2f46919ae59a432d71",
+    "files": [
+      {
+        "path": "app/shared/tennisnote-settlement-adjustment.js",
+        "priorCandidateSha256": "675f8e2760072925647f85a3f45bac45df13caea2eeec8d09d75ca09ed1b0d18",
+        "candidateSha256": "db325c19b4c1912c4b1402fab3d93673e2059f5d939bed95ee3c7b4478fb3b4f"
+      },
+      {
+        "path": "app/tennis-note-coach-app/views/settlement.js",
+        "priorCandidateSha256": "6914bee46e6435de79fd3aca5ca0d3ec887fe6cd613829227cc027d58f13ae8e",
+        "candidateSha256": "1762672d3ba53ba74b3819006abb22b5c06493ae0f25cc4456295f3396444e30"
+      }
+    ]
+  }
+}

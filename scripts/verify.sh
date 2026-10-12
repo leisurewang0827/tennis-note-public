@@ -117,6 +117,9 @@ wait "$profile_pid"
 profile_pid=""
 trap - EXIT
 
+step "운영 A-only 원본 및 현재 DEV 본인 프로필 브라우저 검사 (Chromium/WebKit)"
+node scripts/check_tennisnote_self_profile_a_only_browser.cjs
+
 step "배포본 빌드"
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target admin --output dist/admin
