@@ -51,7 +51,15 @@ test("회원 결제 런타임은 개발계의 결제 차단을 우회하지 않�
 
 test("개발계 배포는 dev 브랜치와 별도 Cloudflare 프로젝트만 사용한다", () => {
   const workflow = readFileSync(join(root, ".github/workflows/deploy-cloudflare-pages-dev.yml"), "utf8");
-  assert.match(workflow, /branches:\s*\[dev\]/);
+  const caller = readFileSync(join(root, ".github/workflows/tennisnote-public-ci.yml"), "utf8");
+  assert.match(workflow, /workflow_call:/);
+  assert.doesNotMatch(workflow, /workflow_dispatch:|branches:\s*\[dev\]/);
+  assert.match(caller, /if:.*github\.event_name == 'push'.*github\.ref == 'refs\/heads\/dev'/);
+  assert.match(caller, /needs: build-and-check/);
+  assert.match(caller, /uses: \.\/.github\/workflows\/deploy-cloudflare-pages-dev\.yml/);
+  assert.match(workflow, /DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT/);
+  assert.match(workflow, /python scripts\/check_tennisnote_development_deploy_scope\.py/);
+  assert.doesNotMatch(workflow, /pages project create/);
   assert.match(workflow, /environment:\s*development/);
   assert.match(workflow, /TENNISNOTE_PAYMENTS_ENABLED:\s*"false"/);
   assert.match(workflow, /DEV_TENNISNOTE_SUPABASE_URL/);

@@ -158,16 +158,33 @@ async function requestIdentityPhoneVerification(surface = "signup") {
   identityPhoneRequestInFlight = true;
   button.disabled = true;
   const owner = phoneVerificationOwner();
+  const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
+    && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
+    && phoneVerificationRequestCurrent(owner, phone, surface));
   try {
     const currentUser = await client.getAuthUser?.();
     if (!phoneVerificationRequestCurrent(owner, phone, surface)
       || (owner.authId && currentUser?.id && currentUser.id !== owner.authId)) return false;
-    if (verifiedPhoneFromAuthUser(currentUser || {}, surface === "profile") === phone) {
+    if (!profileContextCurrent()) {
+      setIdentityPhoneStatus("저장된 정보가 변경되었습니다. 내 정보를 다시 열어 확인해 주세요.", "error", surface);
+      return false;
+    }
+    if (surface === "profile" && confirmedDirectAuthPhone(currentUser, owner.authId) === phone) {
+      markIdentityPhoneVerified(phone, "sms", surface);
+      return true;
+    }
+    if (surface === "profile" && currentUser?.id !== owner.authId) {
+      setIdentityPhoneStatus("인증 상태를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.", "error", surface);
+      return false;
+    }
+    if (surface !== "profile" && verifiedPhoneFromAuthUser(currentUser || {}, false) === phone) {
       markIdentityPhoneVerified(phone, "provider", surface);
       return true;
     }
     const capabilities = await refreshAuthProviderCapabilities({ force: true });
-    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;
+    if (!phoneVerificationRequestCurrent(owner, phone, surface) || !profileContextCurrent()) return false;
     if (capabilities.providers.phone === false || capabilities.status === "unavailable") {
       setIdentityPhoneStatus(phoneAuthUnavailableMessage(), "error", surface);
       return false;
@@ -178,7 +195,7 @@ async function requestIdentityPhoneVerification(surface = "signup") {
     }
     setIdentityPhoneStatus("인증번호를 보내고 있습니다.", "", surface);
     await client.requestPhoneChangeVerification(e164Phone);
-    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;
+    if (!phoneVerificationRequestCurrent(owner, phone, surface) || !profileContextCurrent()) return false;
     const verification = { phone, status: "pending", source: "sms", owner };
     if (surface === "profile") profilePhoneVerification = verification;
     else identityPhoneVerification = verification;
@@ -237,23 +254,54 @@ async function confirmIdentityPhoneVerification(surface = "signup") {
   }
   const client = window.TennisNoteDataClient;
   const owner = phoneVerificationOwner();
+  const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
+    && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
+    && phoneVerificationRequestCurrent(owner, phone, surface));
   identityPhoneConfirmInFlight = true;
   button.disabled = true;
   setIdentityPhoneStatus("인증번호를 확인하고 있습니다.", "", surface);
   try {
     await client.verifyPhoneChange(identityPhoneE164(phone), code);
-    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;
+    if (!phoneVerificationRequestCurrent(owner, phone, surface) || !profileContextCurrent()) return false;
     const authUser = await client.getAuthUser?.();
     if (!phoneVerificationRequestCurrent(owner, phone, surface)
-      || (owner.authId && authUser?.id && authUser.id !== owner.authId)) return false;
-    const verifiedPhone = verifiedPhoneFromAuthUser(authUser || {}, surface === "profile");
-    if (verifiedPhone !== phone) throw new Error("phone_verification_not_confirmed");
+      || !profileContextCurrent()) return false;
+    const verifiedPhone = surface === "profile" ? confirmedDirectAuthPhone(authUser, owner.authId)
+      : verifiedPhoneFromAuthUser(authUser || {}, false);
+    if (verifiedPhone !== phone) throw new Error(surface === "profile"
+      ? "phone_verification_auth_readback_unconfirmed" : "phone_verification_not_confirmed");
     markIdentityPhoneVerified(phone, "sms", surface);
     return true;
   } catch (error) {
+    const code = normalizedIdentityErrorCode(error);
+    const errorStatus = Number(error?.status);
+    const uncertainStatus = errorStatus === 408 || (errorStatus >= 500 && errorStatus <= 599);
+    const terminalOtp = ["otp_expired", "phone_otp_invalid", "phone_exists", "phone_change_conflict"]
+      .some((value) => code.includes(value))
+      || (code.includes("phone_otp_verification_failed") && !uncertainStatus);
+    const uncertain = surface === "profile" && !terminalOtp && (["failed_to_fetch", "networkerror", "load_failed",
+      "temporarily_unavailable", "request_timeout", "aborterror", "server_connection_failed",
+      "phone_verification_auth_readback_unconfirmed"].some((value) => code.includes(value))
+      || uncertainStatus || error instanceof TypeError);
+    if (uncertain && profileContextCurrent() && typeof client.getAuthUser === "function") {
+      try {
+        const authUser = await client.getAuthUser();
+        if (!profileContextCurrent()) return false;
+        if (confirmedDirectAuthPhone(authUser, owner.authId) === phone) {
+          markIdentityPhoneVerified(phone, "sms", surface);
+          return true;
+        }
+      } catch (_readbackError) {
+        // A missing or failed fresh Auth read is never evidence of verification.
+      }
+    }
     if (phoneVerificationRequestCurrent(owner, phone, surface)) {
-      if (normalizedIdentityErrorCode(error).includes("otp_expired")) resetIdentityPhoneVerification(identityErrorMessage(error), surface);
-      setIdentityPhoneStatus(identityErrorMessage(error), "error", surface);
+      if (code.includes("otp_expired")) resetIdentityPhoneVerification(identityErrorMessage(error), surface);
+      setIdentityPhoneStatus(uncertain
+        ? "인증 결과를 확인하지 못했습니다. 입력은 유지됩니다. 잠시 후 다시 확인해 주세요."
+        : identityErrorMessage(error), "error", surface);
     }
     return false;
   } finally {
@@ -295,6 +343,7 @@ async function submitIdentitySetup(event) {
       neighborhood: $("#identityNeighborhood")?.value,
       gender: $("#identityGender")?.value,
     });
+    if (!result?.ok || result.signupReadbackConfirmed !== true) throw new Error("signup_link_readback_unconfirmed");
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
     renderAll();

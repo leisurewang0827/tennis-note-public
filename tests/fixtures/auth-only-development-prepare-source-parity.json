@@ -1,0 +1,191 @@
+{
+  "contract": "auth-only-development-prepare/1",
+  "sourceParent": "0ba2d1908c91bec018a283586bda25d1d8e9c458",
+  "release": {
+    "version": "1.0.548",
+    "releaseId": "2026.10.13.02",
+    "deployedAt": "2026-10-13T13:34:40+09:00",
+    "memberCache": "tennis-note-member-pwa-v584",
+    "coachCache": "tennis-note-coach-mode-v557"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/deploy-cloudflare-pages-dev.yml",
+      "beforeSha256": "a39bedc4a3886df2d7eb2a5a8aae0711798728e2cfe7bd4ebdbeacfbe7a8c4fd",
+      "afterSha256": "26d40bdb3e4961a79cdd83e71df40d34e8097d2d0beb77f81cc49e8268881712",
+      "inverse": [
+        [
+          "name: Deploy Tennis Note development sites\n\non:\n  workflow_call:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: cloudflare-pages-development\n  cancel-in-progress: true\n\njobs:\n  build-and-deploy-development:\n    runs-on: ubuntu-latest\n    environment: development\n    env:\n      TENNISNOTE_ENVIRONMENT: development\n      TENNISNOTE_PAYMENTS_ENABLED: \"false\"\n      TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED: \"true\"\n      TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}\n      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}\n      TENNISNOTE_PAYMENT_MODE: disabled\n      TENNISNOTE_ALLOWED_PAYMENT_METHODS: \"\"\n      TENNISNOTE_BANK_TRANSFER_ENABLED: \"false\"\n      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply\n      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: \"true\"\n      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}\n      TENNISNOTE_CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}\n    steps:\n      - name: Check out repository\n        uses: actions/checkout@v7\n        with:\n          ref: ${{ github.sha }}\n\n      - name: Set up Python\n        uses: actions/setup-python@v7\n        with:\n          python-version: \"3.12\"\n\n      - name: Verify existing development account, projects, source and rollback\n        run: python scripts/check_tennisnote_development_deploy_scope.py\n\n      - name: Build isolated development sites\n        run: |\n          python scripts/build_cloudflare_pages.py --target member --output dist/member-dev\n          python scripts/build_cloudflare_pages.py --target admin --output dist/admin-dev\n\n      - name: Verify development deployment configuration\n        run: |\n          grep -q '\"environment\": \"development\"' dist/member-dev/shared/config.local.js\n          grep -q '\"enabled\": false' dist/member-dev/shared/config.local.js\n          grep -q '\"developmentEmailSignIn\": true' dist/member-dev/shared/config.local.js\n          grep -q '\"emailPasswordAuthUi\": false' dist/member-dev/shared/config.local.js\n          grep -q '\"singleSheetImportMode\": \"apply\"' dist/admin-dev/shared/config.local.js\n          grep -q '\"singleSheetImportReverseEnabled\": true' dist/admin-dev/shared/config.local.js\n          grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html\n          grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html\n\n      - name: Deploy member development PWA\n        run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev\n\n      - name: Deploy administrator development web\n        run: npx --yes wrangler@3.90.0 pages deploy dist/admin-dev --project-name=tennisnote-admin-dev --branch=dev\n",
+          "name: Deploy Tennis Note development sites\n\non:\n  push:\n    branches: [dev]\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: cloudflare-pages-development\n  cancel-in-progress: true\n\njobs:\n  build-and-deploy-development:\n    runs-on: ubuntu-latest\n    environment: development\n    env:\n      TENNISNOTE_ENVIRONMENT: development\n      TENNISNOTE_PAYMENTS_ENABLED: \"false\"\n      TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED: \"true\"\n      TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}\n      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}\n      TENNISNOTE_PAYMENT_MODE: disabled\n      TENNISNOTE_ALLOWED_PAYMENT_METHODS: \"\"\n      TENNISNOTE_BANK_TRANSFER_ENABLED: \"false\"\n      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply\n      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: \"true\"\n      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n    steps:\n      - name: Check out repository\n        uses: actions/checkout@v7\n\n      - name: Set up Python\n        uses: actions/setup-python@v7\n        with:\n          python-version: \"3.12\"\n\n      - name: Build isolated development sites\n        run: |\n          python scripts/build_cloudflare_pages.py --target member --output dist/member-dev\n          python scripts/build_cloudflare_pages.py --target admin --output dist/admin-dev\n\n      - name: Verify development deployment configuration\n        run: |\n          grep -q '\"environment\": \"development\"' dist/member-dev/shared/config.local.js\n          grep -q '\"enabled\": false' dist/member-dev/shared/config.local.js\n          grep -q '\"developmentEmailSignIn\": true' dist/member-dev/shared/config.local.js\n          grep -q '\"emailPasswordAuthUi\": false' dist/member-dev/shared/config.local.js\n          grep -q '\"singleSheetImportMode\": \"apply\"' dist/admin-dev/shared/config.local.js\n          grep -q '\"singleSheetImportReverseEnabled\": true' dist/admin-dev/shared/config.local.js\n          grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html\n          grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html\n\n      - name: Ensure Cloudflare Pages development projects exist\n        shell: bash\n        run: |\n          project_list=\"$(npx --yes wrangler@3.90.0 pages project list)\"\n          if ! grep -q 'tennisnote-app-dev' <<<\"$project_list\"; then\n            npx --yes wrangler@3.90.0 pages project create tennisnote-app-dev --production-branch=dev\n          fi\n          if ! grep -q 'tennisnote-admin-dev' <<<\"$project_list\"; then\n            npx --yes wrangler@3.90.0 pages project create tennisnote-admin-dev --production-branch=dev\n          fi\n\n      - name: Deploy member development PWA\n        run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev\n\n      - name: Deploy administrator development web\n        run: npx --yes wrangler@3.90.0 pages deploy dist/admin-dev --project-name=tennisnote-admin-dev --branch=dev\n"
+        ]
+      ]
+    },
+    {
+      "path": "app/admin/index.html",
+      "beforeSha256": "a6b1481f7e1d73d3b3d3ef1f227a353bdcc388a427ed40290c37263d76780837",
+      "afterSha256": "66e02ffff358cb5ac00f49bbe7ac40fe55b65fb471a24cbe87d12dc06fd36465",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/release.json",
+      "beforeSha256": "df819cf7bae6f97a000dff96fb77327bcac7bc71bf065c0d8f879b142497221a",
+      "afterSha256": "5d243043588865ce46bc1e42f5ab271454acb3c011208eadec838acd1d30a738",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ],
+        [
+          "2026.10.13.02",
+          "2026.10.09.03"
+        ],
+        [
+          "2026-10-13T13:34:40+09:00",
+          "2026-10-09T20:54:42+09:00"
+        ]
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-release.js",
+      "beforeSha256": "7e9d92edde1ed1c726614db2736e08e4751d8b6db7abf1b3524833b8c2ef4608",
+      "afterSha256": "6d8b0f075083b92545b9f1b8afc655d82b9ab31d9af0902743802c7beebe1408",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ],
+        [
+          "2026.10.13.02",
+          "2026.10.09.03"
+        ],
+        [
+          "2026-10-13T13:34:40+09:00",
+          "2026-10-09T20:54:42+09:00"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/app.js",
+      "beforeSha256": "36393be6b9cd906c975f0301007ea7a8095955b069b7b7d84b91c4794c64c892",
+      "afterSha256": "7e64fbc3d0e3c2dd8c305b3521729cea8221d4830728e788925d545ec05d5396",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/coaches.js",
+      "beforeSha256": "b3432f24d0521f3368e3785b35c06dbe062eca7709f6859e8b213f45d23ae2f4",
+      "afterSha256": "7f0128b2140f5c6c50a420d4bc783f2dd20a71efcd8e9f829e7b5220a02456d2",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/forms/common.js",
+      "beforeSha256": "005573e465cbf90aedbd4d6972fa8cb0b5d8b97153ba0ab013e0acda42dca2b0",
+      "afterSha256": "2d8f3620a4347aed61d810a7dcc082074f4df252be3d0f1e385f632f24c75354",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "beforeSha256": "8009543c42612ddabda5920da1c572ee3045fc0360dddddeddad64aaf5cb3ccb",
+      "afterSha256": "cd89ad7cfaabb1cb54c304372074b9b31335c4de08913ee6f48b4640d64dc725",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "c67565acf56fb227671d3c544e4ac658bde64e79826ba7cf61e7af4aa2b7eee3",
+      "afterSha256": "0c9fa9d8c41fd9ffbf5eeff2a035e0cc91b50bb2f8229fd04550a13a0786ed7e",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ],
+        [
+          "tennis-note-coach-mode-v557",
+          "tennis-note-coach-mode-v556"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "beforeSha256": "6f3d5829f77c915924fd9a784b3102db03bc9d8d7dc88f3fdb7972180a4ed4ea",
+      "afterSha256": "dc8180272f52bbcf6a34a626782a246799b08a5d8fcb5b2ee5117ebdfbfdc3a3",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "beforeSha256": "38f1843b124c6948301f29ff7a7d89be0e8b7248f8844ca443f291089f0432f2",
+      "afterSha256": "62ba1f9a6af22f5e9fad52fc56eb657b5df110890e216038cd397aa349a22440",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "beforeSha256": "691c6423346313149582c0b92f28a4dedc071242b60447bb8e9c1d8f796dabfa",
+      "afterSha256": "c814e5ca6a3d6bf20b8d54279a6b4a992c85aced019ff86d0aec41e74169880a",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/service-worker.js",
+      "beforeSha256": "1362e5cf4006befd902369bd62bc8944584df3e3d60a4cd0eafef2f23b6c72d9",
+      "afterSha256": "625817909b23fffaa9880a4f4f5f69c2c0bac3a01e2c01d7ec425b8288043ea4",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ],
+        [
+          "tennis-note-member-pwa-v584",
+          "tennis-note-member-pwa-v583"
+        ]
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "beforeSha256": "bbd25b88f61508d13abed3b1126bfcdadc20438caf8bba4282afc801465ea903",
+      "afterSha256": "a1472e2b061b2f6887380ce5cc2a165b2c44ef4f9b176702dba512c0d3eb4544",
+      "inverse": [
+        [
+          "1.0.548",
+          "1.0.546"
+        ]
+      ]
+    }
+  ]
+}
