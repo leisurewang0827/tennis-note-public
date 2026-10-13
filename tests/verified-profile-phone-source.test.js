@@ -9,7 +9,77 @@ const root = path.resolve(__dirname,"..");
 const port=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/verified-profile-phone-source-parity.json"),"utf8"));
 const version=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version;
 const hash=s=>crypto.createHash("sha256").update(s).digest("hex");
-const {restorePhone,restoreOperationStatus,restoreAuthReconciliation}=require("./helpers/verified-profile-phone-port.cjs");
+const {restorePhone,restoreOperationStatus,restoreAuthReconciliation,restoreSessionLoss}=require("./helpers/verified-profile-phone-port.cjs");
+test("세션 없는 실제 가입·동의 함수는 로컬 완료를 만들지 않고 입력을 보존",async()=>{
+  const rows=port.sessionLoss.files;
+  let applied=0;
+  const context={Date,window:{TennisNoteDataClient:{rpc:async()=>{throw Error("unexpected_rpc");}}},
+    hasLiveMemberSession:()=>false,normalizeIdentityText:value=>String(value||"").trim(),
+    normalizeIdentityPhone:value=>String(value||"").replace(/\D/g,""),
+    applySavedIdentity:()=>{applied+=1;},applyConsentPreferences:()=>{applied+=1;},
+    identityPrivacyVersion:"fixture-privacy",identityTermsVersion:"fixture-terms"};
+  vm.createContext(context);
+  const input={realName:"합성 회원",nickname:"합성별명",phone:"01000000003",birthYear:2000,neighborhood:"",gender:"prefer_not"};
+  for(const name of ["persistIdentityProfile","persistConsentPreferences"]){
+    const fn=rows.flatMap(row=>row.functions).find(fn=>fn.name===name);
+    assert(fn); applied=0;
+    const legacy=vm.runInContext(`${fn.before}; ${name}`,context);
+    const result=await legacy(input);
+    assert.equal(result.ok,true);assert.equal(applied,1,"baseline false success must be reproduced");
+    applied=0;
+    const current=vm.runInContext(`${fn.after}; ${name}`,context);
+    await assert.rejects(current(input),/login_required/);
+    assert.equal(applied,0);
+  }
+  for(const row of rows){
+    const current=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
+    assert.equal(hash(current),row.afterFileSha256);
+    assert.equal(hash(restoreSessionLoss(row.path,current)),row.beforeFileSha256);
+    assert.throws(()=>restoreSessionLoss(row.path,current+"\n"),/Auth session loss candidate drift/);
+  }
+});
+test("실제 migration 응답 shape의 승인대기·자동연결·응답유실을 분리",async()=>{
+  const fn=port.sessionLoss.files.flatMap(row=>row.functions).find(fn=>fn.name==="persistIdentityProfile");
+  const sourceId="synthetic-source",targetId="synthetic-linked",authId="synthetic-auth",phone="01000000003";
+  const row={id:sourceId,name:"합성 회원",nickname:"합성별명",phone:"",birth_year:2000,neighborhood:"",gender:"prefer_not",
+    role:"member",status:"active",updated_at:"2026-01-01T00:00:00Z",profile_completed_at:"2026-01-01T00:00:00Z",
+    privacy_consent_version:"fixture-privacy",privacy_consented_at:"2026-01-01T00:00:00Z"};
+  const {role,status,updated_at,...receipt}=row;
+  assert(!Object.hasOwn(receipt,"role")&&!Object.hasOwn(receipt,"status"));
+  let live=true,mode="pending",applied=0,restored=0,reads=0,rpcs=0,keys=[];
+  const client={rpc:async(name,args)=>{
+    assert.equal(name,"tn_save_my_signup_profile");rpcs++;keys.push(args.target_operation_key);
+    if(mode==="response-loss"){mode="pending";throw new TypeError("Failed to fetch");}
+    if(mode==="lost-rpc")live=false;
+    return mode.startsWith("linked")?{ok:true,linkStatus:"linked",profile:{...receipt,id:targetId,phone}}:
+      {ok:true,linkStatus:"approval_pending",profile:{...receipt,phone_candidate:mode==="wrong-candidate"?"01000000004":phone}};
+  },selectRows:async(table,options)=>{
+    assert.equal(table,"tn_users");assert.deepEqual(JSON.parse(JSON.stringify(options.filters)),{id:sourceId});
+    assert.equal(options.limit,2);assert.equal(options.requireFresh,true);assert.equal(options.requireCurrentSession,true);assert.equal(options.retryAuth,false);
+    reads++;return mode==="duplicate-read"?[{...row},{...row}]:[{...row}];
+  }};
+  const owner={client,authId,profileId:sourceId};
+  const context={Date,window:{TennisNoteDataClient:client},hasLiveMemberSession:()=>live,
+    normalizeIdentityText:v=>String(v||"").trim(),normalizeIdentityPhone:v=>String(v||"").replace(/\D/g,""),
+    phoneVerificationOwner:()=>owner,phoneVerificationOwnerCurrent:()=>live,
+    requireVerifiedIdentityPhone:async()=>{},identityPrivacyVersion:"fixture-privacy",signupProfileOperation:{fingerprint:"",key:""},
+    crypto:{randomUUID:()=>"fixture-operation-key"},state:{member:{authUserId:"stale-not-authority"}},
+    retryTransientNetwork:callback=>callback(),applySavedIdentity:profile=>{assert.equal(profile.phone,"");applied++;},
+    applySupabaseMemberSession:async(show,options)=>{
+      assert.equal(options.expectedAuthUserId,authId);assert.equal(options.expectedProfileId,targetId);assert.equal(options.requireSignupReadback,true);
+      restored++;return mode!=="linked-unconfirmed";
+    }};
+  vm.createContext(context);const save=vm.runInContext(`${fn.after}; persistIdentityProfile`,context);
+  const input={realName:row.name,nickname:row.nickname,phone,birthYear:2000,neighborhood:"",gender:row.gender};
+  const pending=await save(input);assert.equal(pending.signupReadbackConfirmed,true);assert.equal(pending.profile.phone,"");assert.equal(applied,1);
+  mode="linked";const linked=await save(input);assert.equal(linked.signupReadbackConfirmed,true);assert.equal(restored,1);assert.equal(reads,1);
+  mode="linked-unconfirmed";await assert.rejects(save(input),/signup_link_readback_unconfirmed/);assert.equal(applied,1);
+  mode="wrong-candidate";const beforeReads=reads;await assert.rejects(save(input),/signup_link_readback_unconfirmed/);assert.equal(reads,beforeReads);
+  mode="duplicate-read";await assert.rejects(save(input),/signup_link_readback_unconfirmed/);assert.equal(applied,1);
+  mode="lost-rpc";await assert.rejects(save(input),/login_required/);assert.equal(applied,1);
+  live=true;mode="response-loss";await assert.rejects(save(input),/Failed to fetch/);
+  await save(input);assert.equal(applied,2);assert.equal(new Set(keys).size,1);assert.equal(rpcs,8);
+});
 test("Python 기존 golden chain도 Auth 증분만 역변환하고 drift를 거부",()=>{
   const result=execFileSync(process.env.TENNISNOTE_PYTHON || "python",["-B","-c",`
 import copy, json, sys
@@ -20,7 +90,10 @@ for row in port['authReconciliation']['files']:
     source=(a.ROOT/row['path']).read_text(encoding='utf-8')
     restored=a.restore_auth_reconciliation_base(row['path'],source)
     assert a.sha256(restored.encode('utf-8'))==row['beforeFileSha256']
-    for drift in (source+'\\n',source.replace(row['functions'][0]['after'],''),source+row['functions'][0]['after']):
+    current=next((item for item in port['sessionLoss']['files'] if item['path']==row['path']),row)
+    needle=current['functions'][0]['after']
+    assert source.count(needle)==1, 'negative fixture must actually mutate current source'
+    for drift in (source+'\\n',source.replace(needle,''),source+needle):
         try: a.restore_auth_reconciliation_base(row['path'],drift)
         except RuntimeError: pass
         else: raise AssertionError('Auth drift accepted')
@@ -95,9 +168,10 @@ test("Auth 응답 유실 복구는 private 함수와 exact 일치하고 이전 �
     "app/tennis-note-member-app/data/auth.js",
   ]);
   for(const row of contract.files){
-    const source=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
+    const current=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
+    const source=restoreSessionLoss(row.path,current);
     assert.equal(hash(source),row.afterFileSha256);
-    assert.equal(hash(restoreAuthReconciliation(row.path,source)),row.beforeFileSha256);
+    assert.equal(hash(restoreAuthReconciliation(row.path,current)),row.beforeFileSha256);
     for(const fn of row.functions){
       assert.equal(hash(fn.before),fn.beforeSha256);
       assert.equal(hash(fn.after),fn.afterSha256);
@@ -111,7 +185,7 @@ test("Auth 응답 유실 복구는 private 함수와 exact 일치하고 이전 �
         requireVerifiedIdentityPhone:"1a0d001b72fc271b0fd8fef64c84134b66f7835335b751e8d4c3520aad586755",
       }[fn.name]);
     }
-    assert.throws(()=>restoreAuthReconciliation(row.path,source+"\n"),/Auth candidate drift/);
+    assert.throws(()=>restoreAuthReconciliation(row.path,current+"\n"),/Auth(?: session loss)? candidate drift/);
   }
 });
 test("본인 번호 exact private authority와 공개 metadata 방어 보존",()=>{
@@ -152,10 +226,11 @@ test("전화번호 projection 추가·중복·누락 drift는 기존 golden 이�
     const restored=restorePhone(row.path,source).split(version).join(port.publicVersion);
     assert.equal(hash(restored),row.baseSha256,row.path);
     const authRow=port.authReconciliation.files.find(item=>item.path===row.path);
-    const after=authRow?.functions.at(-1).after||row.hunks.at(-1).after;
+    const sessionRow=port.sessionLoss.files.find(item=>item.path===row.path);
+    const after=sessionRow?.functions.at(-1).after||authRow?.functions.at(-1).after||row.hunks.at(-1).after;
     assert.equal(source.split(after).length,2,row.path);
     for(const drift of [source+"\n",source.replace(after,()=>after+after),source.replace(after,"")]){
-      assert.throws(()=>restorePhone(row.path,drift),/Auth candidate drift|phone candidate drift/);
+      assert.throws(()=>restorePhone(row.path,drift),/Auth(?: session loss)? candidate drift|phone candidate drift/);
     }
   }
 });

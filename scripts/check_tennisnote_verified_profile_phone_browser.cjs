@@ -21,6 +21,101 @@ function assert(condition, message) {
 const http = require("node:http");
 const root = path.resolve(__dirname, "..");
 // 실제 modular HTML과 이벤트를 사용하되 외부 Auth/SMS/DB는 차단한다.
+async function sessionLossContracts(page) {
+  return page.evaluate(async () => {
+    const checks = {}, check = (name, ok) => { checks[name] = Boolean(ok); };
+    const client = window.TennisNoteDataClient;
+    const originals = { getSession: client.getSession, readiness: client.readiness, rpc: client.rpc,
+      selectRows: client.selectRows, renderAll, saveSnapshot, showToast, applyPendingOnboardingIntent };
+    const authId = "00000000-0000-4000-8000-000000000101";
+    const profileId = "00000000-0000-4000-8000-000000000001";
+    const phone = "01000000003";
+    let live = true, mode = "lost-consent", writes = [], reads = 0, snapshots = 0, successes = 0;
+    const keys = [];
+    client.readiness = () => ({ ready: true });
+    client.getSession = () => live ? { access_token: "synthetic-session", user: { id: authId } } : null;
+    state.member = { ...state.member, id: profileId, profileId, authUserId: authId, role: "member", status: "active" };
+    state.liveProfileId = profileId;
+    state.profile.profileCompletedAt = ""; state.profile.name = "저장 전";
+    state.profile.termsConsentVersion = ""; state.profile.privacyConsentVersion = "";
+    const row = { id: profileId, name: "합성 회원", nickname: "합성별명", phone: "", birth_year: 2000,
+      neighborhood: "", gender: "prefer_not", role: "member", status: "active",
+      profile_completed_at: "2026-01-01T00:00:00.000Z", privacy_consent_version: identityPrivacyVersion,
+      updated_at: "2026-01-01T00:00:00.000Z" };
+    const fields = { identityRealName: row.name, identityNickname: row.nickname, identityPhone: phone,
+      identityBirthYear: "2000", identityNeighborhood: "", identityGender: row.gender };
+    for (const [id, value] of Object.entries(fields)) document.getElementById(id).value = value;
+    document.getElementById("identityTermsConsent").checked = true;
+    document.getElementById("identityPrivacyConsent").checked = true;
+    const modal = document.getElementById("identitySetupModal"), form = modal.querySelector("form");
+    const button = form.querySelector('button[type="submit"]');
+    modal.hidden = false;
+    renderAll = () => {};
+    saveSnapshot = () => { snapshots += 1; };
+    showToast = () => { successes += 1; };
+    applyPendingOnboardingIntent = async () => {};
+    client.rpc = async (name, args) => {
+      writes.push(name);
+      if (name === "tn_save_my_consent_preferences") {
+        if (mode === "lost-consent") live = false;
+        return { ok: true };
+      }
+      if (name !== "tn_save_my_signup_profile") throw new Error("unexpected_signup_rpc");
+      keys.push(args.target_operation_key);
+      if (mode === "lost-profile") live = false;
+      const { role, status, updated_at, ...rpcProfile } = row;
+      return { ok: true, profile: { ...rpcProfile, phone_candidate: phone }, linkStatus: "approval_pending" };
+    };
+    client.selectRows = async (table, options) => {
+      reads += 1;
+      if (table !== "tn_users" || options.filters?.id !== profileId || Object.keys(options.filters).length !== 1
+        || options.limit !== 2 || options.requireFresh !== true || options.requireCurrentSession !== true || options.retryAuth !== false)
+        throw new Error("unexpected_signup_readback");
+      if (mode === "lost-readback") live = false;
+      return mode === "missing-readback" ? [] : [{ ...row }];
+    };
+    const draft = () => Object.keys(fields).map(id => document.getElementById(id).value).join("|");
+    const before = draft();
+    const submit = () => submitIdentitySetup({ preventDefault() {}, currentTarget: form });
+    const prepare = () => {
+      live = true; modal.hidden = false;
+      identityPhoneVerification = { phone, status: "verified", source: "sms", owner: phoneVerificationOwner() };
+    };
+    try {
+      prepare(); live = false; await submit();
+      check("signup_lost_session_no_rpc_or_local_success", writes.length === 0 && reads === 0 && successes === 0 && snapshots === 0
+        && !state.profile.profileCompletedAt && state.profile.name === "저장 전" && !modal.hidden);
+      check("signup_lost_session_draft_and_retry_preserved", draft() === before && !button.disabled && !signupProfileSubmitting
+        && document.getElementById("identitySetupMessage").textContent.includes("로그인"));
+      const consentBefore = JSON.stringify([state.profile.termsConsentVersion, state.profile.privacyConsentVersion]);
+      prepare(); await submit();
+      check("signup_session_loss_during_consent_stops_profile", writes.length === 1 && writes[0] === "tn_save_my_consent_preferences"
+        && reads === 0 && successes === 0 && snapshots === 0 && !modal.hidden && draft() === before);
+      check("signup_late_consent_not_applied_locally", JSON.stringify([state.profile.termsConsentVersion, state.profile.privacyConsentVersion]) === consentBefore);
+      mode = "lost-profile"; prepare(); await submit();
+      check("signup_late_profile_response_no_success", keys.length === 1 && reads === 0 && successes === 0 && !modal.hidden
+        && !state.profile.profileCompletedAt && draft() === before);
+      mode = "lost-readback"; prepare(); await submit();
+      check("signup_lost_readback_session_keeps_draft", reads === 1 && successes === 0 && snapshots === 0 && !modal.hidden
+        && !state.profile.profileCompletedAt && draft() === before);
+      mode = "missing-readback"; prepare(); await submit();
+      check("signup_rpc_only_claim_not_completion", reads === 2 && successes === 0 && !modal.hidden && draft() === before);
+      mode = "confirmed"; prepare(); await submit();
+      check("signup_explicit_retry_durable_success_once", reads === 3 && successes === 1 && snapshots === 1 && modal.hidden
+        && state.profile.name === row.name && state.profile.profileCompletedAt === row.profile_completed_at);
+      check("signup_pending_candidate_does_not_change_canonical_phone", state.profile.phone === "");
+      check("signup_same_payload_keeps_operation_key", keys.length === 4 && new Set(keys).size === 1);
+      check("signup_final_submit_lock_released", !button.disabled && !signupProfileSubmitting);
+      return checks;
+    } finally {
+      client.getSession = originals.getSession; client.readiness = originals.readiness;
+      client.rpc = originals.rpc; client.selectRows = originals.selectRows;
+      renderAll = originals.renderAll; saveSnapshot = originals.saveSnapshot;
+      showToast = originals.showToast; applyPendingOnboardingIntent = originals.applyPendingOnboardingIntent;
+    }
+  });
+}
+
 async function profileContracts(page) {
   return page.evaluate(async () => {
     const checks = {};
@@ -606,6 +701,7 @@ async function main() {
   const optionalOnly=process.env.TENNISNOTE_PROFILE_OPTIONAL_ONLY==="true";
   const statusOnly=process.env.TENNISNOTE_PROFILE_STATUS_FOCUSED==="1";
   const ownershipOnly=process.env.TENNISNOTE_PROFILE_OWNERSHIP_FOCUSED==="1";
+  const sessionLossOnly=process.env.TENNISNOTE_AUTH_SESSION_LOSS_FOCUSED==="1";
   assert(!captureOnly || captureDir,"capture_only_requires_private_output_directory");
   if(captureDir)fs.mkdirSync(captureDir,{recursive:true});
   let contexts=0,predicates=0;
@@ -616,6 +712,7 @@ async function main() {
         ...(selected==="chromium" && process.env.TENNISNOTE_CHROMIUM_EXECUTABLE ? {executablePath:process.env.TENNISNOTE_CHROMIUM_EXECUTABLE} : {})});
       try {
         for(const colorScheme of colorSchemes) for(const viewport of viewports){
+          if(sessionLossOnly && (viewport.width!==390 || colorScheme!=="light"))continue;
           if(ownershipOnly && viewport.width!==390)continue;
           if(statusOnly && ![390,768,1366,844].includes(viewport.width))continue;
           if(captureOnly && ![390,768,1366].includes(viewport.width))continue;
@@ -630,8 +727,8 @@ async function main() {
             window.TennisNoteDataClient.readiness=()=>({ready:true});
             bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
           });
-          const legacyResult=optionalOnly || statusOnly || ownershipOnly ? {} : await profileContracts(page);
-          if(!optionalOnly && !statusOnly && !ownershipOnly){
+          const legacyResult=optionalOnly || statusOnly || ownershipOnly || sessionLossOnly ? {} : await profileContracts(page);
+          if(!optionalOnly && !statusOnly && !ownershipOnly && !sessionLossOnly){
             // Reload alone retains the legacy snapshot and its editor draft.
             // Isolate the second contract in a genuinely empty browser context.
             await context.close();
@@ -646,8 +743,8 @@ async function main() {
               bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
             });
           }
-          const result=ownershipOnly ? await profileOperationStatusContracts(page,true) : statusOnly ? await profileOperationStatusContracts(page) : {...legacyResult,...await optionalProfileContracts(page)};
-          if(!statusOnly && !captureOnly && !ownershipOnly) Object.assign(result, await profileOperationStatusContracts(page));
+          const result=sessionLossOnly ? await sessionLossContracts(page) : ownershipOnly ? await profileOperationStatusContracts(page,true) : statusOnly ? await profileOperationStatusContracts(page) : {...legacyResult,...await optionalProfileContracts(page)};
+          if(!statusOnly && !captureOnly && !ownershipOnly && !sessionLossOnly) Object.assign(result, await profileOperationStatusContracts(page), await sessionLossContracts(page));
           for(const [name,ok] of Object.entries(result))assert(ok,`${selected}/${viewport.width}/${colorScheme}: ${name}`);
           assert(errors.length===0,`page_errors:${errors.join("|")}`);
           if(captureDir && [390,768,1366].includes(viewport.width)){

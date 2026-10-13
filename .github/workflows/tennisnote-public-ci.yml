@@ -11,6 +11,7 @@ on:
       - "scripts/check_tennisnote_verified_profile_phone_browser.cjs"
       - "scripts/check_cloudflare_build.py"
       - "scripts/check_tennisnote_dev_prod_alignment.py"
+      - "scripts/check_tennisnote_development_deploy_scope.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_renewal_hold_browser.cjs"
@@ -31,6 +32,7 @@ on:
       - "scripts/check_tennisnote_verified_profile_phone_browser.cjs"
       - "scripts/check_cloudflare_build.py"
       - "scripts/check_tennisnote_dev_prod_alignment.py"
+      - "scripts/check_tennisnote_development_deploy_scope.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_renewal_hold_browser.cjs"
@@ -80,3 +82,11 @@ jobs:
       - name: Verify
         timeout-minutes: 4
         run: ./scripts/verify.sh
+
+  deploy-development-after-ci:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
+    needs: build-and-check
+    uses: ./.github/workflows/deploy-cloudflare-pages-dev.yml
+    permissions:
+      contents: read
+    secrets: inherit

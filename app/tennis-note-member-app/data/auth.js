@@ -89,18 +89,13 @@ async function loadIdentityConsentPreferences() {
 async function persistConsentPreferences({ marketingPush, marketingSms, marketingEmail }) {
   const client = window.TennisNoteDataClient;
   if (!hasLiveMemberSession() || !client?.rpc) {
-    applyConsentPreferences({
-      termsVersion: identityTermsVersion,
-      termsConsentedAt: new Date().toISOString(),
-      privacyVersion: identityPrivacyVersion,
-      privacyConsentedAt: new Date().toISOString(),
-      marketingPush,
-      marketingSms,
-      marketingEmail,
-    });
-    return { ok: true, offlinePreview: true };
+    throw new Error("login_required");
   }
-  const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_consent_preferences", {
+  const owner = phoneVerificationOwner();
+  if (!owner.authId || !phoneVerificationOwnerCurrent(owner)) throw new Error("login_required");
+  const rawResult = await retryTransientNetwork(() => {
+    if (!phoneVerificationOwnerCurrent(owner)) throw new Error("login_required");
+    return client.rpc("tn_save_my_consent_preferences", {
     target_terms_version: identityTermsVersion,
     target_privacy_version: identityPrivacyVersion,
     target_terms_consent: true,
@@ -108,7 +103,9 @@ async function persistConsentPreferences({ marketingPush, marketingSms, marketin
     target_marketing_push: marketingPush === true,
     target_marketing_sms: marketingSms === true,
     target_marketing_email: marketingEmail === true,
-  }));
+    });
+  });
+  if (!phoneVerificationOwnerCurrent(owner)) throw new Error("login_required");
   const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
   if (!result?.ok) throw new Error("consent_update_not_confirmed");
   applyConsentPreferences(result);
@@ -165,7 +162,7 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!profileEditor && (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear())) throw new Error("birth_year_invalid");
   if (!profileEditor && !["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
   const client = window.TennisNoteDataClient;
-  if (profileEditor && (!hasLiveMemberSession() || !client?.rpc)) throw new Error("login_required");
+  if (!hasLiveMemberSession() || !client?.rpc) throw new Error("login_required");
   if (hasLiveMemberSession() && client?.rpc) {
     if (profileEditor) {
       const owner = profilePhoneEditorOwner;
@@ -197,7 +194,10 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       else setIdentityPhoneStatus("저장된 번호를 그대로 유지했습니다. 새 번호로 바꾸려면 인증해 주세요.", "", "profile");
       return result;
     }
+    const signupOwner = phoneVerificationOwner();
+    if (!signupOwner.authId || !phoneVerificationOwnerCurrent(signupOwner)) throw new Error("login_required");
     await requireVerifiedIdentityPhone(normalizedPhone);
+    if (!phoneVerificationOwnerCurrent(signupOwner)) throw new Error("login_required");
     const targetProfile = {
       name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,
       birthYear: normalizedBirthYear, neighborhood: normalizedNeighborhood,
@@ -209,11 +209,15 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
     if (signupProfileOperation.fingerprint !== fingerprint) {
       signupProfileOperation = { fingerprint, key: crypto.randomUUID() };
     }
-    const signupAuthUserId = String(state.member?.authUserId || "");
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_signup_profile", {
-      target_profile: targetProfile,
-      target_operation_key: signupProfileOperation.key,
-    }));
+    const signupAuthUserId = signupOwner.authId;
+    const rawResult = await retryTransientNetwork(() => {
+      if (!phoneVerificationOwnerCurrent(signupOwner)) throw new Error("login_required");
+      return client.rpc("tn_save_my_signup_profile", {
+        target_profile: targetProfile,
+        target_operation_key: signupProfileOperation.key,
+      });
+    });
+    if (!phoneVerificationOwnerCurrent(signupOwner)) throw new Error("login_required");
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
     if (result.linkStatus === "linked") {
@@ -223,23 +227,37 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
         requireSignupReadback: true,
       });
       if (!restored) throw new Error("signup_link_readback_unconfirmed");
-    } else applySavedIdentity(result.profile);
-    return result;
+      return { ...result, signupReadbackConfirmed: true };
+    }
+    // 승인 대기 번호는 private candidate다. 정식 tn_users.phone과 같다고
+    // 추정하거나, RPC가 반환하지 않는 role/status를 비교하지 않는다.
+    if (result.linkStatus !== "approval_pending" || result.profile.id !== signupOwner.profileId
+      || normalizeIdentityPhone(result.profile.phone_candidate) !== normalizedPhone
+      || typeof client.selectRows !== "function") throw new Error("signup_link_readback_unconfirmed");
+    const rows = await client.selectRows("tn_users", {
+      select: "id,name,nickname,phone,birth_year,neighborhood,gender,role,status,profile_completed_at,privacy_consent_version,privacy_consented_at,updated_at",
+      filters: { id: result.profile.id }, limit: 2,
+      requireFresh: true, requireCurrentSession: true, retryAuth: false,
+    });
+    if (!phoneVerificationOwnerCurrent(signupOwner)) throw new Error("login_required");
+    const profile = rows?.length === 1 ? rows[0] : null;
+    if (!profile || profile.id !== result.profile.id || profile.name !== result.profile.name
+      || profile.nickname !== result.profile.nickname || normalizeIdentityPhone(profile.phone) !== normalizeIdentityPhone(result.profile.phone)
+      || Number(profile.birth_year) !== Number(result.profile.birth_year)
+      || normalizeIdentityText(profile.neighborhood) !== normalizeIdentityText(result.profile.neighborhood)
+      || profile.gender !== result.profile.gender || profile.role !== "member" || profile.status !== "active"
+      || !profile.updated_at || !profile.profile_completed_at
+      || Date.parse(profile.profile_completed_at) !== Date.parse(result.profile.profile_completed_at)
+      || profile.privacy_consent_version !== identityPrivacyVersion
+      || profile.privacy_consent_version !== result.profile.privacy_consent_version) {
+      throw new Error("signup_link_readback_unconfirmed");
+    }
+    applySavedIdentity(profile, { preserveCompletion: true });
+    // private candidate의 증거는 동일 operation RPC receipt에 한정된다.
+    return { ...result, profile, signupReadbackConfirmed: true };
   }
 
-  const profile = {
-    name: normalizedRealName,
-    nickname: normalizedNickname,
-    phone: normalizedPhone,
-    birth_year: normalizedBirthYear,
-    neighborhood: normalizedNeighborhood,
-    gender: normalizedGender,
-    profile_completed_at: new Date().toISOString(),
-    privacy_consent_version: identityPrivacyVersion,
-    privacy_consented_at: new Date().toISOString(),
-  };
-  applySavedIdentity(profile);
-  return { ok: true, profile, linkStatus: "offline_preview" };
+  throw new Error("login_required");
 }
 
 function activateLiveMemberProfile(profileId) {

@@ -343,6 +343,7 @@ async function submitIdentitySetup(event) {
       neighborhood: $("#identityNeighborhood")?.value,
       gender: $("#identityGender")?.value,
     });
+    if (!result?.ok || result.signupReadbackConfirmed !== true) throw new Error("signup_link_readback_unconfirmed");
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
     renderAll();

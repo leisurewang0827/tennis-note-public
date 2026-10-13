@@ -9,7 +9,24 @@ const operationStatusManifest = JSON.parse(fs.readFileSync(path.join(root, "test
 const durableReadbackManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-durable-readback-source-parity.json"), "utf8"));
 const editorDraftManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-editor-draft-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
+function restoreSessionLoss(file, text) {
+  const contract = manifest.sessionLoss;
+  assert.equal(contract?.contract, "auth-session-loss-fail-closed/1", "session-loss contract missing");
+  const row = contract.files.find(item => item.path === file);
+  if (!row) return text;
+  text = text.replace(/\r\n/g, "\n");
+  assert.equal(sha(text), row.afterFileSha256, `Auth session loss candidate drift: ${file}`);
+  for (const fn of [...row.functions].reverse()) {
+    assert.equal(sha(fn.after), fn.afterSha256, `session-loss after pin drift: ${fn.name}`);
+    assert.equal(sha(fn.before), fn.beforeSha256, `session-loss before pin drift: ${fn.name}`);
+    assert.equal(text.split(fn.after).length, 2, `session-loss inverse drift: ${fn.name}`);
+    text = text.replace(fn.after, () => fn.before);
+  }
+  assert.equal(sha(text), row.beforeFileSha256, `session-loss baseline drift: ${file}`);
+  return text;
+}
 function restoreAuthReconciliation(file, text) {
+  text = restoreSessionLoss(file, text);
   const row = manifest.authReconciliation.files.find(item => item.path === file);
   if (!row) return text;
   text = text.replace(/\r\n/g, "\n");
@@ -80,4 +97,4 @@ function restorePhone(file, text, inputVersion = JSON.parse(fs.readFileSync(path
   return text.replaceAll(manifest.publicVersion, inputVersion);
 }
 module.exports = { restorePhone, restoreOperationStatus, restoreDurableReadback, restoreEditorDraft,
-  restoreAuthReconciliation, editorDraftManifest, durableReadbackManifest, operationStatusManifest, manifest };
+  restoreAuthReconciliation, restoreSessionLoss, editorDraftManifest, durableReadbackManifest, operationStatusManifest, manifest };

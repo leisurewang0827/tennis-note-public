@@ -208,7 +208,7 @@ def authority_paths(prefix: str) -> list[str]:
 
 
 def release_metadata(path: Path) -> dict[str, str]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(restore_auth_dev_prepare_base(path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")))
     return {
         "version": str(data["version"]),
         "release_id": str(data["releaseId"]),
@@ -283,7 +283,30 @@ def restore_exact_outer_base(path: str, text: str, fixture: str, input_version: 
     return text.replace(port["publicVersion"], input_version)
 
 
+def restore_auth_session_loss_base(path: str, text: str) -> str:
+    port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
+    contract = port.get("sessionLoss")
+    if not contract or contract.get("contract") != "auth-session-loss-fail-closed/1":
+        raise RuntimeError("Auth session loss contract missing")
+    row = next((item for item in contract["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["afterFileSha256"]:
+        raise RuntimeError(f"Auth session loss candidate drift: {path}")
+    for function in reversed(row["functions"]):
+        before, after = function["before"], function["after"]
+        if sha256(before.encode("utf-8")) != function["beforeSha256"] or sha256(after.encode("utf-8")) != function["afterSha256"]:
+            raise RuntimeError(f"Auth session loss function pin drift: {path}")
+        if not after or text.count(after) != 1:
+            raise RuntimeError(f"Auth session loss inverse drift: {path}")
+        text = text.replace(after, before, 1)
+    if sha256(text.encode("utf-8")) != row["beforeFileSha256"]:
+        raise RuntimeError(f"Auth session loss baseline drift: {path}")
+    return text
+
+
 def restore_auth_reconciliation_base(path: str, text: str) -> str:
+    text = restore_auth_session_loss_base(path, text)
     """새 Auth 증분만 검증·역변환하며 기존 운영 golden은 보존한다."""
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
     contract = port.get("authReconciliation")
@@ -429,7 +452,8 @@ def classify_commits() -> list[dict[str, str]]:
 
 
 def candidate_cache(path: Path) -> str:
-    match = re.search(r'^const CACHE_NAME = "([^"]+)";', path.read_text(encoding="utf-8"), re.M)
+    text = restore_auth_dev_prepare_base(path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8"))
+    match = re.search(r'^const CACHE_NAME = "([^"]+)";', text, re.M)
     if not match:
         raise RuntimeError(f"CACHE_NAME not found: {path}")
     return match.group(1)
@@ -639,6 +663,24 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
     return text
 
 
+def restore_auth_dev_prepare_base(path: str, text: str) -> str:
+    """DEV 게시 준비의 exact 증분만 제거하고 기존 golden을 유지한다."""
+    port = json.loads((ROOT / "tests/fixtures/auth-only-development-prepare-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    text = text.replace("\r\n", "\n")
+    if sha256(text.encode("utf-8")) != row["afterSha256"]:
+        raise RuntimeError(f"Auth DEV prepare candidate drift: {path}")
+    for after, before in row["inverse"]:
+        if not after or after not in text:
+            raise RuntimeError(f"Auth DEV prepare inverse drift: {path}")
+        text = text.replace(after, before)
+    if sha256(text.encode("utf-8")) != row["beforeSha256"]:
+        raise RuntimeError(f"Auth DEV prepare baseline drift: {path}")
+    return text
+
+
 def verify() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     candidate = manifest["candidate_release"]
@@ -692,6 +734,10 @@ def verify() -> None:
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
+            data = restore_auth_dev_prepare_base(path, data.decode("utf-8")).encode("utf-8")
+        except UnicodeDecodeError:
+            pass
+        try:
             signin_port = json.loads((ROOT / "tests/fixtures/development-signin-source-parity.json").read_text(encoding="utf-8"))
             phone_port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
             text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, phone_port["publicVersion"])
@@ -721,7 +767,7 @@ def verify() -> None:
     if mismatches:
         raise RuntimeError(f"product hash drift outside approved literals: {mismatches[:20]}")
 
-    workflow = (ROOT / DEV_WORKFLOW).read_bytes()
+    workflow = restore_auth_dev_prepare_base(DEV_WORKFLOW, (ROOT / DEV_WORKFLOW).read_text(encoding="utf-8")).encode("utf-8")
     workflow_text = workflow.decode("utf-8").replace("\r\n", "\n")
     for line in DEV_WORKFLOW_LINES:
         if workflow_text.splitlines().count(line) != 1:

@@ -198,7 +198,7 @@ function identityErrorMessage(error) {
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
   if (code.includes("terms_consent")) return "서비스 이용약관 동의가 필요합니다.";
   if (code.includes("privacy_consent")) return "개인정보 처리방침 동의가 필요합니다.";
-  if (code.includes("login_required")) return "로그인 상태를 다시 확인해 주세요.";
+  if (code.includes("login_required")) return "로그인 상태가 종료되었습니다. 입력을 유지한 채 다시 로그인해 주세요.";
   return "정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
