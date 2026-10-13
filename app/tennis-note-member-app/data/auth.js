@@ -121,12 +121,20 @@ async function refreshIdentityPhoneVerification(surface = "signup") {
   if (!hasLiveMemberSession() || !client?.getAuthUser) return "";
   const owner = phoneVerificationOwner();
   const inputPhone = normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "");
+  const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
+    && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
+    && phoneVerificationRequestCurrent(owner, inputPhone, surface));
   const user = await client.getAuthUser();
   if (!phoneVerificationOwnerCurrent(owner) || (owner.authId && user?.id && user.id !== owner.authId)) return "";
-  const verifiedPhone = verifiedPhoneFromAuthUser(user || {}, surface === "profile");
+  if (!profileContextCurrent()) return "";
+  const verifiedPhone = surface === "profile" ? confirmedDirectAuthPhone(user, owner.authId)
+    : verifiedPhoneFromAuthUser(user || {}, false);
+  if (surface === "profile" && verifiedPhone !== inputPhone) return "";
   if (verifiedPhone && ((!inputPhone && surface === "signup") || inputPhone === verifiedPhone)
     && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "") === inputPhone) {
-    markIdentityPhoneVerified(verifiedPhone, "provider", surface);
+    markIdentityPhoneVerified(verifiedPhone, surface === "profile" ? "sms" : "provider", surface);
   }
   return verifiedPhone;
 }
@@ -134,7 +142,8 @@ async function refreshIdentityPhoneVerification(surface = "signup") {
 async function requireVerifiedIdentityPhone(phone, surface = "signup") {
   const normalizedPhone = normalizeIdentityPhone(phone);
   const verification = phoneVerificationState(surface);
-  if (verification.status === "verified" && verification.phone === normalizedPhone && phoneVerificationOwnerCurrent(verification.owner)) return true;
+  if (surface !== "profile" && verification.status === "verified" && verification.phone === normalizedPhone
+    && phoneVerificationOwnerCurrent(verification.owner)) return true;
   const verifiedPhone = await refreshIdentityPhoneVerification(surface);
   if (verifiedPhone === normalizedPhone) return true;
   throw new Error("phone_verification_required");

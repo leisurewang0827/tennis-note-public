@@ -73,6 +73,15 @@ function verifiedPhoneFromAuthUser(user = {}, strict = false) {
   return identityPhone.startsWith("82") ? `0${identityPhone.slice(2)}` : identityPhone;
 }
 
+function confirmedDirectAuthPhone(user, expectedAuthId) {
+  if (!expectedAuthId || user?.id !== expectedAuthId) return "";
+  const digits = normalizeIdentityPhone(user.phone || "");
+  const canonical = digits.startsWith("82") ? `0${digits.slice(2)}` : digits;
+  const confirmedAt = Date.parse(user.phone_confirmed_at || "");
+  return /^01[0-9]{8,9}$/u.test(canonical) && Number.isFinite(confirmedAt) && confirmedAt <= Date.now()
+    ? canonical : "";
+}
+
 function authUserHasProvider(user = {}, provider = "") {
   const expected = String(provider || "").trim().toLowerCase();
   if (!expected) return false;
@@ -168,6 +177,8 @@ function identityErrorMessage(error) {
     return "가입 정보는 저장됐지만 회원권 조회를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.";
   }
   const code = normalizedIdentityErrorCode(error);
+  if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";
+  if (code.includes("phone_otp_invalid") || code.includes("phone_otp_verification_failed")) return "인증번호 6자리를 확인해 주세요.";
   if (code.includes("failed_to_fetch") || code.includes("networkerror") || code.includes("load_failed") || code.includes("temporarily_unavailable")) {
     return "인터넷 연결이 불안정합니다. 입력 내용은 유지되니 잠시 후 다시 저장해 주세요.";
   }
@@ -181,8 +192,6 @@ function identityErrorMessage(error) {
   if (code.includes("profile_phone_readback_unconfirmed")) return "번호 저장 결과를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.";
   if (code.includes("over_email_send_rate_limit") || code.includes("rate_limit") || code.includes("too many")) return "인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.";
   if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return phoneAuthUnavailableMessage();
-  if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";
-  if (code.includes("phone_otp_invalid") || code.includes("phone_otp_verification_failed")) return "인증번호 6자리를 확인해 주세요.";
   if (code.includes("phone_exists")) return "이미 다른 계정에 연결된 휴대전화입니다. 기존 계정으로 로그인하거나 다른 번호를 사용해 주세요.";
   if (code.includes("phone_change_conflict") || code.includes("phone already")) return "이미 다른 로그인 계정에서 확인된 번호입니다. 관리자에게 계정 연결을 요청해 주세요.";
   if (code.includes("birth_year_invalid")) return "출생연도를 확인해 주세요.";

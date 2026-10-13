@@ -9,6 +9,22 @@ const operationStatusManifest = JSON.parse(fs.readFileSync(path.join(root, "test
 const durableReadbackManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-durable-readback-source-parity.json"), "utf8"));
 const editorDraftManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-editor-draft-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
+function restoreAuthReconciliation(file, text) {
+  const row = manifest.authReconciliation.files.find(item => item.path === file);
+  if (!row) return text;
+  text = text.replace(/\r\n/g, "\n");
+  assert.equal(sha(text), row.afterFileSha256, `Auth candidate drift: ${file}`);
+  for (const fn of [...row.functions].reverse()) {
+    assert.equal(sha(fn.after), fn.afterSha256, `Auth function pin drift: ${fn.name}`);
+    assert.equal(sha(fn.before), fn.beforeSha256, `Auth inverse pin drift: ${fn.name}`);
+    const needle = fn.before ? fn.after : `\n\n${fn.after}\n`;
+    const replacement = fn.before || "\n";
+    assert.equal(text.split(needle).length, 2, `Auth exact inverse: ${file}/${fn.name}`);
+    text = text.replace(needle, () => replacement);
+  }
+  assert.equal(sha(text), row.beforeFileSha256, `Auth baseline drift: ${file}`);
+  return text;
+}
 function restoreEditorDraft(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
   const row = editorDraftManifest.files.find(item => item.path === file);
   if (!row) return text;
@@ -35,6 +51,7 @@ function restoreDurableReadback(file, text, inputVersion = JSON.parse(fs.readFil
   return text.replaceAll(durableReadbackManifest.publicVersion, inputVersion);
 }
 function restoreOperationStatus(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  text = restoreAuthReconciliation(file, text);
   text = restoreDurableReadback(file, text, inputVersion);
   const row = operationStatusManifest.files.find(item => item.path === file);
   if (!row) return text;
@@ -62,4 +79,5 @@ function restorePhone(file, text, inputVersion = JSON.parse(fs.readFileSync(path
   assert.equal(sha(text), row.baseSha256, `phone base drift: ${file}`);
   return text.replaceAll(manifest.publicVersion, inputVersion);
 }
-module.exports = { restorePhone, restoreOperationStatus, restoreDurableReadback, restoreEditorDraft, editorDraftManifest, durableReadbackManifest, operationStatusManifest, manifest };
+module.exports = { restorePhone, restoreOperationStatus, restoreDurableReadback, restoreEditorDraft,
+  restoreAuthReconciliation, editorDraftManifest, durableReadbackManifest, operationStatusManifest, manifest };

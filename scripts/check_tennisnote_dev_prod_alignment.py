@@ -283,7 +283,33 @@ def restore_exact_outer_base(path: str, text: str, fixture: str, input_version: 
     return text.replace(port["publicVersion"], input_version)
 
 
+def restore_auth_reconciliation_base(path: str, text: str) -> str:
+    """새 Auth 증분만 검증·역변환하며 기존 운영 golden은 보존한다."""
+    port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
+    contract = port.get("authReconciliation")
+    if not contract or contract.get("contract") != "auth-direct-phone-reconciliation/1":
+        raise RuntimeError("Auth reconciliation contract missing")
+    row = next((item for item in contract["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["afterFileSha256"]:
+        raise RuntimeError(f"Auth candidate drift: {path}")
+    for function in reversed(row["functions"]):
+        before, after = function["before"], function["after"]
+        if sha256(before.encode("utf-8")) != function["beforeSha256"] or sha256(after.encode("utf-8")) != function["afterSha256"]:
+            raise RuntimeError(f"Auth function pin drift: {path}")
+        needle = after if before else "\n\n" + after + "\n"
+        replacement = before or "\n"
+        if not needle or text.count(needle) != 1:
+            raise RuntimeError(f"Auth inverse drift: {path}")
+        text = text.replace(needle, replacement, 1)
+    if sha256(text.encode("utf-8")) != row["beforeFileSha256"]:
+        raise RuntimeError(f"Auth baseline drift: {path}")
+    return text
+
+
 def restore_verified_profile_phone_base(path: str, text: str) -> str:
+    text = restore_auth_reconciliation_base(path, text)
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
     text = restore_exact_outer_base(path, text, "profile-editor-draft-source-parity.json", port["publicVersion"])
     text = restore_exact_outer_base(path, text, "profile-durable-readback-source-parity.json", port["publicVersion"])
