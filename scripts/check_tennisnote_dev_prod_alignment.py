@@ -665,7 +665,7 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 def restore_r3_auth548_base(path: str, text: str) -> str:
     raw = (ROOT / "tests/fixtures/r3-after-auth548-outer-parity.json").read_bytes()
-    if sha256(raw) != "3914ecc95b1baede733edcab8e5ff0c9788978dc2056179ecd4660ab6b6beb59":
+    if sha256(raw) != "db98b3a58dc41e6820de4c5a903b1070fb3d6c198ed0e0cd296b17808ef97472":
         raise RuntimeError("R3/Auth outer seal drift")
     port = json.loads(raw)
     row = next((item for item in port["files"] if item["path"] == path), None)
@@ -674,8 +674,8 @@ def restore_r3_auth548_base(path: str, text: str) -> str:
     text = text.replace("\r\n", "\n")
     if sha256(text.encode("utf-8")) != row["afterSha256"]:
         raise RuntimeError("R3/Auth outer source drift: " + path)
-    hunk = row["authInverse"]
-    if hunk is not None:
+    hunks = row.get("authInverseHunks") or ([row["authInverse"]] if row["authInverse"] is not None else [])
+    for hunk in reversed(hunks):
         start = hunk["start"]
         if text[start:start + len(hunk["after"])] != hunk["after"]:
             raise RuntimeError("R3/Auth outer inverse drift")

@@ -5,6 +5,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 concurrency:
   group: cloudflare-pages-development
@@ -29,6 +31,9 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
       TENNISNOTE_CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+      GH_TOKEN: ${{ github.token }}
+      TENNISNOTE_R3_CAPABILITY_RECEIPT: ${{ vars.DEV_R3_CAPABILITY_RECEIPT }}
+      DEV_R3_CAPABILITY_RECEIPT_SHA256: ${{ vars.DEV_R3_CAPABILITY_RECEIPT_SHA256 }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -39,6 +44,10 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
 
       - name: Require publishable R3 source checkpoint
         run: node scripts/check_tennisnote_r3_auth548_provenance.cjs --deploy

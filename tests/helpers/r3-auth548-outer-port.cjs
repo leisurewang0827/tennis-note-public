@@ -2,14 +2,14 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto"),assert=require("node:assert/strict");
 const root=path.resolve(__dirname,"../.."),sha=s=>crypto.createHash("sha256").update(s).digest("hex");
 const raw=fs.readFileSync(path.join(root,"tests/fixtures/r3-after-auth548-outer-parity.json"));
-assert.equal(sha(raw),"3914ecc95b1baede733edcab8e5ff0c9788978dc2056179ecd4660ab6b6beb59","R3/Auth outer seal drift");
+assert.equal(sha(raw),"db98b3a58dc41e6820de4c5a903b1070fb3d6c198ed0e0cd296b17808ef97472","R3/Auth outer seal drift");
 const contract=JSON.parse(raw);assert.equal(contract.contract,"r3-after-auth548-strict-outer/1");
 function restore(file,text,kind="auth"){
   assert(["auth","r3"].includes(kind));text=text.replace(/\r\n/g,"\n");
   const row=contract.files.find(r=>r.path===file);if(!row)return text;
   assert.equal(sha(text),row.afterSha256,"R3/Auth outer source drift:"+file);
-  const hunk=row[kind+"Inverse"];
-  if(hunk){const chars=Array.from(text),length=Array.from(hunk.after).length;assert.equal(chars.slice(hunk.start,hunk.start+length).join(""),hunk.after,"R3/Auth inverse drift");text=chars.slice(0,hunk.start).join("")+hunk.before+chars.slice(hunk.start+length).join("")}
+  const hunk=row[kind+"Inverse"],hunks=row[kind+"InverseHunks"]||(hunk?[hunk]:[]);
+  for(const patch of [...hunks].reverse()){const chars=Array.from(text),length=Array.from(patch.after).length;assert.equal(chars.slice(patch.start,patch.start+length).join(""),patch.after,"R3/Auth inverse drift");text=chars.slice(0,patch.start).join("")+patch.before+chars.slice(patch.start+length).join("")}
   assert.equal(sha(text),row[kind+"Sha256"],"R3/Auth authority drift");return text;
 }
 function validateSource(){

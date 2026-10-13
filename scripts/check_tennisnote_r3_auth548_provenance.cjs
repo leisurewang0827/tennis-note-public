@@ -25,6 +25,20 @@ function validateEvidence(which,run){
   return true;
 }
 function requirePublishable(){assert.equal(outer.contract.publishable,true,"foundation_requires_release_and_server_gate");}
+function validateRuntimeReceipt(raw,expectedHash,now=Date.now()){
+  assert(/^[a-f0-9]{64}$/.test(expectedHash||""),"runtime_receipt_approval_missing");
+  assert.equal(outer.sha(raw),expectedHash,"runtime_receipt_hash_mismatch");
+  const r=JSON.parse(raw),c=outer.contract.runtimeAdmission;
+  assert.deepEqual(Object.keys(r).sort(),["contract","environment","projectFingerprint","privatePolicy","authSourceSha256","releaseId","readOnly","schemaReady","roleGrantsVerified","rolloutOff","migrations","observedAt","expiresAt"].sort(),"runtime_receipt_field_mismatch");
+  assert.equal(r.contract,"r3-development-readonly-capability/1");
+  assert.equal(r.environment,"development");assert.equal(r.projectFingerprint,"63350140ffe5");
+  assert.equal(r.privatePolicy,c.privatePolicy);assert.equal(r.authSourceSha256,c.authSourceSha256);
+  assert.equal(r.releaseId,outer.contract.candidateRelease.releaseId);
+  assert.equal(r.readOnly,true);assert.equal(r.schemaReady,true);assert.equal(r.roleGrantsVerified,true);assert.equal(r.rolloutOff,true);
+  assert.deepEqual(r.migrations,c.migrations);
+  const observed=Date.parse(r.observedAt),expires=Date.parse(r.expiresAt);
+  assert(Number.isFinite(observed)&&Number.isFinite(expires)&&observed<=now&&now<expires&&expires-observed<=30*60*1000,"runtime_receipt_stale");return true;
+}
 const git=(...args)=>cp.execFileSync("git",args,{cwd:outer.root,encoding:"utf8",maxBuffer:16e6}).trim();
 async function api(suffix){
   assert(/^(actions\/runs\/\d+|commits\/[a-f0-9]{40}\/pulls)$/.test(suffix));assert(process.env.GH_TOKEN,"read_only_api_access_missing");
@@ -42,13 +56,18 @@ async function routeCi(){
     if(p){context={repository:env.GITHUB_REPOSITORY,event,ref,sha:env.GITHUB_SHA,checkout:git("rev-parse","HEAD"),parent1:git("rev-parse","HEAD^1"),merged:true,mergeCommit:p.merge_commit_sha,headRepository:p.head.repo.full_name,headRef:p.head.ref};scoped=true;requirePublishable()}
   }
   if(scoped){validateContext(context);outer.validateSource();for(const which of ["r3Public","authPublic"])validateEvidence(which,await api("actions/runs/"+outer.contract.evidence[which].run));}
-  fs.appendFileSync(env.GITHUB_OUTPUT,"scoped="+String(scoped)+"\n");console.log(scoped?"R3_AUTH_SOURCE_EVIDENCE_PASS":"STANDARD_VERIFICATION_REQUIRED");
+  fs.appendFileSync(env.GITHUB_OUTPUT,"scoped="+String(scoped)+"\n");console.log(scoped?"R3_AUTH_SOURCE_EVIDENCE_PASS":"STANDARD_VERIFICATION_REQUIRED");return scoped;
 }
 async function main(){
   const mode=process.argv[2];
   if(mode==="--ci-route")return routeCi();
-  if(mode==="--deploy"){assert.equal(process.env.GITHUB_REPOSITORY,REPOSITORY);assert.equal(process.env.GITHUB_EVENT_NAME,"push");assert.equal(process.env.GITHUB_REF,"refs/heads/dev");requirePublishable();throw Error("explicit_runtime_admission_still_required")}
+  if(mode==="--deploy"){
+    assert.equal(process.env.GITHUB_REPOSITORY,REPOSITORY);assert.equal(process.env.GITHUB_EVENT_NAME,"push");assert.equal(process.env.GITHUB_REF,"refs/heads/dev");
+    requirePublishable();outer.validateSource();
+    validateRuntimeReceipt(process.env.TENNISNOTE_R3_CAPABILITY_RECEIPT||"",process.env.DEV_R3_CAPABILITY_RECEIPT_SHA256||"");
+    assert.equal(await routeCi(),true,"deployment_merge_admission_missing");return;
+  }
   assert.equal(mode,"--local");console.log(JSON.stringify(outer.validateSource()));
 }
-module.exports={validateContext,validateEvidence,requirePublishable,REPOSITORY,BRANCH,BASE};
+module.exports={validateContext,validateEvidence,requirePublishable,validateRuntimeReceipt,REPOSITORY,BRANCH,BASE};
 if(require.main===module)main().catch(()=>{console.error("R3_AUTH_PROVENANCE_FAIL");process.exitCode=1});

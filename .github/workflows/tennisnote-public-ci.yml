@@ -94,7 +94,7 @@ jobs:
       - name: Verify only newly composed source and context guards
         if: ${{ steps.provenance.outputs.scoped == 'true' }}
         run: |
-          node --test tests/r3-auth548-composition.test.js tests/r3-auth548-editor-context.test.js tests/r3-auth548-otp-context.test.js
+          node --test tests/r3-auth548-composition.test.js tests/r3-auth548-editor-context.test.js tests/r3-auth548-otp-context.test.js tests/r3-auth549-release-admission.test.js
           python scripts/check_tennisnote_dev_prod_alignment.py
 
   deploy-development-after-ci:
@@ -103,4 +103,6 @@ jobs:
     uses: ./.github/workflows/deploy-cloudflare-pages-dev.yml
     permissions:
       contents: read
+      actions: read
+      pull-requests: read
     secrets: inherit
