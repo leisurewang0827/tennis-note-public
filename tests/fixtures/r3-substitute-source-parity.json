@@ -1,0 +1,205 @@
+{
+  "contract": "r3-substitute-policy-public-overlay-v1",
+  "files": [
+    {
+      "path": "app/admin/data/billing.js",
+      "candidateSha256": "301524382f7fd944df1a78fa2966b9524f0cf3826626ad0863f44cc6d9f12010",
+      "baseSha256": "f8b59665ab8837f35db09d0ac22657e2f1aa4e99057810730b37f4fc8efa33b1",
+      "hunks": [
+        {
+          "start": 22190,
+          "end": 23273,
+          "before": "",
+          "after": "function validatedR3SubstituteDecisionCandidates(value, scope) {\n  if (value?.branchId !== scope.branchId || value?.coachRoleId !== scope.coachRoleId\n    || String(value?.settlementMonth || \"\").slice(0, 10) !== scope.settlementMonth\n    || !Array.isArray(value?.candidates) || value.candidates.length > 500) {\n    throw new Error(\"settlement_substitute_candidate_scope_mismatch\");\n  }\n  const seen = new Set();\n  for (const item of value.candidates) {\n    if (!/^[0-9a-f-]{36}$/i.test(String(item?.id || \"\")) || seen.has(item.id)\n      || item.branchId !== scope.branchId\n      || !/^[0-9a-f-]{36}$/i.test(String(item.lessonId || \"\"))\n      || !Number.isSafeInteger(Number(item.lessonRevision))\n      || String(item.serviceDate || \"\").slice(0, 7) !== scope.settlementMonth.slice(0, 7)\n      || ![item.originalCoachRoleId, item.actualCoachRoleId].includes(scope.coachRoleId)\n      || !/^[0-9a-f]{64}$/.test(String(item.sourceFingerprint || \"\"))) {\n      throw new Error(\"settlement_substitute_candidate_scope_mismatch\");\n    }\n    seen.add(item.id);\n  }\n  return value.candidates;\n}\n\n"
+        },
+        {
+          "start": 24393,
+          "end": 24475,
+          "before": "",
+          "after": "    const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };\n"
+        },
+        {
+          "start": 24529,
+          "end": 24529,
+          "before": "      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };\n",
+          "after": ""
+        },
+        {
+          "start": 24935,
+          "end": 26110,
+          "before": "      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };\n",
+          "after": "      const code = String(error?.payload?.message || error?.message || \"\");\n      const errorCode = code.includes(\"settlement_hold_substitute_manual_approval_required\")\n        ? \"settlement_hold_substitute_manual_approval_required\" : \"\";\n      if (!errorCode) return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode: \"\" };\n      try {\n        const listed = await client.rpc(\"tn_admin_list_substitute_manual_candidates\", {\n          target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,\n        });\n        if (!requestIsCurrent()) return null;\n        const candidates = validatedR3SubstituteDecisionCandidates(listed, scope);\n        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,\n          candidates, candidateLoadError: candidates.length ? \"\" : \"정확한 대타 귀속 근거를 찾지 못했습니다.\" };\n      } catch (_) {\n        if (!requestIsCurrent()) return null;\n        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,\n          candidates: [], candidateLoadError: \"대타 귀속 근거를 불러오지 못했습니다. 저장은 차단됐습니다.\" };\n      }\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "candidateSha256": "5d8fa0645bc912cfa7568b4af48511cb2fe678cda13998ad85bc5ccc0e985866",
+      "baseSha256": "626d2cce244287a5b61a50fd9369b24854e13f102cce9f12924ffb97a0adea09",
+      "hunks": [
+        {
+          "start": 36941,
+          "end": 41124,
+          "before": "",
+          "after": "const r3SubstituteDecisionUi = { preview: null, recipient: \"\", operationKey: \"\", busy: false, message: \"\" };\n\nfunction r3SubstituteDecisionCandidates(coach) {\n  const entries = effectiveSettlementPreview.results.filter((item) => item.coach.serverRoleId === coach.serverRoleId);\n  return entries.length === 1 && entries[0].errorCode === \"settlement_hold_substitute_manual_approval_required\"\n    && effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context)\n    ? entries[0].candidates || [] : [];\n}\n\nasync function previewR3SubstituteDecision(assignmentId) {\n  if (r3SubstituteDecisionUi.busy || !adminApprovalReady()) return;\n  const context = effectiveSettlementPreviewContext();\n  if (!effectiveSettlementPreviewContextIsCurrent(context)) return;\n  const candidate = effectiveSettlementPreview.results.flatMap((entry) => entry.candidates || [])\n    .find((item) => item.id === assignmentId);\n  if (!candidate || candidate.branchId !== activeOperationBranchId()) return;\n  r3SubstituteDecisionUi.busy = true;\n  r3SubstituteDecisionUi.message = \"대타 귀속 근거를 확인하고 있습니다.\";\n  renderEffectiveSettlementPreview();\n  try {\n    const value = await context.client.rpc(\"tn_admin_preview_substitute_policy_decision\", {\n      target_branch_id: activeOperationBranchId(), target_assignment_id: assignmentId,\n    });\n    if (!effectiveSettlementPreviewContextIsCurrent(context) || value.branchId !== candidate.branchId\n      || value.assignmentId !== assignmentId || value.lessonId !== candidate.lessonId\n      || Number(value.lessonRevision) !== Number(candidate.lessonRevision)\n      || value.sourceFingerprint !== candidate.sourceFingerprint) return;\n    r3SubstituteDecisionUi.preview = value;\n    r3SubstituteDecisionUi.recipient = \"\";\n    r3SubstituteDecisionUi.operationKey = \"\";\n    r3SubstituteDecisionUi.message = value.decisionEnabled ? \"원 담당 A와 실제 대타 B 중 귀속을 확인해 주세요.\"\n      : \"대타 귀속 승인 기능은 현재 OFF입니다. 운영 게이트 확인 전 저장할 수 없습니다.\";\n  } catch (error) {\n    if (effectiveSettlementPreviewContextIsCurrent(context)) r3SubstituteDecisionUi.message = window.TennisNoteSettlementAdjustment.effectiveError(error);\n  } finally {\n    r3SubstituteDecisionUi.busy = false;\n    if (effectiveSettlementPreviewContextIsCurrent(context)) renderEffectiveSettlementPreview();\n  }\n}\n\nasync function confirmR3SubstituteDecision() {\n  const decision = r3SubstituteDecisionUi.preview;\n  if (r3SubstituteDecisionUi.busy || !decision?.decisionEnabled || decision.chosenRecipient\n    || ![\"originalCoach\", \"actualCoach\"].includes(r3SubstituteDecisionUi.recipient)) return;\n  const context = effectiveSettlementPreviewContext();\n  if (!effectiveSettlementPreviewContextIsCurrent(context) || decision.branchId !== activeOperationBranchId()\n    || !effectiveSettlementPreview.results.some((entry) => (entry.candidates || []).some((candidate) =>\n      candidate.id === decision.assignmentId && candidate.sourceFingerprint === decision.sourceFingerprint))) return;\n  r3SubstituteDecisionUi.operationKey ||= createAdminOperationKey(\"r3-substitute-decision\");\n  r3SubstituteDecisionUi.busy = true;\n  renderEffectiveSettlementPreview();\n  try {\n    const result = await context.client.rpc(\"tn_admin_confirm_substitute_policy_decision\", {\n      target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,\n      expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,\n      target_chosen_recipient: r3SubstituteDecisionUi.recipient,\n      target_operation_key: r3SubstituteDecisionUi.operationKey,\n    });\n    if (!effectiveSettlementPreviewContextIsCurrent(context) || result?.ok !== true) return;\n    r3SubstituteDecisionUi.preview = null;\n    r3SubstituteDecisionUi.message = \"대타 귀속을 기록했습니다. 서버 정산을 다시 확인합니다.\";\n    void refreshEffectiveSettlementPreview(effectiveSettlementPreviewSignature());\n  } catch (error) {\n    if (effectiveSettlementPreviewContextIsCurrent(context)) r3SubstituteDecisionUi.message = window.TennisNoteSettlementAdjustment.effectiveError(error);\n  } finally {\n    r3SubstituteDecisionUi.busy = false;\n    if (effectiveSettlementPreviewContextIsCurrent(context)) renderEffectiveSettlementPreview();\n  }\n}\n"
+        },
+        {
+          "start": 41452,
+          "end": 41560,
+          "before": "",
+          "after": "    Object.assign(r3SubstituteDecisionUi, { preview: null, recipient: \"\", operationKey: \"\", message: \"\" });\n"
+        },
+        {
+          "start": 42287,
+          "end": 42694,
+          "before": "    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? \"\" : \" · 새 계산 미리보기 / 기존 확정 내역 유지\"}`)}</small>\n",
+          "after": "    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건 · 본수업 ${money.format(entry.value.ownSettlement)}원 / 대타 ${money.format(entry.value.substituteSettlement)}원${entry.value.branchSubstituteExpense ? ` · 지점 대타비 ${money.format(entry.value.branchSubstituteExpense)}원` : \"\"}${entry.value.confirmationReady ? \"\" : \" · 새 계산 미리보기 / 기존 확정 내역 유지\"}`)}</small>\n"
+        },
+        {
+          "start": 43107,
+          "end": 44772,
+          "before": "    .map(({ coach, row, error }) => {\n      if (error) return `<tr><td colspan=\"6\">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;\n",
+          "after": "    .map(({ coach, row, error, errorCode, candidateLoadError }) => {\n      if (error) {\n        const candidates = errorCode === \"settlement_hold_substitute_manual_approval_required\"\n          ? r3SubstituteDecisionCandidates(coach) : [];\n        const actions = candidates.map((assignment, index) =>\n          `<button type=\"button\" data-r3-policy-preview=\"${escapeHtml(assignment.id)}\" ${r3SubstituteDecisionUi.busy ? \"disabled\" : \"\"}>대타 귀속 근거 ${index + 1} 확인</button>`).join(\" \");\n        const decision = r3SubstituteDecisionUi.preview;\n        const chooser = decision && candidates.some((assignment) => assignment.id === decision.assignmentId)\n          ? `<label>대타 정산 귀속 <select data-r3-policy-recipient ${decision.decisionEnabled && !decision.chosenRecipient && !r3SubstituteDecisionUi.busy ? \"\" : \"disabled\"}>\n              <option value=\"\">선택</option><option value=\"originalCoach\" ${r3SubstituteDecisionUi.recipient === \"originalCoach\" ? \"selected\" : \"\"}>A 원 담당 코치</option>\n              <option value=\"actualCoach\" ${r3SubstituteDecisionUi.recipient === \"actualCoach\" ? \"selected\" : \"\"}>B 실제 대타 코치</option></select></label>\n              <button type=\"button\" data-r3-policy-confirm ${decision.decisionEnabled && !decision.chosenRecipient && r3SubstituteDecisionUi.recipient && !r3SubstituteDecisionUi.busy ? \"\" : \"disabled\"}>귀속 확인 저장</button>` : \"\";\n        return `<tr><td colspan=\"6\">${escapeHtml(coach.name)} · ${escapeHtml(error)} ${actions} ${chooser}\n          ${candidateLoadError ? `<small>${escapeHtml(candidateLoadError)}</small>` : \"\"}\n          <small role=\"status\">${escapeHtml(r3SubstituteDecisionUi.message)}</small></td></tr>`;\n      }\n"
+        },
+        {
+          "start": 45124,
+          "end": 45253,
+          "before": "        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>\n",
+          "after": "        <td>${escapeHtml(row.method)}<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>\n"
+        },
+        {
+          "start": 45417,
+          "end": 45969,
+          "before": "",
+          "after": "  rows.querySelectorAll(\"[data-r3-policy-preview]\").forEach((button) => button.addEventListener(\"click\", () => {\n    void previewR3SubstituteDecision(button.dataset.r3PolicyPreview);\n  }));\n  rows.querySelector(\"[data-r3-policy-recipient]\")?.addEventListener(\"change\", (event) => {\n    r3SubstituteDecisionUi.recipient = event.target.value;\n    r3SubstituteDecisionUi.operationKey = \"\";\n    renderEffectiveSettlementPreview();\n  });\n  rows.querySelector(\"[data-r3-policy-confirm]\")?.addEventListener(\"click\", () => void confirmR3SubstituteDecision());\n"
+        },
+        {
+          "start": 46094,
+          "end": 46096,
+          "before": "",
+          "after": "\n\n"
+        }
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-settlement-adjustment.js",
+      "candidateSha256": "675f8e2760072925647f85a3f45bac45df13caea2eeec8d09d75ca09ed1b0d18",
+      "baseSha256": "53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34",
+      "hunks": [
+        {
+          "start": 2104,
+          "end": 2304,
+          "before": "    for (const key of [\"totalSettlementAmount\", \"revenueAmount\", \"settledSessions\", \"settledMinutes\", \"paymentCount\"]) {\n",
+          "after": "    for (const key of [\"totalSettlementAmount\", \"ownSettlementAmount\", \"substituteSettlementAmount\", \"substituteSessionCount\", \"revenueAmount\", \"settledSessions\", \"settledMinutes\", \"paymentCount\"]) {\n"
+        },
+        {
+          "start": 2434,
+          "end": 8019,
+          "before": "",
+          "after": "    if (value.totals.ownSettlementAmount + value.totals.substituteSettlementAmount !== value.totals.totalSettlementAmount) {\n      throw new Error(\"settlement_split_total_mismatch\");\n    }\n    const policyV2 = value.sourceManifest?.substituteContractVersion === \"r3_substitute_policy_v2\";\n    if (!policyV2 && value.sourceManifest?.substituteContractVersion !== \"r3_substitute_safe_v1\"\n      && value.lines.some((line) => line.lineKind === \"substitute_session\")) {\n      throw new Error(\"settlement_substitute_contract_unknown\");\n    }\n    if (policyV2 && (!Number.isSafeInteger(value.totals?.branchSubstituteExpenseAmount)\n      || value.totals.branchSubstituteExpenseAmount < 0\n      || value.totals.branchSubstituteExpenseAmount > value.totals.substituteSettlementAmount)) {\n      throw new Error(\"settlement_branch_expense_total_invalid\");\n    }\n    const lineIndexes = new Set();\n    const contributions = new Set();\n    const physicalSources = new Map();\n    const split = { own_payment: 0, substitute_session: 0 };\n    let branchExpense = 0;\n    for (const line of value.lines) {\n      if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex <= 0 || lineIndexes.has(line.lineIndex)\n        || !Object.hasOwn(split, line.lineKind)\n        || !Number.isSafeInteger(line.settlementAmount) || line.settlementAmount < 0) {\n        throw new Error(\"settlement_line_scope_mismatch\");\n      }\n      lineIndexes.add(line.lineIndex);\n      for (const key of [\"settledSessions\", \"settledMinutes\", \"totalSessions\", \"netAmount\"]) {\n        if (!Number.isSafeInteger(line[key]) || line[key] < 0) throw new Error(\"settlement_line_scope_mismatch\");\n      }\n      if (line.lineKind === \"substitute_session\" && (!line.sourceLessonId || !line.sourceSessionId || !line.sourceSubstituteAssignmentId)) {\n        throw new Error(\"settlement_substitute_source_missing\");\n      }\n      if (line.lineKind === \"substitute_session\") {\n        const components = line.calculationComponents;\n        const key = components?.physicalKey;\n        // Server UUID/date/time keys are bounded; never normalize distinct source handles.\n        if (typeof key !== \"string\" || !key || key.length > 512 || key !== key.trim()\n          || /[\\u0000-\\u001f\\u007f]/.test(key) || !Array.isArray(components.contributions)) {\n          throw new Error(\"settlement_substitute_physical_key_invalid\");\n        }\n        const source = physicalSources.get(key) || {\n          lessonId: line.sourceLessonId, assignmentId: line.sourceSubstituteAssignmentId,\n          payable: false, nonPayable: false,\n        };\n        if (source.lessonId !== line.sourceLessonId || source.assignmentId !== line.sourceSubstituteAssignmentId) {\n          throw new Error(\"settlement_substitute_physical_source_conflict\");\n        }\n        const exactSession = policyV2\n          ? (value.sourceManifest.sessions || []).filter((item) => item.id === line.sourceSessionId)\n          : [];\n        if (policyV2 && (exactSession.length !== 1 || exactSession[0].lessonId !== line.sourceLessonId\n          || exactSession[0].substituteAssignmentId !== line.sourceSubstituteAssignmentId\n          || exactSession[0].accountingClass !== components.accountingClass)) {\n          throw new Error(\"settlement_substitute_accounting_source_mismatch\");\n        }\n        if (components.duplicateSharedTime === true) {\n          if (line.settlementAmount !== 0 || line.settledSessions !== 0 || line.settledMinutes !== 0\n            || components.contributions.length !== 0) {\n            throw new Error(\"settlement_substitute_duplicate_trace_invalid\");\n          }\n          if (policyV2 && components.nonPayableDecision === true) source.nonPayable = true;\n        } else {\n          if (line.settledSessions <= 0 || components.contributions.length === 0\n            || components.contributions.some((item) => !item || item.sessionId !== line.sourceSessionId\n              || item.lessonId !== line.sourceLessonId || item.substituteAssignmentId !== line.sourceSubstituteAssignmentId)) {\n            throw new Error(\"settlement_substitute_payable_source_invalid\");\n          }\n          source.payable = true; // A valid occurrence can have a legitimate zero-won payout.\n          if (policyV2 && components.accountingClass === \"branch_substitute_expense\") {\n            branchExpense += line.settlementAmount;\n          }\n        }\n        physicalSources.set(key, source);\n      }\n      for (const item of line.calculationComponents?.contributions || []) {\n        const key = item.sessionId ? `session:${item.sessionId}` : item.paymentId ? `payment:${item.paymentId}` : \"\";\n        if (!key || contributions.has(key)) throw new Error(\"settlement_contribution_duplicate_or_missing\");\n        contributions.add(key);\n      }\n      split[line.lineKind] += line.settlementAmount;\n    }\n    if ([...physicalSources.values()].some((source) => source.payable === source.nonPayable\n      || (!source.payable && !policyV2))) {\n      throw new Error(\"settlement_substitute_duplicate_trace_orphan\");\n    }\n    if ([...physicalSources.values()].filter((source) => source.payable).length !== value.totals.substituteSessionCount) {\n      throw new Error(\"settlement_substitute_physical_count_mismatch\");\n    }\n    if (policyV2 && branchExpense !== value.totals.branchSubstituteExpenseAmount) {\n      throw new Error(\"settlement_branch_expense_total_mismatch\");\n    }\n    if (split.own_payment !== value.totals.ownSettlementAmount || split.substitute_session !== value.totals.substituteSettlementAmount) {\n      throw new Error(\"settlement_split_line_mismatch\");\n    }\n"
+        },
+        {
+          "start": 8305,
+          "end": 8492,
+          "before": "",
+          "after": "    if (ticketById.size !== value.sourceManifest.tickets.length || ticketById.has(undefined) || ticketById.has(null)) {\n      throw new Error(\"settlement_ticket_source_ambiguous\");\n    }\n"
+        },
+        {
+          "start": 8780,
+          "end": 9061,
+          "before": "",
+          "after": "      ownSettlement: value.totals.ownSettlementAmount,\n      substituteSettlement: value.totals.substituteSettlementAmount,\n      branchSubstituteExpense: policyV2 ? value.totals.branchSubstituteExpenseAmount : 0,\n      substituteSessionCount: value.totals.substituteSessionCount,\n"
+        },
+        {
+          "start": 9520,
+          "end": 10896,
+          "before": "",
+          "after": "        if (line.lineKind === \"own_payment\" && ticket.coachRoleId !== scope.coachRoleId) {\n          throw new Error(\"settlement_line_scope_mismatch\");\n        }\n        if (line.lineKind === \"substitute_session\") {\n          const exact = (value.sourceManifest.assignments || []).filter((item) => item.id === line.sourceSubstituteAssignmentId);\n          const session = policyV2 ? (value.sourceManifest.sessions || []).find((item) => item.id === line.sourceSessionId) : null;\n          if (exact.length !== 1\n            || exact[0].lessonId !== line.sourceLessonId || exact[0].branchId !== scope.branchId\n            || exact[0].substituteCoachRoleId !== scope.coachRoleId || exact[0].originalCoachRoleId !== ticket.coachRoleId\n            || ![\"assigned\", \"completed\"].includes(exact[0].status)\n            || (policyV2\n              ? ![\"actual_coach\", \"hourly\", \"none\"].includes(exact[0].settlementMode)\n                || !session || session.substituteSettlementMode !== exact[0].settlementMode\n                || (line.calculationComponents?.nonPayableDecision === true\n                  ? session.recipientCoachRoleId === scope.coachRoleId\n                  : session.recipientCoachRoleId !== scope.coachRoleId)\n              : exact[0].settlementMode !== \"actual_coach\")) {\n            throw new Error(\"settlement_substitute_source_mismatch\");\n          }\n        }\n"
+        },
+        {
+          "start": 10989,
+          "end": 11212,
+          "before": "",
+          "after": "          lineKind: line.lineKind, sourceLessonId: line.sourceLessonId,\n          sourceSessionId: line.sourceSessionId, sourceSubstituteAssignmentId: line.sourceSubstituteAssignmentId,\n          sourceIds: line.sourceIds,\n"
+        },
+        {
+          "start": 11471,
+          "end": 11886,
+          "before": "          method: line.sourcePaymentId ? \"결제 근거 보존\" : \"미입금 포함 · 시간제\",\n",
+          "after": "          method: line.lineKind === \"substitute_session\"\n            ? line.calculationComponents?.accountingClass === \"branch_substitute_expense\"\n              ? \"대타 · 지점 별도 비용 · 적용일별 조건\"\n              : line.calculationComponents?.nonPayableDecision === true\n                ? \"대타 · 지급 없음 또는 원코치 귀속 근거\"\n                : \"대타 · 실제 진행 코치 · 적용일별 조건\"\n            : line.sourcePaymentId ? \"결제 근거 보존\" : \"미입금 포함 · 시간제\",\n"
+        },
+        {
+          "start": 12202,
+          "end": 12328,
+          "before": "",
+          "after": "    if (code.includes(\"settlement_hold_substitute_\")) return \"대타 확인 필요: 배정·적용기간·지급 기준 또는 승인 근거를 확인해 주세요. 임의 금액은 계산하지 않았습니다.\";\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "candidateSha256": "6914bee46e6435de79fd3aca5ca0d3ec887fe6cd613829227cc027d58f13ae8e",
+      "baseSha256": "f1591a08460b848188af0245704a892e30f6f5e46a19f840e412fd24f40d3de6",
+      "hunks": [
+        {
+          "start": 2162,
+          "end": 2238,
+          "before": "",
+          "after": "    const substituteCount = Number(settlement.substituteSessionCount) || 0;\n"
+        },
+        {
+          "start": 2302,
+          "end": 2563,
+          "before": "      ? `${coachSettlementRuleLabel(settlement)}${substitute ? ` · 대타 ${formatCoachWon(substitute)}` : \"\"}`\n",
+          "after": "      ? `${coachSettlementRuleLabel(settlement)}${substituteCount > 0 ? ` · 대타 ${substituteCount}회 · ${formatCoachWon(substitute)}` : \"\"}${Number(settlement.branchSubstituteExpense) > 0 ? ` · 지점 대타비 ${formatCoachWon(settlement.branchSubstituteExpense)}` : \"\"}`\n"
+        },
+        {
+          "start": 3383,
+          "end": 5211,
+          "before": "",
+          "after": "  const substituteDetail = (row) => {\n    const components = row.calculationComponents || {};\n    const formulas = (components.contributions || []).map((item) => item.formula);\n    const basis = components.duplicateSharedTime === true ? \"\"\n      : formulas.length && formulas.every((formula) => formula === \"hourly\") ? \"시간제 근거\"\n        : formulas.length && formulas.every((formula) => formula === \"session_progress\") ? \"회원권 결제 근거\" : \"적용기간별 계산 근거\";\n    const peerMinutes = typeof components.physicalKey === \"string\" && components.physicalKey\n      && row.sourceLessonId && row.sourceSubstituteAssignmentId && row.coachRoleId\n      ? rows.filter((peer) => peer.lineKind === \"substitute_session\"\n        && peer.calculationComponents?.physicalKey === components.physicalKey\n        && peer.sourceLessonId === row.sourceLessonId && peer.sourceSubstituteAssignmentId === row.sourceSubstituteAssignmentId\n        && peer.coachRoleId === row.coachRoleId && Number.isSafeInteger(peer.settledMinutes) && peer.settledMinutes > 0\n        && peer.settledSessions > 0 && peer.calculationComponents?.duplicateSharedTime !== true\n        && Array.isArray(peer.calculationComponents?.contributions) && peer.calculationComponents.contributions.length > 0)\n        .map((peer) => peer.settledMinutes) : [];\n    const occurrenceMinutes = new Set(peerMinutes).size === 1 ? peerMinutes[0] : null;\n    const progress = Number.isSafeInteger(row.settledMinutes) && row.settledMinutes > 0\n      ? `실제 진행 ${row.settledMinutes}분`\n      : occurrenceMinutes ? `공동 수업 ${occurrenceMinutes}분` : \"수업 시간 확인 필요\";\n    const exclusion = components.duplicateSharedTime === true ? \"시간·정산 중복 제외\"\n      : row.settledMinutes === 0 ? \"시간 합계 중복 제외\" : \"\";\n    return [progress, `정산 ${Number(row.settledSessions) || 0}회`, basis, exclusion].filter(Boolean).join(\" · \");\n  };\n"
+        },
+        {
+          "start": 5742,
+          "end": 6057,
+          "before": "            <small>매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : \"\"} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>\n",
+          "after": "            <small>${row.lineKind === \"substitute_session\" ? escapeHtml(substituteDetail(row)) : `매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : \"\"} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회`}</small>\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/domain/coaches.js",
+      "provenance": "pre-existing availability dirty hunk plus R3 exact match hunks; inverse is test-only",
+      "candidateSha256": "2b9d0b5b243f5ec4ce308c999e9106603fd8c131276d7060304a6ab9a9fbae82",
+      "baseSha256": "0f5b38ce0089cbe7c9c1f1580dce6cfe675893a06a13cd057c0e657873c92ff6",
+      "hunks": [
+        {
+          "start": 27695,
+          "end": 27787,
+          "before": "",
+          "after": "  if (Array.isArray(coach?.workBlocks) && coach.workBlocks.length === 0) return \"근무시간 미등록\";\n"
+        },
+        {
+          "start": 43709,
+          "end": 43924,
+          "before": "",
+          "after": "  if ((settlement.cardBase === \"paid\" ? \"actual_paid_inc_vat\" : \"cash_ex_vat\") !== draft.settlement.basis) return false;\n  if ((settlement.substitute || \"actualCoach\") !== draft.settlement.substitute) return false;\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/domain/coaches.js",
+      "provenance": "clean R3 candidate without preserved unrelated availability dirty hunk",
+      "candidateSha256": "87131d4e2a899950b5def62cc9609046fb263729ffe20feeb6e0ea4461265d3c",
+      "baseSha256": "0f5b38ce0089cbe7c9c1f1580dce6cfe675893a06a13cd057c0e657873c92ff6",
+      "hunks": [
+        {
+          "start": 43617,
+          "end": 43832,
+          "before": "",
+          "after": "  if ((settlement.cardBase === \"paid\" ? \"actual_paid_inc_vat\" : \"cash_ex_vat\") !== draft.settlement.basis) return false;\n  if ((settlement.substitute || \"actualCoach\") !== draft.settlement.substitute) return false;\n"
+        }
+      ]
+    }
+  ]
+}

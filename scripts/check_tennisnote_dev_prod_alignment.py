@@ -409,6 +409,22 @@ def candidate_cache(path: Path) -> str:
     return match.group(1)
 
 
+def restore_current_release_base(path: str, text: str, port: dict) -> str:
+    """Verify the exact current DEV release file, then undo only its approved bump."""
+    release = port["development"]
+    row = next((item for item in release["releaseFiles"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateHash"]:
+        raise RuntimeError(f"current release candidate drift: {path}")
+    for key in ("version", "releaseId", "deployedAt", "memberCache", "coachCache"):
+        before, after = release[key]["before"], release[key]["after"]
+        text = text.replace(after, before)
+    if sha256(text.encode("utf-8")) != row["baseHash"]:
+        raise RuntimeError(f"current release base drift: {path}")
+    return text
+
+
 def generate() -> None:
     authority_release = json.loads(
         authority_bytes("app/release.json").decode("utf-8")
@@ -561,9 +577,142 @@ def restore_r3_unlock_base(path: str, text: str, port: dict | None = None) -> st
     return text
 
 
+def restore_r3_layer_boundary_base(path: str, text: str) -> str:
+    """Undo only the sealed view-to-data RPC move before immutable R3 pins."""
+    manifest = json.loads((ROOT / "tests/fixtures/r3-substitute-context-source-parity.json").read_text(encoding="utf-8"))
+    seal = manifest["layerBoundaryRepair"]
+    entry = next((item for item in seal["files"] if item["path"] == path), None)
+    if entry is None:
+        return text
+    text = text.replace("\r\n", "\n")
+    digest = sha256(text.encode("utf-8"))
+    if digest == entry["priorCandidateSha256"]:
+        return text
+    if path == manifest["path"] and digest == manifest["priorCandidateSha256"]:
+        return text
+    if digest != entry["candidateSha256"]:
+        raise RuntimeError("R3 data-layer candidate drift")
+    if path == "app/admin/data/billing.js":
+        marker = "\nasync function requestR3SubstituteDecisionPreview("
+        start = text.find(marker)
+        end = text.find("\nasync function refreshEffectiveSettlementPreview(", start)
+        if start < 0 or end < 0 or text.find(marker, start + 1) >= 0:
+            raise RuntimeError("R3 data-layer boundary drift")
+        text = text[:start] + text[end:]
+    else:
+        replacements = (
+            ('    const value = await requestR3SubstituteDecisionPreview(context, candidate, assignmentId);',
+             '    const value = await context.client.rpc("tn_admin_preview_substitute_policy_decision", {\n      target_branch_id: candidate.branchId, target_assignment_id: assignmentId,\n    });'),
+            ('    const result = await requestR3SubstituteDecisionConfirmation(context, decision, recipient, operationKey);',
+             '    const result = await context.client.rpc("tn_admin_confirm_substitute_policy_decision", {\n      target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,\n      expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,\n      target_chosen_recipient: recipient,\n      target_operation_key: operationKey,\n    });'),
+        )
+        for after, before in replacements:
+            if text.count(after) != 1:
+                raise RuntimeError("R3 data-layer inverse boundary drift")
+            text = text.replace(after, before, 1)
+    if sha256(text.encode("utf-8")) != entry["priorCandidateSha256"]:
+        raise RuntimeError("R3 data-layer inverse drift")
+    return text
+
+
+def restore_r3_context_base(path: str, text: str) -> str:
+    """Undo only the sealed P1 repair before the prior substitute inverse."""
+    seal = json.loads((ROOT / "tests/fixtures/r3-substitute-context-source-parity.json").read_text(encoding="utf-8"))
+    if path != seal["path"]:
+        return text
+    port = json.loads((ROOT / "tests/fixtures/r3-substitute-source-parity.json").read_text(encoding="utf-8"))
+    prior = next((item for item in port["files"] if item["path"] == path), None)
+    if prior is None or prior["candidateSha256"] != seal["priorCandidateSha256"]:
+        raise RuntimeError("R3 context prior seal drift")
+    text = text.replace("\r\n", "\n")
+    digest = sha256(text.encode("utf-8"))
+    if digest == seal["priorCandidateSha256"]:
+        return text
+    if digest != seal["repairedCandidateSha256"]:
+        raise RuntimeError("R3 context candidate hash drift")
+    start = text.find("const r3SubstituteDecisionUi = ")
+    next_function = text.find("function renderEffectiveSettlementPreview()", start)
+    if start < 0 or next_function < 1 or text.find("const r3SubstituteDecisionUi = ", start + 1) >= 0:
+        raise RuntimeError("R3 context boundary drift")
+    text = text[:start] + prior["hunks"][0]["after"] + text[next_function - 1:]
+    repaired_reset = 'preview: null, context: null, recipient: "", operationKey: "", message: ""'
+    prior_reset = 'preview: null, recipient: "", operationKey: "", message: ""'
+    if text.count(repaired_reset) != 1:
+        raise RuntimeError("R3 context reset drift")
+    text = text.replace(repaired_reset, prior_reset, 1)
+    if sha256(text.encode("utf-8")) != seal["priorCandidateSha256"]:
+        raise RuntimeError("R3 context inverse drift")
+    return text
+
+
+def restore_r3_substitute_base(path: str, text: str) -> str:
+    """Inverse only the exact new R3 layer before older immutable source pins."""
+    port = json.loads((ROOT / "tests/fixtures/r3-substitute-source-parity.json").read_text(encoding="utf-8"))
+    variants = [item for item in port["files"] if item["path"] == path]
+    if not variants:
+        return text
+    text = restore_r3_context_base(path, restore_r3_nonpayable_base(
+        path, restore_r3_layer_boundary_base(path, text.replace("\r\n", "\n"))))
+    entry = next((item for item in variants if item["candidateSha256"] == sha256(text.encode("utf-8"))), None)
+    if entry is None:
+        raise RuntimeError("R3 substitute candidate hash drift")
+    for hunk in reversed(entry["hunks"]):
+        if text[hunk["start"]:hunk["end"]] != hunk["after"]:
+            raise RuntimeError("R3 substitute inverse hunk drift")
+        text = text[:hunk["start"]] + hunk["before"] + text[hunk["end"]:]
+    if sha256(text.encode("utf-8")) != entry["baseSha256"]:
+        raise RuntimeError("R3 substitute baseline hash drift")
+    return text
+
+
+def restore_r3_nonpayable_base(path: str, text: str) -> str:
+    """Preserve the older R3 source seal while inverting the exact P2 zero-won trace."""
+    seal = json.loads((ROOT / "tests/fixtures/r3-substitute-context-source-parity.json").read_text(encoding="utf-8"))["nonPayableTrace"]
+    entry = next((item for item in seal["files"] if item["path"] == path), None)
+    if entry is None:
+        return text
+    digest = sha256(text.encode("utf-8"))
+    if digest == entry["priorCandidateSha256"]:
+        return text
+    if digest != entry["candidateSha256"]:
+        raise RuntimeError("R3 nonpayable candidate hash drift")
+
+    def once(old: str, new: str) -> None:
+        nonlocal text
+        if text.count(old) != 1:
+            raise RuntimeError("R3 nonpayable inverse boundary drift")
+        text = text.replace(old, new, 1)
+
+    if path == "app/shared/tennisnote-settlement-adjustment.js":
+        start = text.find("        const excludedLesson = policyV2 && components.nonPayableDecision === true;")
+        marker = "        if (components.duplicateSharedTime === true || excludedLesson) {"
+        end = text.find(marker, start)
+        if start < 0 or end < start or text.find("        const excludedLesson =", start + 1) >= 0:
+            raise RuntimeError("R3 nonpayable inverse boundary drift")
+        text = text[:start] + "        if (components.duplicateSharedTime === true) {" + text[end + len(marker):]
+        once("          if (excludedLesson) source.nonPayable = true;", "          if (policyV2 && components.nonPayableDecision === true) source.nonPayable = true;")
+        once("        const ticket = ticketById.get(line.sourceTicketId);\n        const session = policyV2 ? (value.sourceManifest.sessions || []).find((item) => item.id === line.sourceSessionId) : null;",
+             "        const ticket = ticketById.get(line.sourceTicketId);")
+        once("          const exact = (value.sourceManifest.assignments || []).filter((item) => item.id === line.sourceSubstituteAssignmentId);",
+             "          const exact = (value.sourceManifest.assignments || []).filter((item) => item.id === line.sourceSubstituteAssignmentId);\n          const session = policyV2 ? (value.sourceManifest.sessions || []).find((item) => item.id === line.sourceSessionId) : null;")
+        once('                ? (line.calculationComponents?.nonPayableReason === "recipient_original_coach"\n                  || (line.calculationComponents?.nonPayableReason == null && session?.substitutePolicy === "originalCoach"))\n                  ? "대타 · 원코치 귀속 · 0원 근거"\n                  : "대타 · 지급 제외 · 0원 근거"',
+             '                ? "대타 · 지급 없음 또는 원코치 귀속 근거"')
+    elif path == "app/tennis-note-coach-app/views/settlement.js":
+        once('    const excluded = components.nonPayableDecision === true;\n    const basis = excluded || components.duplicateSharedTime === true ? ""',
+             '    const basis = components.duplicateSharedTime === true ? ""')
+        once('    const progress = excluded\n      ? `${components.nonPayableReason === "recipient_original_coach" ? "실제 진행 수업" : "대타 배정 근거"} · 정산 반영 0분`\n      : Number.isSafeInteger(row.settledMinutes) && row.settledMinutes > 0',
+             '    const progress = Number.isSafeInteger(row.settledMinutes) && row.settledMinutes > 0')
+        once('    const exclusion = excluded\n      ? components.nonPayableReason === "recipient_original_coach" ? "원코치 귀속 · 대타 코치 지급 제외"\n        : components.nonPayableReason === "explicit_no_settlement" ? "명시적 정산 없음" : "지급 제외 근거"\n      : components.duplicateSharedTime === true ? "시간·정산 중복 제외"',
+             '    const exclusion = components.duplicateSharedTime === true ? "시간·정산 중복 제외"')
+    if sha256(text.encode("utf-8")) != entry["priorCandidateSha256"]:
+        raise RuntimeError("R3 nonpayable inverse hash drift")
+    return text
+
+
 def restore_r3_effective_base(path: str, text: str) -> str | None:
     """승인된 원본 projection만 exact hash/offset으로 역변환. 기존 golden은 불변."""
     port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    text = restore_r3_substitute_base(path, text)
     text = restore_exact_outer_base(path, text, "r3-preview-identity-fence-source-parity.json", port["publicVersion"])
     text = restore_r3_unlock_base(path, text)
     admin_history = json.loads((ROOT / "tests/fixtures/r3-admin-history-source-parity.json").read_text(encoding="utf-8"))
@@ -615,18 +764,34 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 def verify() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    current_port = json.loads((ROOT / "tests/fixtures/self-profile-a-only.json").read_text(encoding="utf-8"))
+    current_release = current_port["development"]
     candidate = manifest["candidate_release"]
     if candidate["version"] != EXPECTED_VERSION or candidate["release_id"] != EXPECTED_RELEASE_ID:
         raise RuntimeError("manifest candidate version/release does not match the approved release")
     if candidate["member_cache"] != EXPECTED_MEMBER_CACHE or candidate["coach_cache"] != EXPECTED_COACH_CACHE:
         raise RuntimeError("manifest candidate cache names do not match approved monotonic floors")
 
-    current_release = release_metadata(ROOT / "app" / "release.json")
-    if current_release != {key: candidate[key] for key in ("version", "release_id", "deployed_at")}:
+    actual_metadata = release_metadata(ROOT / "app" / "release.json")
+    if actual_metadata != {
+        "version": current_release["version"]["after"],
+        "release_id": current_release["releaseId"]["after"],
+        "deployed_at": current_release["deployedAt"]["after"],
+    }:
         raise RuntimeError("current release metadata differs from alignment manifest")
-    if candidate_cache(ROOT / "app" / "tennis-note-member-app" / "service-worker.js") != EXPECTED_MEMBER_CACHE:
+
+    restored_release = restore_current_release_base(
+        "app/release.json", (ROOT / "app/release.json").read_text(encoding="utf-8"), current_port
+    )
+    restored_metadata = json.loads(restored_release)
+    if {"version": restored_metadata["version"], "release_id": restored_metadata["releaseId"],
+        "deployed_at": restored_metadata["deployedAt"]} != {
+            key: candidate[key] for key in ("version", "release_id", "deployed_at")
+        }:
+        raise RuntimeError("current release metadata differs from alignment manifest")
+    if candidate_cache(ROOT / "app" / "tennis-note-member-app" / "service-worker.js") != current_release["memberCache"]["after"]:
         raise RuntimeError("member cache is not the approved monotonic value")
-    if candidate_cache(ROOT / "app" / "tennis-note-coach-app" / "service-worker.js") != EXPECTED_COACH_CACHE:
+    if candidate_cache(ROOT / "app" / "tennis-note-coach-app" / "service-worker.js") != current_release["coachCache"]["after"]:
         raise RuntimeError("coach cache is not the approved monotonic value")
 
     expected_hashes = manifest["product_tree"]["normalized_sha256_by_path"]
@@ -668,7 +833,9 @@ def verify() -> None:
         try:
             signin_port = json.loads((ROOT / "tests/fixtures/development-signin-source-parity.json").read_text(encoding="utf-8"))
             phone_port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
-            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, phone_port["publicVersion"])
+            text = data.decode("utf-8").replace("\r\n", "\n")
+            text = restore_current_release_base(path, text, current_port)
+            text = text.replace(EXPECTED_VERSION, phone_port["publicVersion"])
             text = restore_verified_profile_phone_base(path, text)
             text = text.replace(phone_port["publicVersion"], signin_port["publicVersion"])
             text = restore_development_signin_base(path, text)
@@ -695,7 +862,9 @@ def verify() -> None:
     if mismatches:
         raise RuntimeError(f"product hash drift outside approved literals: {mismatches[:20]}")
 
-    workflow = (ROOT / DEV_WORKFLOW).read_bytes()
+    # The historical alignment golden is immutable. Validate it against its
+    # exact source revision, while the current workflow is covered separately.
+    workflow = run_git("show", f"{current_release['base']}:{DEV_WORKFLOW}", text=False)
     workflow_text = workflow.decode("utf-8").replace("\r\n", "\n")
     for line in DEV_WORKFLOW_LINES:
         if workflow_text.splitlines().count(line) != 1:

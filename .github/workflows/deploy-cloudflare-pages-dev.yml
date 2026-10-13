@@ -1,9 +1,7 @@
 name: Deploy Tennis Note development sites
 
 on:
-  push:
-    branches: [dev]
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -32,6 +30,32 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require exact successful development caller and project scope
+        shell: bash
+        env:
+          EXPECTED_DEV_SUPABASE_FINGERPRINT: "63350140ffe5"
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, subprocess, sys
+          def fail():
+              print('development_deploy_scope_mismatch', file=sys.stderr)
+              raise SystemExit(1)
+          if os.environ.get('GITHUB_EVENT_NAME') != 'push' or os.environ.get('GITHUB_REF') != 'refs/heads/dev': fail()
+          if subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() != os.environ.get('GITHUB_SHA'): fail()
+          url = os.environ.get('TENNISNOTE_SUPABASE_URL', '').strip().lower().rstrip('/')
+          ref = url.removeprefix('https://').removesuffix('.supabase.co')
+          if not url.startswith('https://') or not url.endswith('.supabase.co') or not ref or '.' in ref or '/' in ref: fail()
+          project = hashlib.sha256(ref.encode()).hexdigest()
+          if not project.startswith(os.environ['EXPECTED_DEV_SUPABASE_FINGERPRINT']): fail()
+          account = os.environ.get('CLOUDFLARE_ACCOUNT_ID', '')
+          expected = os.environ.get('EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT', '')
+          if not account or not expected or hashlib.sha256(account.encode()).hexdigest() != expected: fail()
+          print('development_deploy_scope_verified')
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -54,16 +78,46 @@ jobs:
           grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html
           grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html
 
-      - name: Ensure Cloudflare Pages development projects exist
+      - name: Require existing Cloudflare Pages development projects
         shell: bash
         run: |
-          project_list="$(npx --yes wrangler@3.90.0 pages project list)"
-          if ! grep -q 'tennisnote-app-dev' <<<"$project_list"; then
-            npx --yes wrangler@3.90.0 pages project create tennisnote-app-dev --production-branch=dev
-          fi
-          if ! grep -q 'tennisnote-admin-dev' <<<"$project_list"; then
-            npx --yes wrangler@3.90.0 pages project create tennisnote-admin-dev --production-branch=dev
-          fi
+          python - <<'PY'
+          import json, os, sys, urllib.parse, urllib.request
+          account = os.environ.get('CLOUDFLARE_ACCOUNT_ID', '')
+          token = os.environ.get('CLOUDFLARE_API_TOKEN', '')
+          if not account or not token:
+              print('development_pages_presence_unconfirmed', file=sys.stderr)
+              raise SystemExit(1)
+          projects = {}
+          page = 1
+          while True:
+              url = f'https://api.cloudflare.com/client/v4/accounts/{urllib.parse.quote(account, safe="")}/pages/projects?page={page}&per_page=100'
+              request = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      payload = json.load(response)
+              except Exception:
+                  print('development_pages_presence_unconfirmed', file=sys.stderr)
+                  raise SystemExit(1)
+              if payload.get('success') is not True or not isinstance(payload.get('result'), list):
+                  print('development_pages_presence_unconfirmed', file=sys.stderr)
+                  raise SystemExit(1)
+              projects.update({item.get('name'): item for item in payload['result'] if isinstance(item, dict)})
+              pages = payload.get('result_info', {}).get('total_pages')
+              if not isinstance(pages, int) or pages < page or pages > 100:
+                  print('development_pages_presence_unconfirmed', file=sys.stderr)
+                  raise SystemExit(1)
+              if page >= pages: break
+              page += 1
+          required = {'tennisnote-app-dev', 'tennisnote-admin-dev'}
+          if not required <= projects.keys():
+              print('development_pages_project_missing', file=sys.stderr)
+              raise SystemExit(1)
+          if any(projects[name].get('production_branch') != 'dev' for name in required):
+              print('development_pages_branch_mismatch', file=sys.stderr)
+              raise SystemExit(1)
+          print('existing_development_pages_verified')
+          PY
 
       - name: Deploy member development PWA
         run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev

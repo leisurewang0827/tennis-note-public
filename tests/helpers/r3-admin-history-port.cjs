@@ -7,6 +7,7 @@ const unlockManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixture
 const previewFenceManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-preview-identity-fence-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
 function restorePreviewIdentityFence(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  text = require("./r3-substitute-port.cjs").restore(file, text);
   const entry = previewFenceManifest.files.find(item => item.path === file);
   if (!entry) return text;
   text = text.replaceAll(inputVersion, previewFenceManifest.publicVersion);
