@@ -72,15 +72,18 @@ function removeProfilePhoto() {
 
 async function readSavedSelfProfileExactly(client, owner, targetProfile, values, saved) {
   const token = client?.getSession?.()?.access_token || "";
+  const expectedRole = String(owner?.role || "");
+  const expectedStatus = String(owner?.status || "");
   const contextIsCurrent = () => window.TennisNoteDataClient === client
     && token && token === (client.getSession?.()?.access_token || "")
-    && phoneVerificationOwnerCurrent(owner);
+    && phoneVerificationOwnerCurrent(owner) && expectedRole && expectedStatus && owner.revision
+    && (!owner.editorBound || profilePhoneEditorOwnerCurrent(owner))
+    && String(state.member?.role || "") === expectedRole
+    && String(state.member?.status || "") === expectedStatus;
   if (!contextIsCurrent() || typeof client.selectRows !== "function") throw new Error("profile_durable_readback_unconfirmed");
   const keys = Object.keys(values).filter((key) => key !== "ntrp_requested");
   const select = [...new Set(["id", "name", "nickname", "phone", "role", "status", "updated_at",
     "ntrp_requested_at", ...keys])].join(",");
-  const expectedRole = String(state.member?.role || "");
-  const expectedStatus = String(state.member?.status || "");
   // RPC 반환을 저장 증거로 대체하지 않습니다. exact self 행만 새 네트워크
   // 조회하며 오프라인 캐시/자동 Auth 재시도/다른 프로필 fallback을 금지합니다.
   const rows = await client.selectRows("tn_users", { select, filters: { id: owner.profileId },
@@ -110,9 +113,20 @@ async function readSavedSelfProfileExactly(client, owner, targetProfile, values,
 
 async function updateMemberProfileOnServer(values = {}, identity = null) {
   const client = window.TennisNoteDataClient;
-  const owner = identity ? profilePhoneEditorOwner : phoneVerificationOwner();
+  const sourceOwner = identity ? profilePhoneEditorOwner : phoneVerificationOwner();
+  const owner = sourceOwner ? { ...sourceOwner, role: identity ? sourceOwner.role : String(state.member?.role || ""),
+    status: identity ? sourceOwner.status : String(state.member?.status || ""), editorBound: Boolean(identity),
+    revision: identity ? sourceOwner.revision : state.profile.serverRevision } : null;
+  const contextIsCurrent = () => window.TennisNoteDataClient === client
+    && owner?.role && owner.status && owner.revision && phoneVerificationOwnerCurrent(owner)
+    && (!owner.editorBound || profilePhoneEditorOwnerCurrent(owner))
+    && String(state.member?.role || "") === owner.role
+    && String(state.member?.status || "") === owner.status;
   try {
     if (!hasLiveMemberSession() || !client?.rpc || !owner?.profileId || !phoneVerificationOwnerCurrent(owner)) throw new Error("login_required");
+    if (!contextIsCurrent()) throw new Error("profile_phone_context_changed");
+    if (identity && (owner.role !== sourceOwner.role || owner.status !== sourceOwner.status
+      || state.profile.serverRevision !== sourceOwner.revision)) throw new Error("profile_phone_context_changed");
     const allowed = ["profile_photo_url", "dominant_hand", "backhand_style", "tennis_started_on", "tennis_goal", "play_style_memo", "self_ntrp", "ntrp_survey", "ntrp_requested"];
     if (!Object.keys(values).length || Object.keys(values).some((key) => !allowed.includes(key))) throw new Error("profile_style_input_invalid");
     const expectedPhone = identity ? profilePhoneExpectedPhone : normalizeIdentityPhone(state.profile.phone || "");
@@ -131,7 +145,7 @@ async function updateMemberProfileOnServer(values = {}, identity = null) {
       target_expected_phone: expectedPhone, target_operation_key: selfProfileStyleOperation.key,
     };
     const raw = await client.rpc("tn_save_my_verified_profile_phone", selfProfileStyleOperation.parameters);
-    if (!phoneVerificationOwnerCurrent(owner) || (identity && !phoneVerificationRequestCurrent(owner, targetProfile.phone, "profile"))) throw new Error("profile_phone_context_changed");
+    if (!contextIsCurrent() || (identity && !phoneVerificationRequestCurrent(owner, targetProfile.phone, "profile"))) throw new Error("profile_phone_context_changed");
     const saved = Array.isArray(raw) ? raw[0] : raw;
     if (!saved?.ok || saved.profileContract !== "atomic-self-profile/1" || saved.styleSaved !== true
       || saved.profile?.id !== owner.profileId || !saved.profile.updated_at

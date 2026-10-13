@@ -932,6 +932,8 @@ function coachStaffServerMatches(saved, draft) {
   if (coachBlockSignature(normalizeCoachBreakBlocks(saved)) !== coachBlockSignature(draft.breakBlocks)) return false;
   const settlement = coachSettlementRule(saved);
   if (settlement.method !== draft.settlement.method) return false;
+  if ((settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat") !== draft.settlement.basis) return false;
+  if ((settlement.substitute || "actualCoach") !== draft.settlement.substitute) return false;
   if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
   if (draft.settlement.method === "ratio" && Math.abs(((Number(settlement.ratio) || 0) * 100) - Number(draft.settlement.ratio)) > 0.001) return false;
   if (draft.settlement.method === "ratio" && (settlement.calculationMode || "session_progress") !== draft.settlement.calculationMode) return false;

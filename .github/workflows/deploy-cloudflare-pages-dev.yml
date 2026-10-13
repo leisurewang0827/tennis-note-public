@@ -40,6 +40,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Require publishable R3 source checkpoint
+        run: node scripts/check_tennisnote_r3_auth548_provenance.cjs --deploy
+
       - name: Verify existing development account, projects, source and rollback
         run: python scripts/check_tennisnote_development_deploy_scope.py
 

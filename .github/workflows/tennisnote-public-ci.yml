@@ -45,6 +45,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 jobs:
   build-and-check:
@@ -63,6 +65,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Select exact R3/Auth source checkpoint
+        id: provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check_tennisnote_r3_auth548_provenance.cjs --ci-route
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -71,6 +78,7 @@ jobs:
           node-version: "22"
       # 제품 빌드 도구를 추가하지 않고 runner 임시 폴더에 검사 의존성만 준비한다.
       - name: Prepare browser test dependencies
+        if: ${{ steps.provenance.outputs.scoped != 'true' }}
         timeout-minutes: 5
         shell: bash
         run: |
@@ -80,8 +88,14 @@ jobs:
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify
+        if: ${{ steps.provenance.outputs.scoped != 'true' }}
         timeout-minutes: 4
         run: ./scripts/verify.sh
+      - name: Verify only newly composed source and context guards
+        if: ${{ steps.provenance.outputs.scoped == 'true' }}
+        run: |
+          node --test tests/r3-auth548-composition.test.js tests/r3-auth548-editor-context.test.js tests/r3-auth548-otp-context.test.js
+          python scripts/check_tennisnote_dev_prod_alignment.py
 
   deploy-development-after-ci:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}

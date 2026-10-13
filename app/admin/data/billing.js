@@ -490,6 +490,43 @@ function invalidateEffectiveSettlementPreview(message = "로그인 또는 조회
   effectiveSettlementPreview.error = message;
 }
 
+function validatedR3SubstituteDecisionCandidates(value, scope) {
+  if (value?.branchId !== scope.branchId || value?.coachRoleId !== scope.coachRoleId
+    || String(value?.settlementMonth || "").slice(0, 10) !== scope.settlementMonth
+    || !Array.isArray(value?.candidates) || value.candidates.length > 500) {
+    throw new Error("settlement_substitute_candidate_scope_mismatch");
+  }
+  const seen = new Set();
+  for (const item of value.candidates) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(item?.id || "")) || seen.has(item.id)
+      || item.branchId !== scope.branchId
+      || !/^[0-9a-f-]{36}$/i.test(String(item.lessonId || ""))
+      || !Number.isSafeInteger(Number(item.lessonRevision))
+      || String(item.serviceDate || "").slice(0, 7) !== scope.settlementMonth.slice(0, 7)
+      || ![item.originalCoachRoleId, item.actualCoachRoleId].includes(scope.coachRoleId)
+      || !/^[0-9a-f]{64}$/.test(String(item.sourceFingerprint || ""))) {
+      throw new Error("settlement_substitute_candidate_scope_mismatch");
+    }
+    seen.add(item.id);
+  }
+  return value.candidates;
+}
+
+async function requestR3SubstituteDecisionPreview(context, candidate, assignmentId) {
+  return context.client.rpc("tn_admin_preview_substitute_policy_decision", {
+    target_branch_id: candidate.branchId, target_assignment_id: assignmentId,
+  });
+}
+
+async function requestR3SubstituteDecisionConfirmation(context, decision, recipient, operationKey) {
+  return context.client.rpc("tn_admin_confirm_substitute_policy_decision", {
+    target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,
+    expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,
+    target_chosen_recipient: recipient,
+    target_operation_key: operationKey,
+  });
+}
+
 async function refreshEffectiveSettlementPreview(signature) {
   const branchId = activeOperationBranchId();
   const settlementMonth = `${state.billingMonth}-01`;
@@ -511,9 +548,9 @@ async function refreshEffectiveSettlementPreview(signature) {
   effectiveSettlementPreview.loading = true;
   renderEffectiveSettlementPreview();
   const results = await Promise.all(entries.map(async (coach) => {
+    const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
     try {
       if (!requestIsCurrent()) return null;
-      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
       const result = await client.rpc("tn_coach_settlement_scope_v2", {
         target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
       });
@@ -521,7 +558,23 @@ async function refreshEffectiveSettlementPreview(signature) {
       return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };
     } catch (error) {
       if (!requestIsCurrent()) return null;
-      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };
+      const code = String(error?.payload?.message || error?.message || "");
+      const errorCode = code.includes("settlement_hold_substitute_manual_approval_required")
+        ? "settlement_hold_substitute_manual_approval_required" : "";
+      if (!errorCode) return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode: "" };
+      try {
+        const listed = await client.rpc("tn_admin_list_substitute_manual_candidates", {
+          target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
+        });
+        if (!requestIsCurrent()) return null;
+        const candidates = validatedR3SubstituteDecisionCandidates(listed, scope);
+        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,
+          candidates, candidateLoadError: candidates.length ? "" : "정확한 대타 귀속 근거를 찾지 못했습니다." };
+      } catch (_) {
+        if (!requestIsCurrent()) return null;
+        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,
+          candidates: [], candidateLoadError: "대타 귀속 근거를 불러오지 못했습니다. 저장은 차단됐습니다." };
+      }
     }
   }));
   if (requestId !== effectiveSettlementPreview.requestId) return;

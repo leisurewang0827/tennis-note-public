@@ -355,6 +355,16 @@ function phoneVerificationOwnerCurrent(owner) {
     && owner.authId === current.authId && owner.profileId === current.profileId);
 }
 
+function profilePhoneEditorOwnerCurrent(owner = profilePhoneEditorOwner) {
+  const opened = profilePhoneEditorOwner;
+  return Boolean(owner && opened && owner.role && owner.status === "active" && owner.revision
+    && phoneVerificationOwnerCurrent(owner) && owner.client === opened.client
+    && owner.authId === opened.authId && owner.profileId === opened.profileId
+    && owner.revision === opened.revision && owner.role === opened.role && owner.status === opened.status
+    && String(state.member?.role || "") === owner.role
+    && String(state.member?.status || "") === owner.status);
+}
+
 function phoneVerificationRequestCurrent(owner, phone, surface) {
   return phoneVerificationOwnerCurrent(owner)
     && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "") === phone;
