@@ -512,6 +512,21 @@ function validatedR3SubstituteDecisionCandidates(value, scope) {
   return value.candidates;
 }
 
+async function requestR3SubstituteDecisionPreview(context, candidate, assignmentId) {
+  return context.client.rpc("tn_admin_preview_substitute_policy_decision", {
+    target_branch_id: candidate.branchId, target_assignment_id: assignmentId,
+  });
+}
+
+async function requestR3SubstituteDecisionConfirmation(context, decision, recipient, operationKey) {
+  return context.client.rpc("tn_admin_confirm_substitute_policy_decision", {
+    target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,
+    expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,
+    target_chosen_recipient: recipient,
+    target_operation_key: operationKey,
+  });
+}
+
 async function refreshEffectiveSettlementPreview(signature) {
   const branchId = activeOperationBranchId();
   const settlementMonth = `${state.billingMonth}-01`;

@@ -678,9 +678,7 @@ async function previewR3SubstituteDecision(assignmentId) {
   renderEffectiveSettlementPreview();
   try {
     if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)) return;
-    const value = await context.client.rpc("tn_admin_preview_substitute_policy_decision", {
-      target_branch_id: candidate.branchId, target_assignment_id: assignmentId,
-    });
+    const value = await requestR3SubstituteDecisionPreview(context, candidate, assignmentId);
     if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
       || value.branchId !== candidate.branchId
       || value.assignmentId !== assignmentId || value.lessonId !== candidate.lessonId
@@ -719,12 +717,7 @@ async function confirmR3SubstituteDecision() {
     if (r3SubstituteDecisionUi.preview !== decision || r3SubstituteDecisionUi.context !== context
       || r3SubstituteDecisionUi.recipient !== recipient || r3SubstituteDecisionUi.operationKey !== operationKey
       || !r3SubstituteDecisionCandidate(context, decision)) return;
-    const result = await context.client.rpc("tn_admin_confirm_substitute_policy_decision", {
-      target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,
-      expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,
-      target_chosen_recipient: recipient,
-      target_operation_key: operationKey,
-    });
+    const result = await requestR3SubstituteDecisionConfirmation(context, decision, recipient, operationKey);
     if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
       || result?.ok !== true) return;
     r3SubstituteDecisionUi.preview = null;

@@ -61,4 +61,5 @@ function restore(file, source) {
   return text;
 }
 
-module.exports = { root, manifest, sha, restore, restoreContext: contextPort.restore, restoreNonPayable };
+module.exports = { root, manifest, sha, restore, restoreContext: contextPort.restore,
+  restoreLayer: contextPort.restoreLayer, restoreNonPayable };

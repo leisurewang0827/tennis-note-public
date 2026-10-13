@@ -577,6 +577,44 @@ def restore_r3_unlock_base(path: str, text: str, port: dict | None = None) -> st
     return text
 
 
+def restore_r3_layer_boundary_base(path: str, text: str) -> str:
+    """Undo only the sealed view-to-data RPC move before immutable R3 pins."""
+    manifest = json.loads((ROOT / "tests/fixtures/r3-substitute-context-source-parity.json").read_text(encoding="utf-8"))
+    seal = manifest["layerBoundaryRepair"]
+    entry = next((item for item in seal["files"] if item["path"] == path), None)
+    if entry is None:
+        return text
+    text = text.replace("\r\n", "\n")
+    digest = sha256(text.encode("utf-8"))
+    if digest == entry["priorCandidateSha256"]:
+        return text
+    if path == manifest["path"] and digest == manifest["priorCandidateSha256"]:
+        return text
+    if digest != entry["candidateSha256"]:
+        raise RuntimeError("R3 data-layer candidate drift")
+    if path == "app/admin/data/billing.js":
+        marker = "\nasync function requestR3SubstituteDecisionPreview("
+        start = text.find(marker)
+        end = text.find("\nasync function refreshEffectiveSettlementPreview(", start)
+        if start < 0 or end < 0 or text.find(marker, start + 1) >= 0:
+            raise RuntimeError("R3 data-layer boundary drift")
+        text = text[:start] + text[end:]
+    else:
+        replacements = (
+            ('    const value = await requestR3SubstituteDecisionPreview(context, candidate, assignmentId);',
+             '    const value = await context.client.rpc("tn_admin_preview_substitute_policy_decision", {\n      target_branch_id: candidate.branchId, target_assignment_id: assignmentId,\n    });'),
+            ('    const result = await requestR3SubstituteDecisionConfirmation(context, decision, recipient, operationKey);',
+             '    const result = await context.client.rpc("tn_admin_confirm_substitute_policy_decision", {\n      target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,\n      expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,\n      target_chosen_recipient: recipient,\n      target_operation_key: operationKey,\n    });'),
+        )
+        for after, before in replacements:
+            if text.count(after) != 1:
+                raise RuntimeError("R3 data-layer inverse boundary drift")
+            text = text.replace(after, before, 1)
+    if sha256(text.encode("utf-8")) != entry["priorCandidateSha256"]:
+        raise RuntimeError("R3 data-layer inverse drift")
+    return text
+
+
 def restore_r3_context_base(path: str, text: str) -> str:
     """Undo only the sealed P1 repair before the prior substitute inverse."""
     seal = json.loads((ROOT / "tests/fixtures/r3-substitute-context-source-parity.json").read_text(encoding="utf-8"))
@@ -613,7 +651,8 @@ def restore_r3_substitute_base(path: str, text: str) -> str:
     variants = [item for item in port["files"] if item["path"] == path]
     if not variants:
         return text
-    text = restore_r3_context_base(path, restore_r3_nonpayable_base(path, text.replace("\r\n", "\n")))
+    text = restore_r3_context_base(path, restore_r3_nonpayable_base(
+        path, restore_r3_layer_boundary_base(path, text.replace("\r\n", "\n"))))
     entry = next((item for item in variants if item["candidateSha256"] == sha256(text.encode("utf-8"))), None)
     if entry is None:
         raise RuntimeError("R3 substitute candidate hash drift")
@@ -732,6 +771,14 @@ def verify() -> None:
         raise RuntimeError("manifest candidate version/release does not match the approved release")
     if candidate["member_cache"] != EXPECTED_MEMBER_CACHE or candidate["coach_cache"] != EXPECTED_COACH_CACHE:
         raise RuntimeError("manifest candidate cache names do not match approved monotonic floors")
+
+    actual_metadata = release_metadata(ROOT / "app" / "release.json")
+    if actual_metadata != {
+        "version": current_release["version"]["after"],
+        "release_id": current_release["releaseId"]["after"],
+        "deployed_at": current_release["deployedAt"]["after"],
+    }:
+        raise RuntimeError("current release metadata differs from alignment manifest")
 
     restored_release = restore_current_release_base(
         "app/release.json", (ROOT / "app/release.json").read_text(encoding="utf-8"), current_port

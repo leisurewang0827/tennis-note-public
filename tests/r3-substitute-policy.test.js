@@ -56,7 +56,8 @@ function adminContext() {
   vm.runInContext(data.match(/^const effectiveSettlementPreview = .*;$/m)[0], c);
   vm.runInContext(view.match(/^const r3SubstituteDecisionUi = .*;$/m)[0], c);
   for (const name of ["effectiveSettlementPreviewContext", "effectiveSettlementPreviewContextIsCurrent",
-    "invalidateEffectiveSettlementPreview", "validatedR3SubstituteDecisionCandidates", "refreshEffectiveSettlementPreview"]) {
+    "invalidateEffectiveSettlementPreview", "validatedR3SubstituteDecisionCandidates",
+    "requestR3SubstituteDecisionPreview", "requestR3SubstituteDecisionConfirmation", "refreshEffectiveSettlementPreview"]) {
     vm.runInContext(extract(data, name), c);
   }
   for (const name of ["r3SubstituteDecisionCandidate", "r3SubstituteDecisionCandidates", "previewR3SubstituteDecision",
@@ -121,6 +122,25 @@ test("P1 repair has its own exact source seal and cannot bypass the older R3 gol
   assert.equal(port.sha(port.restore(file, source)), entry.baseSha256);
   for (const altered of [source + "\n", source.replace("effectiveSettlementPreview.context !== context", "false")]) {
     assert.throws(() => port.restoreContext(file, altered), /candidate drift/);
+  }
+});
+
+test("data-layer RPC move preserves exact preview/confirm inputs and the immutable R3 pins", () => {
+  const seal = JSON.parse(read("tests/fixtures/r3-substitute-context-source-parity.json")).layerBoundaryRepair;
+  assert.equal(seal.contract, "r3-substitute-data-layer-rpc-v1");
+  assert.equal(seal.files.length, 2);
+  for (const entry of seal.files) {
+    const source = read(entry.path);
+    assert.equal(port.sha(source), entry.candidateSha256);
+    assert.equal(port.sha(port.restoreLayer(entry.path, source)), entry.priorCandidateSha256);
+    assert.equal(port.sha(port.restore(entry.path, source)), port.manifest.files.find((item) => item.path === entry.path).baseSha256);
+    assert.throws(() => port.restoreLayer(entry.path, source + "\n"), /candidate drift/);
+  }
+  const view = read("app/admin/views/billing.js"), data = read("app/admin/data/billing.js");
+  assert(!view.includes("context.client.rpc("));
+  for (const rpc of ["tn_admin_preview_substitute_policy_decision", "tn_admin_confirm_substitute_policy_decision"]) {
+    assert.equal(view.split(rpc).length, 1);
+    assert.equal(data.split(rpc).length, 2);
   }
 });
 

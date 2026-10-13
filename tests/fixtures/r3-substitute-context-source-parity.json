@@ -3,6 +3,21 @@
   "path": "app/admin/views/billing.js",
   "priorCandidateSha256": "5d8fa0645bc912cfa7568b4af48511cb2fe678cda13998ad85bc5ccc0e985866",
   "repairedCandidateSha256": "13ef1d50d2093ee1ed9f9a4088fea64bdd2fae31bb31612f152e28c027df96a0",
+  "layerBoundaryRepair": {
+    "contract": "r3-substitute-data-layer-rpc-v1",
+    "files": [
+      {
+        "path": "app/admin/data/billing.js",
+        "priorCandidateSha256": "301524382f7fd944df1a78fa2966b9524f0cf3826626ad0863f44cc6d9f12010",
+        "candidateSha256": "2be0b3d651e392e7c4afd9bb4af61e36997ab9d70e8bccdfdc06f1cdfd254cb5"
+      },
+      {
+        "path": "app/admin/views/billing.js",
+        "priorCandidateSha256": "13ef1d50d2093ee1ed9f9a4088fea64bdd2fae31bb31612f152e28c027df96a0",
+        "candidateSha256": "1b41b722787f5fa8a9f43d5d641ad7a67f945266390f4a4a03852e42c69e3a06"
+      }
+    ]
+  },
   "nonPayableTrace": {
     "contract": "r3-substitute-nonpayable-trace-v1",
     "authorityCommit": "527c0924d9a98d091ec986741934d2798b4f53f1",
