@@ -4295,7 +4295,7 @@
       "tests/helpers/r3-auth548-outer-port.cjs",
       "tests/r3-auth549-completed-run-admission.test.js"
     ],
-    "sharedGuardSha256": "f2020fb0343590519410986e21919cdaa7d58a0386a274e80f82f68ae9d0a5a4",
+    "sharedGuardSha256": "0c70eb851f59b1a3bd3e3a94c23fb1d42d0353335cc0558069f210625ae18aa5",
     "oldWholeSuiteReusable": false,
     "changedInputPaths": [
       "tests/helpers/r3-auth548-outer-port.cjs",

@@ -6,9 +6,29 @@ import cp from "node:child_process";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),outer=require("./helpers/r3-auth548-outer-port.cjs"),gate=require("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),e=outer.contract.completedRunReuse;
 const clone=x=>JSON.parse(JSON.stringify(x));
-const run={...e,repository:{full_name:e.repository},status:"completed",conclusion:"success",updated_at:"synthetic-time",pull_requests:[{number:e.pr,head:{sha:e.head_sha},base:{sha:e.base}}]};
+const run={...e,repository:{full_name:e.repository},status:"completed",conclusion:"success",updated_at:"synthetic-time",pull_requests:[{number:e.pr,head:{ref:e.head_branch,sha:e.head_sha,repo:{full_name:e.repository}},base:{ref:"dev",sha:e.base,repo:{full_name:e.repository}}}]};
 const jobs={jobs:[{id:1,run_id:e.id,name:e.job,status:"completed",conclusion:"success",steps:e.steps.map(name=>({name,status:"completed",conclusion:"success"}))}]};
 const commit={sha:e.checkout,tree:{sha:e.tree},parents:[{sha:e.base},{sha:e.head_sha}]},logProof={checkout:e.checkout,runtimeMarkers:true};
+test("mutable completed-run association preserves immutable execution and independently binds current candidate",()=>{
+  let checks=0;const check=f=>{f();checks++;},currentHead="c".repeat(40),currentTree="d".repeat(40),currentCheckout="e".repeat(40),updated=clone(run);
+  updated.pull_requests[0].head={ref:e.head_branch,sha:currentHead,repo:{full_name:e.repository}};updated.pull_requests[0].base.repo={full_name:e.repository};
+  const context={repository:e.repository,event:"pull_request",sha:currentCheckout,checkout:currentCheckout,headRepository:e.repository,baseRepository:e.repository,baseRef:"dev",baseSha:e.base,headRef:e.head_branch,headSha:currentHead,parent1:e.base,parent2:currentHead};
+  const pr={number:e.pr,head:{repo:{full_name:e.repository},ref:e.head_branch,sha:currentHead},base:{repo:{full_name:e.repository},ref:"dev",sha:e.base},changed_files:52},log="git log -1 --format=%H\n"+e.checkout+"\n"+e.logMarkers.join("\n");
+  check(()=>assert.equal(updated.pull_requests.some(p=>p.number===e.pr&&p.head.sha===e.head_sha&&p.base.sha===e.base),false));
+  check(()=>gate.validateCompletedRun(e,updated,jobs,commit,gate.validateCheckoutLog(log,e)));check(()=>gate.validateCompletedRun(e,run,jobs,commit,logProof));
+  check(()=>{const future=clone(updated);future.pull_requests[0].base.sha="f".repeat(40);gate.validateCompletedRun(e,future,jobs,commit,logProof);});
+  check(()=>{const brief=clone(updated);for(const side of [brief.pull_requests[0].head,brief.pull_requests[0].base])side.repo={url:"https://api.github.com/repos/"+e.repository,name:e.repository.split("/")[1]};gate.validateCompletedRun(e,brief,jobs,commit,logProof);});
+  check(()=>gate.validateContext(context));check(()=>gate.validateCurrentAssociation(context,pr,currentTree,currentTree));check(()=>gate.validateNewCallerShape(context,2));
+  for(const patch of [{head_sha:currentHead},{head_sha:"f".repeat(40)},{id:1},{workflow_id:1},{path:"wrong"},{head_branch:"wrong"},{event:"push"},{run_attempt:2},{status:"in_progress"},{conclusion:"failure"},{repository:{full_name:"fork/repo"}},{repository:undefined},{pull_requests:[]},{pull_requests:undefined}])check(()=>assert.throws(()=>gate.validateCompletedRun(e,{...updated,...patch},jobs,commit,logProof)));
+  for(const mutate of [r=>r.pull_requests[0].number=1,r=>r.pull_requests[0].base.sha="invalid",r=>delete r.pull_requests[0].base,r=>r.pull_requests[0].head.sha="invalid",r=>delete r.pull_requests[0].head,r=>r.pull_requests.push(clone(r.pull_requests[0])),r=>r.pull_requests.push({...clone(r.pull_requests[0]),number:1}),r=>r.pull_requests[0].head.repo.full_name="fork/repo",r=>r.pull_requests[0].base.repo.full_name="fork/repo",r=>delete r.pull_requests[0].head.repo,r=>delete r.pull_requests[0].base.repo,r=>r.pull_requests[0].head.repo={},r=>r.pull_requests[0].base.repo={},r=>r.pull_requests[0].head.ref="wrong",r=>r.pull_requests[0].base.ref="wrong",r=>delete r.pull_requests[0].base.ref,r=>delete r.pull_requests[0].head.ref,r=>r.pull_requests[0].head.repo.url="https://api.github.com/repos/fork/repo",r=>r.pull_requests[0].base.repo.name="wrong"]){check(()=>{const bad=clone(updated);mutate(bad);assert.throws(()=>gate.validateCompletedRun(e,bad,jobs,commit,logProof));});}
+  for(const patch of [{sha:currentCheckout},{tree:{sha:currentTree}},{parents:[{sha:e.base},{sha:currentHead}]},{parents:[]}])check(()=>assert.throws(()=>gate.validateCompletedRun(e,updated,jobs,{...commit,...patch},logProof)));
+  check(()=>assert.throws(()=>gate.validateCheckoutLog(log.replace(e.checkout,currentCheckout),e)));check(()=>assert.throws(()=>gate.validateCheckoutLog(log.replace(e.logMarkers[0],"missing-runtime"),e)));
+  for(const patch of [{checkout:currentCheckout},{runtimeMarkers:false}])check(()=>assert.throws(()=>gate.validateCompletedRun(e,updated,jobs,commit,patch)));
+  for(const mutate of [j=>j.jobs=[],j=>j.jobs.push(clone(j.jobs[0])),j=>j.jobs[0].name="wrong",j=>j.jobs[0].run_id=1,j=>j.jobs[0].conclusion="failure",j=>j.jobs[0].steps=[],j=>j.jobs[0].steps[0].conclusion="skipped"]){check(()=>{const bad=clone(jobs);mutate(bad);assert.throws(()=>gate.validateCompletedRun(e,updated,bad,commit,logProof));});}
+  for(const mutate of [p=>p.number=1,p=>p.head.sha="f".repeat(40),p=>p.head.ref="wrong",p=>p.head.repo.full_name="fork/repo",p=>p.base.sha="f".repeat(40),p=>p.changed_files=53])check(()=>{const bad=clone(pr);mutate(bad);assert.throws(()=>gate.validateCurrentAssociation(context,bad,currentTree,currentTree));});
+  check(()=>assert.throws(()=>gate.validateCurrentAssociation(context,pr,"f".repeat(40),currentTree)));
+  console.log(JSON.stringify({mutableAssociationPublicChecks:checks,oldSuiteRuns:0,network:0,db:0,syntheticOnly:true}));
+});
 function baseline(file){
   assert(!file.includes("production_projection"));
   if(process.env.GITHUB_ACTIONS==="true"||!process.env.TENNISNOTE_REUSE_OFFLINE_BASE)return cp.execFileSync("git",["show",e.head_sha+":"+file],{cwd:outer.root,encoding:"utf8",maxBuffer:16e6}).replace(/\r\n/g,"\n");

@@ -73,7 +73,19 @@ function validateCompletedRun(expected,run,jobs,commit,logProof){
   assert.equal(run.repository?.full_name,expected.repository,"evidence_repository");
   for(const key of ["id","workflow_id","path","head_sha","head_branch","event","run_attempt"])assert.equal(run[key],expected[key],"evidence_"+key);
   assert.equal(run.status,"completed");assert.equal(run.conclusion,"success");assert(run.completed_at||run.updated_at,"evidence_time_missing");
-  assert(run.pull_requests?.some(p=>p.number===expected.pr&&p.head?.sha===expected.head_sha&&p.base?.sha===expected.base),"evidence_pr_binding");
+  // run.head_sha와 checkout 부모는 과거 실행의 권위다. PR association head는 현재 PR 갱신을 반영한다.
+  // association의 head/base SHA 모두 mutable이다. 동일 PR의 stable identity만 식별한다.
+  assert(Array.isArray(run.pull_requests),"evidence_pr_binding");assert.equal(run.pull_requests.length,1,"evidence_pr_binding");
+  const association=run.pull_requests[0];assert.equal(association.number,expected.pr,"evidence_pr_binding");
+  assert.equal(association.base?.ref,expected.repository==="leisurewang0827/app-automation-vault"?"main":"dev","evidence_pr_base_branch");
+  assert.equal(association.head?.ref,expected.head_branch,"evidence_pr_head_branch");
+  for(const side of [association.base,association.head]){
+    assert(/^[a-f0-9]{40}$/.test(side?.sha||""),"evidence_mutable_sha_shape");
+    const repo=side.repo;assert(repo&&(repo.full_name!==undefined||repo.url!==undefined),"evidence_pr_repository_missing");
+    if(repo.full_name!==undefined)assert.equal(repo.full_name,expected.repository,"evidence_pr_repository_binding");
+    if(repo.url!==undefined)assert.equal(repo.url,"https://api.github.com/repos/"+expected.repository,"evidence_pr_repository_binding");
+    if(repo.name!==undefined)assert.equal(repo.name,expected.repository.split("/")[1],"evidence_pr_repository_binding");
+  }
   assert.equal(commit.sha,expected.checkout);assert.equal(commit.tree?.sha,expected.tree,"evidence_tree");
   assert.deepEqual(commit.parents.map(p=>p.sha),[expected.base,expected.head_sha],"evidence_parents");
   const selected=jobs.jobs.filter(j=>j.name===expected.job);assert.equal(selected.length,1,"evidence_job_ambiguous");const job=selected[0];
