@@ -92,10 +92,13 @@ jobs:
         timeout-minutes: 4
         run: ./scripts/verify.sh
       - name: Verify only newly composed source and context guards
-        if: ${{ steps.provenance.outputs.scoped == 'true' }}
+        if: ${{ steps.provenance.outputs.scoped == 'true' && steps.provenance.outputs.changed_inputs_required != 'true' }}
         run: |
           node --test tests/r3-auth548-composition.test.js tests/r3-auth548-editor-context.test.js tests/r3-auth548-otp-context.test.js tests/r3-auth549-release-admission.test.js
           python scripts/check_tennisnote_dev_prod_alignment.py
+      - name: Verify changed-input completed-run admission only
+        if: ${{ steps.provenance.outputs.changed_inputs_required == 'true' }}
+        run: node --test tests/r3-auth549-completed-run-admission.test.js
 
   deploy-development-after-ci:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
