@@ -5,6 +5,18 @@ import path from "node:path";
 import cp from "node:child_process";
 import {createRequire} from "node:module";
 
+test("grant D actual stable fallback accepts only equivalent canonical repository representations",async()=>{
+  const scopedRequire=createRequire(import.meta.url),guard=scopedRequire("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),outer=scopedRequire("./helpers/r3-auth548-outer-port.cjs");
+  const result=await guard.grantDStableRepresentationFocused("leisurewang0827/tennis-note-public",outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_GIT_ROOT||outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_REF||"HEAD");
+  assert.equal(result.positive,8);assert.equal(result.negative,120);assert(result.records.every(r=>r.outputExact&&r.coverageExact));console.log(JSON.stringify(result));
+});
+
+test("grant D actual PR and dev-push entry preserves old authority and strict historical fallback",async()=>{
+  const scopedRequire=createRequire(import.meta.url),guard=scopedRequire("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),outer=scopedRequire("./helpers/r3-auth548-outer-port.cjs");
+  const result=await guard.grantDActualEntryFocused("leisurewang0827/tennis-note-public",outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_GIT_ROOT||outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_REF||"HEAD");
+  assert.equal(result.positive,4);assert(result.negative>0);assert(result.records.every(r=>r.outputExact&&r.coverageExact));assert.equal(result.oldSuiteRuns,0);console.log(JSON.stringify(result));
+});
+
 test("actual public collector entry binds event token checkout and head",async()=>{
   const scopedRequire=createRequire(import.meta.url),guard=scopedRequire("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),outer=scopedRequire("./helpers/r3-auth548-outer-port.cjs");
   const fixture=guard.buildCollectorFixture("leisurewang0827/tennis-note-public",outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_GIT_ROOT||outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_REF||"HEAD"),variants=["positive","no-token","node24","loader-override","offline-override","wrong-checkout","wrong-event","wrong-base","wrong-head","wrong-repository","wrong-scope","api-denied","early-return","complete-output-no-proof","output-missing-reused","output-wrong-reused","output-missing-changed","output-extra-field","output-duplicate-field","proof-route-omission","proof-chain-short"];let checks=0;
@@ -130,9 +142,17 @@ function shallowFixture(){
   const rows=(old)=>e.deltaPaths.map((p,i)=>({path:p,type:"blob",mode:"100644",sha:old?String(i+1).repeat(40):local.blobs[p]}));
   const unchanged={path:"app/synthetic-unchanged.js",type:"blob",mode:"100644",sha:"e".repeat(40)};
   const bundle={run:{id:runId,repository:{full_name:gate.REPOSITORY},workflow_id:329932540,path:".github/workflows/tennisnote-public-ci.yml",event:"push",head_branch:"dev",head_sha:merged,run_attempt:1,status:"in_progress",conclusion:null},jobs:{total_count:1,jobs:[{id:1,run_id:runId,head_sha:merged,name:"build-and-check",status:"completed",conclusion:"success",steps:[{name:"Verify changed-input completed-run admission only",status:"completed",conclusion:"success"}]}]},associations:[{number:206,merged_at:"synthetic",merge_commit_sha:merged,head:{ref:gate.BRANCH}}],pr:{number:206,head:{repo:{full_name:gate.REPOSITORY},ref:gate.BRANCH,sha:head},base:{repo:{full_name:gate.REPOSITORY},ref:"dev",sha:gate.BASE},changed_files:52,merged_at:"synthetic",merge_commit_sha:merged},currentCommit:{sha:merged,tree:{sha:tree},parents:[{sha:gate.BASE}]},headCommit:{sha:head,tree:{sha:tree}},baselineCommit:{sha:e.head_sha,tree:{sha:e.tree}},baselineTree:{sha:e.tree,truncated:false,tree:[...rows(true),unchanged]},currentTree:{sha:tree,truncated:false,tree:[...rows(false),unchanged]}};
+  bundle.headCommit.parents=[{sha:"b199fcf825b7b27947217b81ed4d46c8e9bc714e"}];
   const responses=new Map([["actions/runs/"+runId,bundle.run],["actions/runs/"+runId+"/attempts/1/jobs?per_page=100",bundle.jobs],["commits/"+merged+"/pulls",bundle.associations],["pulls/206",bundle.pr],["git/commits/"+merged,bundle.currentCommit],["git/commits/"+head,bundle.headCommit],["git/commits/"+e.head_sha,bundle.baselineCommit],["git/trees/"+e.tree+"?recursive=1",bundle.baselineTree],["git/trees/"+tree+"?recursive=1",bundle.currentTree]]);
   return{local,bundle,gitCalls,responses};
 }
+
+test("grant D shallow deploy keeps unique merge binding and exact source parent",()=>{
+  const fixture=shallowFixture();assert.equal(gate.validateShallowDeploymentBundle(fixture.local,fixture.bundle).shallowSafe,true);
+  const edits=[b=>b.associations.push(clone(b.associations[0])),b=>b.headCommit.parents=[],b=>b.headCommit.parents[0].sha="f".repeat(40),b=>b.currentCommit.parents.push({sha:"f".repeat(40)}),b=>b.currentTree.truncated=true,b=>b.pr.changed_files=53,b=>b.jobs.jobs[0].steps[0].conclusion="skipped"];
+  for(const edit of edits){const bad=clone(fixture.bundle);edit(bad);assert.throws(()=>gate.validateShallowDeploymentBundle(fixture.local,bad));}
+  console.log(JSON.stringify({grantDShallowChecks:8,network:0,db:0,oldSuiteRuns:0}));
+});
 test("P1 depth-one local HEAD plus same-run/API immutable metadata admits without local parents, fetch, show or old history",async()=>{
   const f=shallowFixture(),reads=[];const result=await gate.obtainShallowDeploymentProof(f.local,async suffix=>{reads.push(suffix);assert(f.responses.has(suffix));return f.responses.get(suffix)});
   assert.deepEqual(f.gitCalls,["rev-parse HEAD","rev-parse HEAD^{tree}","diff --name-only HEAD"]);assert.equal(reads.length,9);assert.equal(result.shallowSafe,true);assert.equal(result.sourceDeltaPaths,5);assert.equal(result.oldWholePublicSuiteReusable,false);
@@ -157,3 +177,5 @@ test("P1 receipt is necessary but cannot replace current-run proof; stale/wrong 
   const f=shallowFixture();f.bundle.jobs.jobs[0].steps=[];assert.throws(()=>gate.validateShallowDeploymentBundle(f.local,f.bundle));
   for(const delta of [{expiresAt:"2026-01-01T00:09:00Z"},{environment:"production"},{projectFingerprint:"wrong"},{authSourceSha256:"wrong"}])assert.throws(()=>verify({...receipt,...delta}));
 });
+
+test("approval E current Journal producer-consumer preserves historical proof and denies incomplete evidence",()=>{const result=gate.recoverySelfTest();assert(result.positive>=5&&result.negative>=50);assert.equal(result.actualTrace,false);assert.equal(result.oldSuiteRuns,0);console.log(JSON.stringify(result));});
