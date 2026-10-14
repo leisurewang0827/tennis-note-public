@@ -157,9 +157,81 @@ async function obtainCompletedProof(expected,read){
 function currentInfrastructure(contract,root,git){
   const baselineTree=git("rev-parse",contract.head_sha+"^{tree}"),changedPaths=git("diff","--name-only",contract.head_sha,"HEAD").split("\n").filter(Boolean);
   validateInfrastructureDelta(contract,{baselineTree,changedPaths});
-  assert.equal(process.env.NODE_OPTIONS||"","runtime_loader_override_denied");assert.equal(process.env.TENNISNOTE_REUSE_OFFLINE_BASE||"","offline_channel_in_ci_denied");
+  assert.equal(process.env.NODE_OPTIONS||"","","runtime_loader_override_denied");assert.equal(process.env.TENNISNOTE_REUSE_OFFLINE_BASE||"","","offline_channel_in_ci_denied");
   if(process.env.TENNISNOTE_JOURNAL_ROOT)assert.equal(path.resolve(process.env.TENNISNOTE_JOURNAL_ROOT),path.join(root,"90-Dashboard"),"journal_root_override");
   return changedPaths;
+}
+function buildCollectorFixture(repository,sourceRoot,authorityRoot=sourceRoot,sourceRef="HEAD"){
+  const fs=require("node:fs"),path=require("node:path"),cp=require("node:child_process"),isPrivate=repository==="leisurewang0827/app-automation-vault";
+  assert(isPrivate||repository==="leisurewang0827/tennis-note-public");
+  const read=(file,ref)=>{assert(!file.includes("production_projection")&&!file.includes("config.local"));if(!ref&&fs.existsSync(path.join(sourceRoot,file)))return fs.readFileSync(path.join(sourceRoot,file));return cp.execFileSync("git",["show",(ref||sourceRef)+":"+file],{cwd:authorityRoot,maxBuffer:16e6,stdio:["ignore","pipe","pipe"]});};
+  const fixtureFile=isPrivate?"scripts/fixtures/r3-auth548-private-admission.json":"tests/fixtures/r3-after-auth548-outer-parity.json",packet=JSON.parse(read(fixtureFile)),entry=isPrivate?"scripts/check_tennisnote_r3_auth548_admission.cjs":"scripts/check_tennisnote_r3_auth548_provenance.cjs";
+  const currentHead="c".repeat(40),checkout="d".repeat(40),currentTree="e".repeat(40),base=isPrivate?"40bd1687af6f2ee800c8b0c5324cc01ec49f6e04":packet.publicParent,branch=isPrivate?"codex/r3-policy-after-auth548-20261013":"codex/r3-after-auth548-local-20261013",number=isPrivate?596:206;
+  const files={},git={},api={},es=isPrivate?Object.values(packet.completedRunReuse.completedRuns):[packet.completedRunReuse];
+  const add=file=>{assert(!file.includes("production_projection"));files[file]=read(file).toString("utf8");};
+  add(fixtureFile);add(entry);add(isPrivate?"scripts/check_tennisnote_r3_completed_run_admission.cjs":"tests/helpers/r3-auth548-outer-port.cjs");
+  for(const row of isPrivate?packet.source:packet.files)add(row.path);if(!isPrivate)for(const row of packet.authPins)add(row.path);
+  const pr={number,head:{sha:currentHead,ref:branch,repo:{full_name:repository}},base:{sha:base,ref:isPrivate?"main":"dev",repo:{full_name:repository}},changed_files:isPrivate?19:52};
+  const env={GH_TOKEN:"synthetic-readonly-token",GITHUB_EVENT_NAME:"pull_request",GITHUB_EVENT_PATH:"/virtual/event.json",GITHUB_OUTPUT:"/virtual/output",GITHUB_REPOSITORY:repository,GITHUB_SHA:checkout,GITHUB_REF:"refs/pull/"+number+"/merge",NODE_OPTIONS:"",TENNISNOTE_REUSE_OFFLINE_BASE:""};
+  const answer=(args,value)=>git[JSON.stringify(args)]=value;
+  answer(["rev-parse","HEAD"],checkout);answer(["rev-parse","HEAD^1"],base);answer(["rev-parse","HEAD^2"],currentHead);answer(["rev-parse","HEAD^{tree}"],currentTree);answer(["rev-parse",currentHead+"^{tree}"],currentTree);answer(["rev-list","--parents","-n","1","HEAD"],[checkout,base,currentHead].join(" "));
+  answer(["diff","--name-only",base,"HEAD"],(isPrivate?packet.allowedPaths:Object.keys(packet.files.reduce((m,r)=>(m[r.path]=true,m),{}))).join("\n"));
+  if(!isPrivate){const scope=52,paths=Array.from({length:scope},(_,i)=>"synthetic-scope-"+i);answer(["diff","--name-only",base,"HEAD"],paths.join("\n"));}
+  api["pulls/"+number]=pr;
+  if(isPrivate)api["actions/runs/38261870915"]={id:38261870915,head_sha:"527c0924d9a98d091ec986741934d2798b4f53f1",event:"workflow_dispatch",conclusion:"success",repository:{full_name:repository}};
+  else for(const [which,e]of Object.entries(packet.evidence)){if(!["r3Public","authPublic"].includes(which))continue;api["actions/runs/"+e.run]={id:e.run,head_sha:e.head,event:e.event,conclusion:"success",repository:{full_name:repository},head_branch:e.branch,pull_requests:[{number:204,head:{sha:e.head},base:{sha:"e794c18059ff3391af9a5494f6389cfa0de70c2b"}}]};}
+  for(const e of es){
+    add(e.path);
+    answer(["rev-parse",e.head_sha+"^{tree}"],e.tree);answer(["diff","--name-only",e.head_sha,"HEAD"],e.deltaPaths.join("\n"));
+    for(const row of e.inputPins||[]){if(row.kind==="git-tree"){answer(["rev-parse",e.head_sha+":"+row.path],e.inputHashes[row.name]);answer(["rev-parse","HEAD:"+row.path],e.inputHashes[row.name]);}else{add(row.path);answer(["show",e.head_sha+":"+row.path],read(row.path,e.head_sha).toString("utf8"));}}
+    answer(["show",e.head_sha+":"+e.path],read(e.path,e.head_sha).toString("utf8").trim());
+    const jobId=e.id*10+1;
+    api["actions/runs/"+e.id]={...e,status:"completed",conclusion:"success",updated_at:"synthetic-time",repository:{full_name:repository},pull_requests:[{number:e.pr,head:{ref:e.head_branch,sha:currentHead,repo:{url:"https://api.github.com/repos/"+repository,name:repository.split("/")[1]}},base:{ref:isPrivate?"main":"dev",sha:base,repo:{url:"https://api.github.com/repos/"+repository,name:repository.split("/")[1]}}}]};
+    api["actions/runs/"+e.id+"/attempts/1/jobs?per_page=100"]={total_count:1,jobs:[{id:jobId,name:e.job,run_id:e.id,status:"completed",conclusion:"success",steps:e.steps.map(name=>({name,status:"completed",conclusion:"success"}))}]};
+    api["actions/jobs/"+jobId+"/logs"]="git log -1 --format=%H\n"+e.checkout+"\n"+e.logMarkers.join("\n");
+    api["git/commits/"+e.checkout]={sha:e.checkout,tree:{sha:e.tree},parents:[{sha:e.base},{sha:e.head_sha}]};
+  }
+  if(!isPrivate){const e=packet.completedRunReuse;for(const file of [fixtureFile,"tests/helpers/r3-auth548-outer-port.cjs",entry])answer(["show",e.head_sha+":"+file],read(file,e.head_sha).toString("utf8").trim());}
+  const proofRoutes=e=>["actions/runs/"+e.id,"actions/runs/"+e.id+"/attempts/1/jobs?per_page=100","actions/jobs/"+(e.id*10+1)+"/logs","git/commits/"+e.checkout];
+  const common=isPrivate?["pulls/"+number,"actions/runs/38261870915"]:["pulls/"+number,"actions/runs/"+packet.evidence.r3Public.run,"actions/runs/"+packet.evidence.authPublic.run];
+  const mandatoryRoutes={"--ci-route":[...common,...es.flatMap(proofRoutes)]};
+  if(isPrivate)mandatoryRoutes["--journal-route"]=[...common,...proofRoutes(packet.completedRunReuse.completedRuns.journal)];
+  return {repository,entry,files,git,api,mandatoryRoutes,event:{pull_request:pr},env,nodeVersion:"22.23.3",mode:"--ci-route",synthetic:true,observedShape:"PR event; read token; merge checkout distinct from head; base-parent1/head-parent2"};
+}
+async function executeCollectorFixture(fixture,variant="positive"){
+  const vm=require("node:vm"),path=require("node:path"),data=JSON.parse(JSON.stringify(fixture)),base=path.resolve("/virtual"),modules=new Map(),routeCounts={};let output="",calls=0;
+  if(variant==="journal-positive")data.mode="--journal-route";
+  if(variant==="no-token")delete data.env.GH_TOKEN;
+  if(variant==="node24")data.nodeVersion="24.0.0";
+  if(variant==="loader-override")data.env.NODE_OPTIONS="--require=synthetic-loader";
+  if(variant==="offline-override")data.env.TENNISNOTE_REUSE_OFFLINE_BASE="synthetic-offline-root";
+  if(variant==="wrong-checkout")data.env.GITHUB_SHA="f".repeat(40);
+  if(variant==="wrong-event")data.env.GITHUB_EVENT_NAME="workflow_dispatch";
+  if(variant==="wrong-base")data.event.pull_request.base.sha="f".repeat(40);
+  if(variant==="wrong-head"){data.event.pull_request.head.sha="f".repeat(40);data.api["pulls/"+data.event.pull_request.number].head.sha="f".repeat(40);}
+  if(variant==="wrong-repository")data.env.GITHUB_REPOSITORY="synthetic/foreign";
+  if(variant==="wrong-scope"){data.event.pull_request.changed_files++;data.api["pulls/"+data.event.pull_request.number].changed_files++;}
+  const isPrivate=data.repository==="leisurewang0827/app-automation-vault",expectedOutput=isPrivate?"scoped=true\nreused=true\n":"scoped=true\nchanged_inputs_required=true\nreused=false\n",requiredRoutes=data.mandatoryRoutes[data.mode];
+  assert(Array.isArray(requiredRoutes)&&requiredRoutes.every(route=>Object.hasOwn(data.api,route)),"fixture_required_routes_missing");
+  const expectedCounts={};for(const route of requiredRoutes)expectedCounts[route]=(expectedCounts[route]||0)+1;
+  let context;const clone=x=>vm.runInContext("JSON.parse("+JSON.stringify(JSON.stringify(x))+")",context);
+  const writeOutput=b=>{let text=String(b);if(variant==="output-missing-reused")text=text.replace(/reused=(true|false)\n/g,"");if(variant==="output-wrong-reused")text=text.replace(/reused=(true|false)\n/g,isPrivate?"reused=false\n":"reused=true\n");if(variant==="output-missing-changed")text=text.replace(/changed_inputs_required=(true|false)\n/g,"");if(variant==="output-extra-field")text+="complete=true\n";if(variant==="output-duplicate-field")text+="scoped=true\n";output+=text;};
+  const fs={readFileSync:(p,encoding)=>{const full=path.resolve(p);let text;if(full===path.resolve(data.env.GITHUB_EVENT_PATH))text=JSON.stringify(data.event);else{assert(full.startsWith(base+path.sep));const file=full.slice(base.length+1).replace(/\\/g,"/");assert(!file.includes("production_projection"));assert(Object.hasOwn(data.files,file),"fixture_file_missing");text=data.files[file];}return encoding?text:Buffer.from(text);},existsSync:p=>{const file=path.resolve(p).slice(base.length+1).replace(/\\/g,"/");return Object.hasOwn(data.files,file);},appendFileSync:(p,b)=>{assert.equal(path.resolve(p),path.resolve(data.env.GITHUB_OUTPUT));writeOutput(b);}};
+  const cp={execFileSync:(exe,args)=>{assert.equal(exe,"git");assert(!args.join(" ").includes("production_projection"));const key=JSON.stringify(args);assert(Object.hasOwn(data.git,key),"fixture_git_route_denied");return data.git[key];}};
+  function load(file){if(modules.has(file))return modules.get(file).exports;assert(Object.hasOwn(data.files,file));const module={exports:{}};modules.set(file,module);let text=data.files[file];
+    if(file===data.entry&&["early-return","complete-output-no-proof"].includes(variant)){const prefix=/(^|\n)async function main\(\)\{/;assert(prefix.test(text));const emitted=variant==="early-return"?"scoped=true\n":expectedOutput;text=text.replace(prefix,match=>match+"fs.appendFileSync(process.env.GITHUB_OUTPUT,"+JSON.stringify(emitted)+");return;");}
+    if(variant==="proof-route-omission"&&text.includes('const run=await read("actions/runs/"+expected.id),jobs='))text=text.replace('const run=await read("actions/runs/"+expected.id),jobs=','const run=fixtureCachedEvidenceRun(expected.id),jobs=');
+    if(variant==="proof-chain-short"&&text.includes("async function obtainCompletedProof(expected,read){"))text=text.replace("async function obtainCompletedProof(expected,read){",'async function obtainCompletedProof(expected,read){await read("actions/runs/"+expected.id);return {};');
+    if(file===data.entry)text+="\nmodule.exports.fixtureEntry=main;";
+    const localRequire=name=>{if(name.startsWith(".")){const next=path.posix.normalize(path.posix.join(path.posix.dirname(file),name));return load(next);}if(name==="node:fs")return fs;if(name==="node:child_process")return cp;assert(["node:path","node:crypto","node:assert/strict","node:vm"].includes(name));return require(name);};localRequire.main=null;
+    vm.runInContext("(function(require,module,__dirname,__filename){"+text+"\n})",context)(localRequire,module,path.dirname(path.join(base,file)),path.join(base,file));return module.exports;
+  }
+  context=vm.createContext({Buffer,AbortSignal,process:{env:data.env,versions:{node:data.nodeVersion},argv:["node",data.entry,data.mode]},console:{log:()=>{},error:()=>{}},fixtureCachedEvidenceRun:id=>clone(data.api["actions/runs/"+id]),fetch:async url=>{assert(url.startsWith("https://api.github.com/repos/"+data.repository+"/"));const suffix=url.split("/repos/"+data.repository+"/")[1];assert(Object.hasOwn(data.api,suffix),"fixture_api_route_denied");calls++;routeCounts[suffix]=(routeCounts[suffix]||0)+1;return{ok:variant!=="api-denied",json:async()=>clone(data.api[suffix]),text:async()=>String(data.api[suffix])};}});
+  try{
+    await load(data.entry).fixtureEntry();const outputMatches=output===expectedOutput,apiCoverageComplete=Object.keys(expectedCounts).every(route=>(routeCounts[route]||0)>=expectedCounts[route]),apiContractExact=JSON.stringify(Object.entries(routeCounts).sort())===JSON.stringify(Object.entries(expectedCounts).sort());
+    const outputFields={};for(const line of output.split("\n").filter(Boolean)){const match=line.match(/^(scoped|reused|changed_inputs_required)=(true|false)$/);if(match&&!Object.hasOwn(outputFields,match[1]))outputFields[match[1]]=match[2]==="true";}
+    return{passed:outputMatches&&apiCoverageComplete&&apiContractExact,calls,expectedCalls:requiredRoutes.length,routeCounts,expectedCounts,outputFields,outputMatches,apiCoverageComplete,apiContractExact,oldScopedOnlyDetectorWouldPass:output.includes("scoped=true\n"),network:0,db:0,synthetic:true};
+  }catch(error){const allowed=new Set(["collector_node22_required","runtime_loader_override_denied","offline_channel_in_ci_denied","journal_root_override","fixture_api_route_denied","fixture_git_route_denied","fixture_file_missing"]),first=String(error.message).split("\n")[0];return{passed:false,calls,errorCode:["ERR_ASSERTION","MODULE_NOT_FOUND"].includes(error.code)?error.code:"FIXTURE_FAILURE",reason:allowed.has(first)?first:"COLLECTOR_GATE_REJECTED",network:0,db:0,synthetic:true};}
 }
 // END SHARED COMPLETED RUN GUARD
 const git=(...args)=>cp.execFileSync("git",args,{cwd:outer.root,encoding:"utf8",maxBuffer:16e6}).trim();
@@ -181,7 +253,9 @@ async function routeCi(){
   if(scoped){currentPr=await api("pulls/206");context.headSha=currentPr.head.sha;validateContext(context);validateCurrentAssociation(context,currentPr,git("rev-parse",context.headSha+"^{tree}"),git("rev-parse","HEAD^{tree}"));validateNewCallerShape(context,git("rev-list","--parents","-n","1","HEAD").split(/\s+/).length-1);outer.validateSource();for(const which of ["r3Public","authPublic"])validateEvidence(which,await api("actions/runs/"+outer.contract.evidence[which].run));const impact=await provePublicChangedInputDelta();assert.equal(impact.oldSuiteReusable,false);changedInputsRequired=true;}
   fs.appendFileSync(env.GITHUB_OUTPUT,"scoped="+String(scoped)+"\nchanged_inputs_required="+String(changedInputsRequired)+"\nreused=false\n");console.log(scoped?"R3_AUTH_CHANGED_INPUT_DELTA_REQUIRED":"STANDARD_VERIFICATION_REQUIRED");return scoped;
 }
+function validateCollectorRuntime(){assert(/^22\./.test(process.versions.node),"collector_node22_required");return true;}
 async function main(){
+  validateCollectorRuntime();
   const mode=process.argv[2];
   if(mode==="--ci-route")return routeCi();
   if(mode==="--deploy"){
@@ -192,7 +266,7 @@ async function main(){
   }
   assert.equal(mode,"--local");console.log(JSON.stringify(outer.validateSource()));
 }
-module.exports={validateContext,validateEvidence,requirePublishable,validateRuntimeReceipt,fixedCompletedAuthority,validateNewCallerShape,validateCurrentAssociation,validateCompletedRun,validateCheckoutLog,validateInfrastructureDelta,validateUnchangedInputs,completedApi,obtainCompletedProof,validatePublicInputImpact,sharedCompletedGuardHash,classifyPushSourceArrival,fixedPushSourceArrival,validateShallowDeploymentBundle,obtainShallowDeploymentProof,validateCurrentDeltaRun,readLocalDeploymentCheckout,REPOSITORY,BRANCH,BASE};
+module.exports={validateContext,validateEvidence,requirePublishable,validateRuntimeReceipt,fixedCompletedAuthority,validateNewCallerShape,validateCurrentAssociation,validateCompletedRun,validateCheckoutLog,validateInfrastructureDelta,currentInfrastructure,buildCollectorFixture,executeCollectorFixture,validateUnchangedInputs,completedApi,obtainCompletedProof,validatePublicInputImpact,sharedCompletedGuardHash,classifyPushSourceArrival,fixedPushSourceArrival,validateShallowDeploymentBundle,obtainShallowDeploymentProof,validateCurrentDeltaRun,readLocalDeploymentCheckout,REPOSITORY,BRANCH,BASE};
 if(require.main===module)main().catch(()=>{console.error("R3_AUTH_PROVENANCE_FAIL");process.exitCode=1});
 // 새 changed-input delta. 기계적 준비가 아래를 기존 authority wrapper 뒤에 붙인다.
 function validatePublicInputImpact(before,after,texts){

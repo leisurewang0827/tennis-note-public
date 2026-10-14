@@ -4,6 +4,29 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 import {createRequire} from "node:module";
+
+test("actual public collector entry binds event token checkout and head",async()=>{
+  const scopedRequire=createRequire(import.meta.url),guard=scopedRequire("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),outer=scopedRequire("./helpers/r3-auth548-outer-port.cjs");
+  const fixture=guard.buildCollectorFixture("leisurewang0827/tennis-note-public",outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_GIT_ROOT||outer.root,process.env.TENNISNOTE_COLLECTOR_TEST_REF||"HEAD"),variants=["positive","no-token","node24","loader-override","offline-override","wrong-checkout","wrong-event","wrong-base","wrong-head","wrong-repository","wrong-scope","api-denied","early-return","complete-output-no-proof","output-missing-reused","output-wrong-reused","output-missing-changed","output-extra-field","output-duplicate-field","proof-route-omission","proof-chain-short"];let checks=0;
+  const mutantCases=new Set(variants.slice(12));
+  for(const variant of variants){const result=await guard.executeCollectorFixture(fixture,variant);if(result.passed!==(variant==="positive"))console.error(JSON.stringify({fixtureVariant:variant,errorCode:result.errorCode||"COLLECTOR_RECEIPT_REJECTED"}));assert.equal(result.passed,variant==="positive","actual_public_collector_case:"+variant);assert(result.calls<=12);if(variant==="positive"){assert.deepEqual(result.outputFields,{scoped:true,changed_inputs_required:true,reused:false});assert(result.outputMatches&&result.apiCoverageComplete&&result.apiContractExact);assert.equal(result.calls,7);assert.deepEqual(result.routeCounts,result.expectedCounts);}if(mutantCases.has(variant)){assert.equal(result.oldScopedOnlyDetectorWouldPass,true);assert.equal(result.passed,false);}checks++;}
+  assert.equal(checks,21);
+});
+
+test("runtime override gate executes actual infrastructure caller",()=>{
+  const scopedRequire=createRequire(import.meta.url),guard=scopedRequire("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),outer=scopedRequire("./helpers/r3-auth548-outer-port.cjs"),e=outer.contract.completedRunReuse;
+  const names=["NODE_OPTIONS","TENNISNOTE_REUSE_OFFLINE_BASE","TENNISNOTE_JOURNAL_ROOT"],saved=names.map(n=>({name:n,present:Object.hasOwn(process.env,n),value:process.env[n]}));
+  const readGit=(...a)=>{assert(["rev-parse","diff"].includes(a[0]));return a[0]==="rev-parse"?e.tree:e.deltaPaths.join("\n");};let checks=0;const check=f=>{f();checks++;};
+  try{
+    names.forEach(n=>delete process.env[n]);check(()=>guard.currentInfrastructure(e,outer.root,readGit));
+    process.env.NODE_OPTIONS="";process.env.TENNISNOTE_REUSE_OFFLINE_BASE="";check(()=>guard.currentInfrastructure(e,outer.root,readGit));
+    process.env.TENNISNOTE_JOURNAL_ROOT=path.join(outer.root,"90-Dashboard");check(()=>guard.currentInfrastructure(e,outer.root,readGit));delete process.env.TENNISNOTE_JOURNAL_ROOT;
+    for(const [name,value,reason]of [["NODE_OPTIONS","--require=synthetic-loader","runtime_loader_override_denied"],["TENNISNOTE_REUSE_OFFLINE_BASE","synthetic-offline-base","offline_channel_in_ci_denied"],["TENNISNOTE_JOURNAL_ROOT",path.join(outer.root,"untrusted-root"),"journal_root_override"]]){process.env[name]=value;check(()=>assert.throws(()=>guard.currentInfrastructure(e,outer.root,readGit),x=>x.code==="ERR_ASSERTION"&&x.message.includes(reason)));delete process.env[name];}
+    check(()=>assert.throws(()=>guard.currentInfrastructure(e,outer.root,(...a)=>a[0]==="rev-parse"?"f".repeat(40):e.deltaPaths.join("\n"))));
+    check(()=>assert.throws(()=>guard.currentInfrastructure(e,outer.root,(...a)=>a[0]==="rev-parse"?e.tree:[...e.deltaPaths,"unapproved-file"].join("\n"))));
+    assert.equal(checks,8);
+  }finally{for(const row of saved){if(row.present)process.env[row.name]=row.value;else delete process.env[row.name];}}
+});
 const require=createRequire(import.meta.url),outer=require("./helpers/r3-auth548-outer-port.cjs"),gate=require("../scripts/check_tennisnote_r3_auth548_provenance.cjs"),e=outer.contract.completedRunReuse;
 const clone=x=>JSON.parse(JSON.stringify(x));
 const run={...e,repository:{full_name:e.repository},status:"completed",conclusion:"success",updated_at:"synthetic-time",pull_requests:[{number:e.pr,head:{ref:e.head_branch,sha:e.head_sha,repo:{full_name:e.repository}},base:{ref:"dev",sha:e.base,repo:{full_name:e.repository}}}]};
