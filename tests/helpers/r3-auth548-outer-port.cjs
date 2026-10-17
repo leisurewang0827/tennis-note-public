@@ -2,7 +2,7 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto"),assert=require("node:assert/strict");
 const root=path.resolve(__dirname,"../.."),sha=s=>crypto.createHash("sha256").update(s).digest("hex");
 const raw=fs.readFileSync(path.join(root,"tests/fixtures/r3-after-auth548-outer-parity.json"));
-assert.equal(sha(raw),"751fa05e3a2128f5311366d08610c42c7f8835b3e40ec6a802ca50307a8e2805","R3/Auth outer seal drift");
+assert.equal(sha(raw),"893c5fa05125b3b7ac3f71847139ec60d33c14cfcd9bc005ba294ed483689cd7","R3/Auth outer seal drift");
 const contract=JSON.parse(raw);assert.equal(contract.contract,"r3-after-auth548-strict-outer/1");
 function restore(file,text,kind="auth"){
   assert(["auth","r3"].includes(kind));text=text.replace(/\r\n/g,"\n");

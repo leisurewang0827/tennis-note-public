@@ -4350,6 +4350,31 @@
   },
   "completedRunReuse": {
     "contract": "changed-input-source-admission/1",
+    "sql5RuntimeAdmission": {
+      "contract": "r3-development-readonly-capability-sql5-extension/1",
+      "migrations": [
+        {
+          "version": "20261009001000",
+          "sha256": "edde250e27156280b1346c2c0d541d382494636f1e6862c5b3bfe3e3dc6bfe4b"
+        },
+        {
+          "version": "20261010001000",
+          "sha256": "7777f25c79155eafaf761bad1bfe0ab298a0c34956880719890e30f0999622cb"
+        },
+        {
+          "version": "20261012001000",
+          "sha256": "c4f0721e606177e458c412c01559859c38fab1009c9d4f3920d60578d38b7b35"
+        },
+        {
+          "version": "20261012002000",
+          "sha256": "7bb65a04a93e9025fe4d316c65226bd814f10c139c64aac512ca74a99cd7ac9b"
+        },
+        {
+          "version": "20261015001000",
+          "sha256": "f25d70419c747731014fb57df0b154fe7d9fc5f7acb2bd965e556bebed1f6bba"
+        }
+      ]
+    },
     "repository": "leisurewang0827/tennis-note-public",
     "id": 38394162701,
     "workflow_id": 329932540,
