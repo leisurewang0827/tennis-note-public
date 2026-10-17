@@ -159,11 +159,17 @@ async function requestIdentityPhoneVerification(surface = "signup") {
   button.disabled = true;
   const owner = phoneVerificationOwner();
   const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const editorOwner = surface === "profile" ? { ...profilePhoneEditorOwner } : null;
   const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwnerCurrent(editorOwner)
     && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
     && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
     && phoneVerificationRequestCurrent(owner, phone, surface));
   try {
+    if (!phoneVerificationRequestCurrent(owner, phone, surface) || !profileContextCurrent()) {
+      setIdentityPhoneStatus("저장된 정보가 변경되었습니다. 내 정보를 다시 열어 확인해 주세요.", "error", surface);
+      return false;
+    }
     const currentUser = await client.getAuthUser?.();
     if (!phoneVerificationRequestCurrent(owner, phone, surface)
       || (owner.authId && currentUser?.id && currentUser.id !== owner.authId)) return false;
@@ -255,10 +261,16 @@ async function confirmIdentityPhoneVerification(surface = "signup") {
   const client = window.TennisNoteDataClient;
   const owner = phoneVerificationOwner();
   const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const editorOwner = surface === "profile" ? { ...profilePhoneEditorOwner } : null;
   const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwnerCurrent(editorOwner)
     && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
     && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
     && phoneVerificationRequestCurrent(owner, phone, surface));
+  if (!phoneVerificationRequestCurrent(owner, phone, surface) || !profileContextCurrent()) {
+    setIdentityPhoneStatus("저장된 정보가 변경되었습니다. 내 정보를 다시 열어 확인해 주세요.", "error", surface);
+    return false;
+  }
   identityPhoneConfirmInFlight = true;
   button.disabled = true;
   setIdentityPhoneStatus("인증번호를 확인하고 있습니다.", "", surface);

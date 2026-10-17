@@ -119,10 +119,13 @@ async function refreshIdentityPhoneVerification(surface = "signup") {
   const owner = phoneVerificationOwner();
   const inputPhone = normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "");
   const editorRevision = surface === "profile" ? String(profilePhoneEditorOwner?.revision || "") : "";
+  const editorOwner = surface === "profile" ? { ...profilePhoneEditorOwner } : null;
   const profileContextCurrent = () => surface !== "profile" || Boolean(owner.authId && owner.profileId && editorRevision
+    && profilePhoneEditorOwnerCurrent(editorOwner)
     && profilePhoneEditorOwner?.authId === owner.authId && profilePhoneEditorOwner?.profileId === owner.profileId
     && profilePhoneEditorOwner?.revision === editorRevision && state.profile.serverRevision === editorRevision
     && phoneVerificationRequestCurrent(owner, inputPhone, surface));
+  if (!profileContextCurrent()) return "";
   const user = await client.getAuthUser();
   if (!phoneVerificationOwnerCurrent(owner) || (owner.authId && user?.id && user.id !== owner.authId)) return "";
   if (!profileContextCurrent()) return "";
@@ -138,10 +141,16 @@ async function refreshIdentityPhoneVerification(surface = "signup") {
 
 async function requireVerifiedIdentityPhone(phone, surface = "signup") {
   const normalizedPhone = normalizeIdentityPhone(phone);
+  const editorOwner = surface === "profile" ? { ...profilePhoneEditorOwner } : null;
+  if (surface === "profile" && (!profilePhoneEditorOwnerCurrent(editorOwner)
+    || state.profile.serverRevision !== editorOwner.revision)) throw new Error("profile_phone_context_changed");
   const verification = phoneVerificationState(surface);
   if (surface !== "profile" && verification.status === "verified" && verification.phone === normalizedPhone
     && phoneVerificationOwnerCurrent(verification.owner)) return true;
   const verifiedPhone = await refreshIdentityPhoneVerification(surface);
+  if (surface === "profile" && (!profilePhoneEditorOwnerCurrent(editorOwner)
+    || state.profile.serverRevision !== editorOwner.revision
+    || !phoneVerificationRequestCurrent(editorOwner, normalizedPhone, surface))) throw new Error("profile_phone_context_changed");
   if (verifiedPhone === normalizedPhone) return true;
   throw new Error("phone_verification_required");
 }
@@ -166,13 +175,17 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (hasLiveMemberSession() && client?.rpc) {
     if (profileEditor) {
       const owner = profilePhoneEditorOwner;
-      if (!owner?.profileId || !owner.authId || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
+      if (!owner?.profileId || !owner.authId || !profilePhoneEditorOwnerCurrent(owner)
+        || state.profile.serverRevision !== owner.revision
+        || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
       if (normalizedPhone !== profilePhoneExpectedPhone) await requireVerifiedIdentityPhone(normalizedPhone, "profile");
-      if (!phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
+      if (!profilePhoneEditorOwnerCurrent(owner) || state.profile.serverRevision !== owner.revision
+        || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
       const targetProfile = { name: normalizedRealName, nickname: normalizedNickname, phone: normalizedPhone };
       if (profileStyle !== null) {
         const saved = await updateMemberProfileOnServer(profileStyle, targetProfile);
         if (!saved.ok) throw saved.error;
+        if (!profilePhoneEditorOwnerCurrent(owner) || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
         if (saved.phoneVerified === true) markIdentityPhoneVerified(normalizedPhone, "server", "profile");
         return saved;
       }
@@ -182,7 +195,7 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
         target_profile_id: owner.profileId, target_profile: targetProfile,
         target_expected_phone: profilePhoneExpectedPhone, target_operation_key: profilePhoneSaveOperation.key,
       });
-      if (!phoneVerificationOwnerCurrent(owner)) throw new Error("profile_phone_context_changed");
+      if (!profilePhoneEditorOwnerCurrent(owner) || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
       const result = Array.isArray(resultRaw) ? resultRaw[0] : resultRaw;
       if (!result?.ok || result.profile?.id !== owner.profileId
         || normalizeIdentityPhone(result.profile?.phone || "") !== normalizedPhone

@@ -26,6 +26,7 @@ function restoreSessionLoss(file, text) {
   return text;
 }
 function restoreAuthReconciliation(file, text) {
+  text = require("./r3-auth548-outer-port.cjs").restore(file, text, "auth");
   text = restoreSessionLoss(file, text);
   const row = manifest.authReconciliation.files.find(item => item.path === file);
   if (!row) return text;

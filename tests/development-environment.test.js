@@ -53,6 +53,8 @@ test("개발계 배포는 dev 브랜치와 별도 Cloudflare 프로젝트만 사
   const workflow = readFileSync(join(root, ".github/workflows/deploy-cloudflare-pages-dev.yml"), "utf8");
   const caller = readFileSync(join(root, ".github/workflows/tennisnote-public-ci.yml"), "utf8");
   assert.match(workflow, /workflow_call:/);
+  assert.match(workflow, /check_tennisnote_r3_auth548_provenance\.cjs --deploy/);
+  assert.match(caller, /check_tennisnote_r3_auth548_provenance\.cjs --ci-route/);
   assert.doesNotMatch(workflow, /workflow_dispatch:|branches:\s*\[dev\]/);
   assert.match(caller, /if:.*github\.event_name == 'push'.*github\.ref == 'refs\/heads\/dev'/);
   assert.match(caller, /needs: build-and-check/);

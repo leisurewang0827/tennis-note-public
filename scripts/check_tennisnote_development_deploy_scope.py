@@ -79,15 +79,24 @@ def verify_existing_projects(get) -> dict[str, str]:
 
 
 def validate_source() -> dict:
+    # 새 exact outer 후보를 기존 Auth authority로 복원한 뒤 원래 검사를 유지한다.
+    # actual release는 별도로 새 outer freeze와 비교한다. 어느 쪽도 추정하지 않는다.
+    from check_tennisnote_dev_prod_alignment import restore_r3_auth548_base
+    composed = json.loads((ROOT / "tests/fixtures/r3-after-auth548-outer-parity.json").read_text(encoding="utf-8"))
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
     for row in port["authReconciliation"]["files"]:
         source = (ROOT / row["path"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+        source = restore_r3_auth548_base(row["path"], source)
         current = next((item for item in port["sessionLoss"]["files"] if item["path"] == row["path"]), row)
         require(hashlib.sha256(source.encode()).hexdigest() == current["afterFileSha256"], "auth_source_parity_mismatch")
-    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    release_text = (ROOT / "app/release.json").read_text(encoding="utf-8")
+    release = json.loads(release_text)
+    previous_release = json.loads(restore_r3_auth548_base("app/release.json", release_text))
     freeze = json.loads((ROOT / "tests/fixtures/auth-only-development-prepare-source-parity.json").read_text(encoding="utf-8"))
-    require(release["version"] == freeze["release"]["version"]
-            and release["releaseId"] == freeze["release"]["releaseId"], "development_release_mismatch")
+    require(previous_release["version"] == freeze["release"]["version"]
+            and previous_release["releaseId"] == freeze["release"]["releaseId"], "development_release_mismatch")
+    require(release["version"] == composed["candidateRelease"]["version"]
+            and release["releaseId"] == composed["candidateRelease"]["releaseId"], "composed_release_mismatch")
     return {"version": release["version"], "releaseId": release["releaseId"]}
 
 

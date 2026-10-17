@@ -663,8 +663,31 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
     return text
 
 
+def restore_r3_auth548_base(path: str, text: str) -> str:
+    raw = (ROOT / "tests/fixtures/r3-after-auth548-outer-parity.json").read_bytes()
+    if sha256(raw) != "db98b3a58dc41e6820de4c5a903b1070fb3d6c198ed0e0cd296b17808ef97472":
+        raise RuntimeError("R3/Auth outer seal drift")
+    port = json.loads(raw)
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    text = text.replace("\r\n", "\n")
+    if sha256(text.encode("utf-8")) != row["afterSha256"]:
+        raise RuntimeError("R3/Auth outer source drift: " + path)
+    hunks = row.get("authInverseHunks") or ([row["authInverse"]] if row["authInverse"] is not None else [])
+    for hunk in reversed(hunks):
+        start = hunk["start"]
+        if text[start:start + len(hunk["after"])] != hunk["after"]:
+            raise RuntimeError("R3/Auth outer inverse drift")
+        text = text[:start] + hunk["before"] + text[start + len(hunk["after"]):]
+    if sha256(text.encode("utf-8")) != row["authSha256"]:
+        raise RuntimeError("R3/Auth authority drift")
+    return text
+
+
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
     """DEV 게시 준비의 exact 증분만 제거하고 기존 golden을 유지한다."""
+    text = restore_r3_auth548_base(path, text)
     port = json.loads((ROOT / "tests/fixtures/auth-only-development-prepare-source-parity.json").read_text(encoding="utf-8"))
     row = next((item for item in port["files"] if item["path"] == path), None)
     if row is None:
@@ -707,7 +730,7 @@ def verify() -> None:
     for entry in r3_port["files"]:
         if entry["new"] and entry["path"].startswith("app/"):
             source = (ROOT / entry["path"]).read_text(encoding="utf-8").replace("\r\n", "\n")
-            if restore_r3_effective_base(entry["path"], source) is not None:
+            if restore_r3_effective_base(entry["path"], restore_r3_auth548_base(entry["path"], source)) is not None:
                 raise RuntimeError("R3 new-module baseline drift")
             actual_paths.remove(entry["path"])
     if actual_paths != sorted(expected_hashes):
