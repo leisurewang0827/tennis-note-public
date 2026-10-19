@@ -1,0 +1,312 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
+import { test } from "node:test";
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(process.env.TENNISNOTE_PUBLIC_REPO_ROOT || resolve(testDir, ".."));
+const PINNED_PUBLIC_SHA = "582ebd00f31654233ecc77c1bf2efdd4fde0beec";
+const sourceMode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actual";
+const domainPath = "app/admin/domain/coaches.js";
+const actionPath = "app/admin/actions/coach.js";
+const commonPath = "app/admin/data/common.js";
+
+function readPublicSource(relativePath) {
+  const absolutePath = resolve(repoRoot, relativePath);
+  assert.ok(absolutePath.startsWith(`${repoRoot}/`) || absolutePath.startsWith(`${repoRoot}\\`),
+    `source path stays under the public repository: ${relativePath}`);
+  return readFileSync(absolutePath, "utf8");
+}
+
+function readGitSource(sourceSha, relativePath) {
+  return execFileSync("git", ["-C", repoRoot, "show", `${sourceSha}:${relativePath}`], { encoding: "utf8" });
+}
+
+function applyUnifiedPatchInMemory(source, patchText, targetPath) {
+  const sections = patchText.split(/^diff --git /m).slice(1);
+  const section = sections.find((item) => item.startsWith(`a/${targetPath} b/${targetPath}\n`)
+    || item.startsWith(`a/${targetPath} b/${targetPath}\r\n`));
+  assert.ok(section, `patch contains ${targetPath}`);
+  const lines = source.split(/\r?\n/);
+  const sectionLines = section.split(/\r?\n/);
+  let offset = 0;
+  for (let i = 0; i < sectionLines.length; i += 1) {
+    const header = sectionLines[i].match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (!header) continue;
+    const start = Number(header[1]) - 1 + offset;
+    const oldLines = [];
+    const newLines = [];
+    for (i += 1; i < sectionLines.length && !sectionLines[i].startsWith("@@") && !sectionLines[i].startsWith("diff --git "); i += 1) {
+      const line = sectionLines[i];
+      if (line.startsWith("\\")) continue;
+      if (line.startsWith(" ")) { oldLines.push(line.slice(1)); newLines.push(line.slice(1)); }
+      else if (line.startsWith("-")) oldLines.push(line.slice(1));
+      else if (line.startsWith("+")) newLines.push(line.slice(1));
+      else if (line === "") break;
+      else throw new Error(`unsupported unified patch line in ${targetPath}`);
+    }
+    assert.deepEqual(lines.slice(start, start + oldLines.length), oldLines,
+      `${targetPath} exact pinned source context at old line ${Number(header[1])}`);
+    lines.splice(start, oldLines.length, ...newLines);
+    offset += newLines.length - oldLines.length;
+    i -= 1;
+  }
+  return lines.join("\n");
+}
+
+function extractFunction(source, name) {
+  const match = source.match(new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`));
+  assert.ok(match, `actual source includes ${name}`);
+  const start = match.index;
+  const end = source.indexOf("\n}\n", start);
+  assert.ok(end > start, `top-level function end found for ${name}`);
+  return source.slice(start, end + 2);
+}
+
+function loadSourceBundle(mode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actual") {
+  if (mode === "actual") {
+    return {
+      mode,
+      domainSource: readPublicSource(domainPath),
+      actionSource: readPublicSource(actionPath),
+      // The unchanged read dependency remains live so refresh failure is not mocked.
+      commonSource: readPublicSource(commonPath),
+    };
+  }
+  if (mode === "offline") {
+    const sourceSha = process.env.TENNISNOTE_PUBLIC_SOURCE_SHA || "";
+    const patchPath = process.env.TENNISNOTE_R3_PUBLIC_PATCH || "";
+    assert.equal(sourceSha, PINNED_PUBLIC_SHA, "offline mode must use the exact pinned public base SHA");
+    assert.ok(patchPath, "offline mode requires the existing in-memory patch input");
+    const patchText = readFileSync(patchPath, "utf8");
+    return {
+      mode,
+      sourceSha,
+      patchText,
+      domainSource: applyUnifiedPatchInMemory(readGitSource(sourceSha, domainPath), patchText, domainPath),
+      actionSource: applyUnifiedPatchInMemory(readGitSource(sourceSha, actionPath), patchText, actionPath),
+      commonSource: readGitSource(sourceSha, commonPath),
+    };
+  }
+  throw new Error(`unsupported source mode: ${mode}`);
+}
+
+function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
+  const functionSource = [
+    extractFunction(domainSource, "coachStaffPayload"),
+    extractFunction(domainSource, "coachBlockSignature"),
+    extractFunction(domainSource, "normalizeCoachWorkBlocks"),
+    extractFunction(domainSource, "normalizeCoachBreakBlocks"),
+    extractFunction(domainSource, "coachSettlementRule"),
+    extractFunction(domainSource, "coachStaffServerMatches"),
+    extractFunction(domainSource, "coachStaffFreshSettlementTermMatches"),
+    extractFunction(commonSource, "refreshCoachStaffData"),
+    extractFunction(actionSource, "saveCoachStaff"),
+  ].join("\n\n");
+  const branchId = "synthetic-public-branch";
+  const roleId = "synthetic-public-role";
+  const effectiveFrom = "2099-10-01";
+  const row = {
+    coach_role_id: roleId,
+    settlement_type: "ratio",
+    coach_rate: 0.5,
+    hourly_rate: null,
+    settlement_basis: "cash_ex_vat",
+    settlement_calculation_mode: "session_progress",
+    substitute_policy: "manual",
+    effective_from: effectiveFrom,
+    effective_to: null,
+    status: "scheduled",
+  };
+  const role = {
+    id: roleId,
+    user_id: "synthetic-public-user",
+    branch_id: branchId,
+    display_name: "Synthetic QA Coach",
+    status: "approved",
+    job_title: "레슨",
+    employment_status: "active",
+  };
+  const displayedRule = {
+    serverRoleId: roleId,
+    coach: "Synthetic QA Coach",
+    method: "ratio",
+    ratio: 0.5,
+    hourly: 0,
+    cardBase: "cash",
+    calculationMode: "session_progress",
+    substitute: "manual",
+    effectiveFrom,
+  };
+  const counters = { rpc: 0, termReads: 0, close: 0, toast: 0, renderError: 0 };
+  const button = { disabled: false, textContent: "저장" };
+  const context = {
+    console,
+    window: {},
+    state: { view: "coaches" },
+    adminLiveDataState: { coachSettlementTerms: [row] },
+    coaches: [],
+    coachSettlementRules: [displayedRule],
+    coachStaffEditorState: {
+      mode: "edit", saving: false, message: "", settlementDetailsOpen: false,
+      draft: {
+        coachId: "synthetic-local-coach",
+        coachRoleId: roleId,
+        availabilityRevision: 0,
+        branchId,
+        name: "Synthetic QA Coach",
+        phone: "",
+        jobTitle: "레슨",
+        bio: "",
+        color: "#157a5b",
+        approvalStatus: "approved",
+        employmentStatus: "active",
+        employmentStartedOn: effectiveFrom,
+        employmentEndedOn: "",
+        workBlocks: [],
+        breakBlocks: [],
+        settlement: {
+          method: "ratio", ratio: 50, hourly: 0, basis: "cash_ex_vat",
+          calculationMode: "session_progress", substitute: "manual", effectiveFrom,
+        },
+      },
+    },
+    adminApprovalReady: () => true,
+    operationsAccessReady: () => scenario.refreshReady !== false,
+    activeOperationBranchId: () => branchId,
+    readCoachStaffPanel: () => {},
+    renderCoachStaffModal: () => { counters.renderError += 1; },
+    renderCoaches: () => {},
+    renderSchedule: () => {},
+    scheduleAdminOperationalCacheWrite: () => {},
+    applyServerCoachSnapshot: ({ serverCoachRoles }) => {
+      context.coaches.splice(0, context.coaches.length, ...serverCoachRoles.map((item) => ({
+        id: "synthetic-local-coach",
+        serverRoleId: item.id,
+        branchId: item.branch_id,
+        name: item.display_name,
+        phone: "",
+        role: item.job_title,
+        bio: "",
+        approvalStatus: item.status,
+        employmentStatus: item.employment_status,
+        workBlocks: [],
+        breakBlocks: [],
+      })));
+    },
+    normalizedMemberPhone: (value) => String(value || "").replace(/\D/g, ""),
+    normalizeCoachWorkBlocks: (coach) => Array.isArray(coach?.workBlocks) ? coach.workBlocks : [],
+    normalizeCoachBreakBlocks: (coach) => Array.isArray(coach?.breakBlocks) ? coach.breakBlocks : [],
+    closeCoachStaffModal: () => { counters.close += 1; },
+    updateActiveOperationProfileFromCurrent: () => {},
+    syncLiveSchedulePolicyToServer: async () => "ok",
+    loadLiveSchedulePolicyFromServer: async () => {},
+    showToast: () => { counters.toast += 1; },
+    $: () => button,
+  };
+  context.coachSettlementRule = undefined;
+  context.coachBlockSignature = undefined;
+  context.window.TennisNoteInputGuard = { markSaved: () => {} };
+  context.window.TennisNoteDataClient = {
+    rpc: async (name) => {
+      assert.equal(name, "tn_admin_save_coach_staff_v2");
+      counters.rpc += 1;
+      return { coachRoleId: roleId };
+    },
+    selectRows: async (table) => {
+      if (table === "tn_coach_roles") return [role];
+      if (table === "tn_coach_settlement_terms") {
+        counters.termReads += 1;
+        if (scenario.rejectTerms) throw new Error("synthetic terms read failure");
+        return scenario.terms ?? [row];
+      }
+      return [];
+    },
+  };
+  runInNewContext(functionSource, context);
+  return { context, counters, button };
+}
+
+function baseTerm() {
+  return {
+    coach_role_id: "synthetic-public-role",
+    settlement_type: "ratio",
+    coach_rate: 0.5,
+    hourly_rate: null,
+    settlement_basis: "cash_ex_vat",
+    settlement_calculation_mode: "session_progress",
+    substitute_policy: "manual",
+    effective_from: "2099-10-01",
+    effective_to: null,
+    status: "scheduled",
+  };
+}
+
+test("source adapters resolve actual checkout and pinned offline candidate", () => {
+  const saved = Object.fromEntries([
+    "TENNISNOTE_R3_SOURCE_MODE",
+    "TENNISNOTE_PUBLIC_SOURCE_SHA",
+    "TENNISNOTE_R3_PUBLIC_PATCH",
+  ].map((key) => [key, process.env[key]]));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  let actual;
+  try {
+    actual = loadSourceBundle();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  for (const name of [
+    "coachStaffPayload",
+    "coachBlockSignature",
+    "normalizeCoachWorkBlocks",
+    "normalizeCoachBreakBlocks",
+    "coachSettlementRule",
+    "coachStaffServerMatches",
+  ]) {
+    assert.doesNotThrow(() => extractFunction(actual.domainSource, name), `actual domain adapter: ${name}`);
+  }
+  assert.doesNotThrow(() => extractFunction(actual.commonSource, "refreshCoachStaffData"), "actual refresh adapter");
+  assert.doesNotThrow(() => extractFunction(actual.actionSource, "saveCoachStaff"), "actual save adapter");
+  const save = extractFunction(actual.actionSource, "saveCoachStaff");
+  const sha256 = (value) => createHash("sha256").update(value, "utf8").digest("hex");
+  console.log(`SOURCE_MODE=${sourceMode}`);
+  console.log(`ACTUAL_CHECKOUT_SAVE_FUNCTION_SHA256=${sha256(save)}`);
+  if (sourceMode === "offline") {
+    const offline = loadSourceBundle("offline");
+    const verifier = extractFunction(offline.domainSource, "coachStaffFreshSettlementTermMatches");
+    assert.equal(offline.sourceSha, PINNED_PUBLIC_SHA);
+    console.log(`PINNED_BASE_SHA=${offline.sourceSha}`);
+    console.log(`PATCH_SHA256=${sha256(offline.patchText)}`);
+    console.log(`OFFLINE_FRESH_VERIFIER_FUNCTION_SHA256=${sha256(verifier)}`);
+  }
+});
+
+test("actual public save -> refresh -> raw verifier blocks false-success in memory", async () => {
+  const { domainSource, actionSource, commonSource } = loadSourceBundle();
+  const cases = [
+    { name: "exact fresh row", scenario: {}, success: true },
+    { name: "query rejection despite display fallback", scenario: { rejectTerms: true }, success: false },
+    { name: "refresh false with stale exact row", scenario: { refreshReady: false }, success: false },
+    { name: "missing raw term", scenario: { terms: [] }, success: false },
+    { name: "wrong role", scenario: { terms: [{ ...baseTerm(), coach_role_id: "other-role" }] }, success: false },
+    { name: "wrong effective date", scenario: { terms: [{ ...baseTerm(), effective_from: "2099-10-02" }] }, success: false },
+    { name: "wrong persisted policy", scenario: { terms: [{ ...baseTerm(), settlement_basis: "actual_paid_inc_vat" }] }, success: false },
+  ];
+  for (const item of cases) {
+    const harness = publicSaveHarness(domainSource, actionSource, commonSource, item.scenario);
+    await harness.context.saveCoachStaff();
+    assert.equal(harness.counters.rpc, 1, `${item.name}: one explicit save RPC only`);
+    assert.equal(harness.counters.close, item.success ? 1 : 0, `${item.name}: modal close follows verification`);
+    assert.equal(harness.counters.toast, item.success ? 1 : 0, `${item.name}: success toast follows verification`);
+    if (!item.success) assert.match(harness.context.coachStaffEditorState.message, /재확인에 실패/,
+      `${item.name}: existing fail-closed message is shown`);
+  }
+  console.log("PUBLIC_ACTUAL_SAVE_REFRESH_RAW_TERM_PASS=7_CASES; RPC_FAKE=1_PER_CASE; DB=0; WORKTREE_WRITE=0");
+});

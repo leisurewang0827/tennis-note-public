@@ -240,15 +240,18 @@ async function saveCoachStaff() {
       expected_revision: draft.coachRoleId ? Number(draft.availabilityRevision) || 0 : null,
     });
     const coachRoleId = result?.coachRoleId || result?.coach_role_id || draft.coachRoleId;
-    await refreshCoachStaffData();
+    const refreshed = await refreshCoachStaffData();
+    if (refreshed !== true) throw new Error("coach_staff_server_verification_failed");
     const saved = coaches.find((coach) => (
       coach.serverRoleId === coachRoleId
       && String(coach.branchId || "") === branchId
-    )) || coaches.find((coach) => (
-      coach.name === draft.name
-      && String(coach.branchId || "") === branchId
     ));
-    if (!coachStaffServerMatches(saved, draft)) {
+    if (!coachStaffServerMatches(saved, draft)
+      || !coachStaffFreshSettlementTermMatches(
+        adminLiveDataState.coachSettlementTerms,
+        coachRoleId,
+        draft.settlement,
+      )) {
       throw new Error("coach_staff_server_verification_failed");
     }
     updateActiveOperationProfileFromCurrent();
