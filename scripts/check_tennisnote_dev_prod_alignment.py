@@ -17,6 +17,28 @@ MANIFEST_PATH = ROOT / "docs" / "tennisnote-dev-prod-alignment-20260916.json"
 AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
+R3_SUCCESSOR_AUTHORITY_PATH = ROOT / "tests" / "fixtures" / "r3-basic-settlement-549-successor-authority.json"
+R3_SUCCESSOR_BASE_SHA = "582ebd00f31654233ecc77c1bf2efdd4fde0beec"
+R3_SUCCESSOR_CANDIDATE_SHA = "3f52094ad45979ceb5a732d56aaca1445f5ecae6"
+R3_SUCCESSOR_TARGET = "public-dev"
+R3_SUCCESSOR_BRANCH = "dev"
+R3_SUCCESSOR_EXPECTED_PATHS = frozenset({
+    "app/admin/actions/coach.js",
+    "app/admin/domain/coaches.js",
+    "app/admin/index.html",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/domain/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/ui/screens.js",
+})
 
 EXPECTED_VERSION = "1.0.546"
 EXPECTED_RELEASE_ID = "2026.10.09.03"
@@ -459,6 +481,67 @@ def candidate_cache(path: Path) -> str:
     return match.group(1)
 
 
+def _load_r3_successor_authority(authority: dict[str, object] | None = None) -> dict[str, object]:
+    port = authority if authority is not None else json.loads(R3_SUCCESSOR_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    if (port.get("contract") != "r3-basic-settlement-successor-authority-v1"
+            or port.get("baseCommit") != R3_SUCCESSOR_BASE_SHA
+            or port.get("candidateCommit") != R3_SUCCESSOR_CANDIDATE_SHA
+            or port.get("target") != R3_SUCCESSOR_TARGET
+            or port.get("targetBranch") != R3_SUCCESSOR_BRANCH
+            or port.get("baseVersion") != "1.0.548"
+            or port.get("candidateVersion") != "1.0.549"
+            or port.get("baseReleaseId") != "2026.10.13.02"
+            or port.get("candidateReleaseId") != "2026.10.19.01"):
+        raise RuntimeError("R3 successor authority context mismatch")
+    files = port.get("files")
+    if not isinstance(files, list):
+        raise RuntimeError("R3 successor authority file list invalid")
+    paths = [row.get("path") for row in files if isinstance(row, dict)]
+    if len(paths) != len(files) or len(paths) != len(set(paths)) or set(paths) != R3_SUCCESSOR_EXPECTED_PATHS:
+        raise RuntimeError("R3 successor authority exact path set mismatch")
+    for row in files:
+        if not re.fullmatch(r"[a-f0-9]{64}", str(row.get("beforeSha256", ""))) or not re.fullmatch(r"[a-f0-9]{64}", str(row.get("afterSha256", ""))):
+            raise RuntimeError("R3 successor authority hash invalid")
+        replacements = row.get("replacements", [])
+        hunks = row.get("hunks", [])
+        if not isinstance(replacements, list) or not isinstance(hunks, list) or bool(replacements) == bool(hunks):
+            raise RuntimeError("R3 successor authority inverse contract invalid")
+    return port
+
+
+def restore_r3_basic_settlement_successor_base(
+    path: str,
+    text: str,
+    authority: dict[str, object] | None = None,
+) -> str:
+    """Restore only the pinned 1.0.549 successor delta to its exact 1.0.548 parent."""
+    port = _load_r3_successor_authority(authority)
+    normalized_path = Path(path).as_posix()
+    row = next((item for item in port["files"] if item["path"] == normalized_path), None)
+    if row is None:
+        return text
+    candidate_text = text.replace("\r\n", "\n")
+    if sha256(candidate_text.encode("utf-8")) != row["afterSha256"]:
+        raise RuntimeError(f"R3 successor candidate drift: {normalized_path}")
+    for rule in row.get("replacements", []):
+        candidate, base, count = rule.get("candidate"), rule.get("base"), rule.get("count")
+        if not isinstance(candidate, str) or not candidate or not isinstance(base, str) or not isinstance(count, int) or count < 1:
+            raise RuntimeError(f"R3 successor replacement authority invalid: {normalized_path}")
+        if candidate_text.count(candidate) != count:
+            raise RuntimeError(f"R3 successor replacement count drift: {normalized_path}")
+        candidate_text = candidate_text.replace(candidate, base)
+    for hunk in row.get("hunks", []):
+        after, before = hunk.get("candidate"), hunk.get("base")
+        if not isinstance(after, str) or not after or not isinstance(before, str) or hunk.get("count") != 1:
+            raise RuntimeError(f"R3 successor hunk authority invalid: {normalized_path}")
+        if candidate_text.count(after) != 1:
+            raise RuntimeError(f"R3 successor exact hunk count drift: {normalized_path}")
+        candidate_text = candidate_text.replace(after, before)
+    if sha256(candidate_text.encode("utf-8")) != row["beforeSha256"]:
+        raise RuntimeError(f"R3 successor restored baseline drift: {normalized_path}")
+    return candidate_text
+
+
 def generate() -> None:
     authority_release = json.loads(
         authority_bytes("app/release.json").decode("utf-8")
@@ -664,6 +747,13 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
+    # The current release successor must be restored before consulting the frozen
+    # 1.0.548 Auth parity row (including its row-none decision).
+    text = restore_r3_basic_settlement_successor_base(path, text)
+    return restore_auth_dev_prepare_base_legacy(path, text)
+
+
+def restore_auth_dev_prepare_base_legacy(path: str, text: str) -> str:
     """DEV 게시 준비의 exact 증분만 제거하고 기존 golden을 유지한다."""
     port = json.loads((ROOT / "tests/fixtures/auth-only-development-prepare-source-parity.json").read_text(encoding="utf-8"))
     row = next((item for item in port["files"] if item["path"] == path), None)

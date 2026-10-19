@@ -1,0 +1,134 @@
+{
+  "contract": "r3-basic-settlement-successor-authority-v1",
+  "baseCommit": "582ebd00f31654233ecc77c1bf2efdd4fde0beec",
+  "candidateCommit": "3f52094ad45979ceb5a732d56aaca1445f5ecae6",
+  "target": "public-dev",
+  "targetBranch": "dev",
+  "baseVersion": "1.0.548",
+  "candidateVersion": "1.0.549",
+  "baseReleaseId": "2026.10.13.02",
+  "candidateReleaseId": "2026.10.19.01",
+  "files": [
+    {
+      "path": "app/admin/actions/coach.js",
+      "beforeSha256": "812454fa198ef90c38f02471573449f3263d3dcf4f1992658cf3f3fc1a9e8d49",
+      "afterSha256": "08d3c8f1a07eaff26971436264b7ca7cc2c37f12da6ccc770a3f6f6247342c66",
+      "hunks": [
+        {
+          "count": 1,
+          "candidate": "    const refreshed = await refreshCoachStaffData();\n    if (refreshed !== true) throw new Error(\"coach_staff_server_verification_failed\");\n    const saved = coaches.find((coach) => (\n      coach.serverRoleId === coachRoleId\n      && String(coach.branchId || \"\") === branchId\n    ));\n    if (!coachStaffServerMatches(saved, draft)\n      || !coachStaffFreshSettlementTermMatches(\n        adminLiveDataState.coachSettlementTerms,\n        coachRoleId,\n        draft.settlement,\n      )) {",
+          "base": "    await refreshCoachStaffData();\n    const saved = coaches.find((coach) => (\n      coach.serverRoleId === coachRoleId\n      && String(coach.branchId || \"\") === branchId\n    )) || coaches.find((coach) => (\n      coach.name === draft.name\n      && String(coach.branchId || \"\") === branchId\n    ));\n    if (!coachStaffServerMatches(saved, draft)) {"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/domain/coaches.js",
+      "beforeSha256": "0f5b38ce0089cbe7c9c1f1580dce6cfe675893a06a13cd057c0e657873c92ff6",
+      "afterSha256": "d1a509670a11e019b7ad0e26e0ec79488121bbf26d33d20fda91edad9cd98f48",
+      "hunks": [
+        {
+          "count": 1,
+          "candidate": "  const settlementBasisToCardBase = { cash_ex_vat: \"cash\", actual_paid_inc_vat: \"paid\" };\n  const expectedCardBase = settlementBasisToCardBase[draft.settlement.basis];\n  const substitutePolicies = [\"actualCoach\", \"originalCoach\", \"manual\"];\n  if (!expectedCardBase || settlement.cardBase !== expectedCardBase) return false;\n  if (!substitutePolicies.includes(settlement.substitute)\n    || !substitutePolicies.includes(draft.settlement.substitute)\n    || settlement.substitute !== draft.settlement.substitute) return false;\n",
+          "base": ""
+        },
+        {
+          "count": 1,
+          "candidate": "function coachStaffFreshSettlementTermMatches(terms, coachRoleId, settlementDraft) {\n  if (!Array.isArray(terms) || !coachRoleId || !settlementDraft) return false;\n  const roleId = String(coachRoleId).trim();\n  const effectiveFrom = String(settlementDraft.effectiveFrom || \"\").trim();\n  if (!roleId || !effectiveFrom) return false;\n  const matches = terms.filter((term) => (\n    String(term?.coach_role_id || \"\").trim() === roleId\n    && String(term?.effective_from || \"\").trim() === effectiveFrom\n  ));\n  if (matches.length !== 1) return false;\n  const term = matches[0];\n  if (![\"active\", \"scheduled\", \"ended\"].includes(String(term.status || \"\").toLowerCase())) return false;\n  if (term.settlement_type !== settlementDraft.method\n    || term.settlement_basis !== settlementDraft.basis\n    || term.settlement_calculation_mode !== settlementDraft.calculationMode\n    || term.substitute_policy !== settlementDraft.substitute) return false;\n  if (settlementDraft.method === \"ratio\") {\n    if (term.coach_rate === null || term.coach_rate === undefined || term.coach_rate === \"\"\n      || !Number.isFinite(Number(term.coach_rate))\n      || Math.abs(Number(term.coach_rate) * 100 - Number(settlementDraft.ratio)) > 0.001) return false;\n  } else if (settlementDraft.method === \"hourly\") {\n    if (term.hourly_rate === null || term.hourly_rate === undefined || term.hourly_rate === \"\"\n      || !Number.isFinite(Number(term.hourly_rate))\n      || Number(term.hourly_rate) !== Number(settlementDraft.hourly)) return false;\n  } else {\n    return false;\n  }\n  return true;\n}\n\n",
+          "base": ""
+        }
+      ]
+    },
+    {
+      "path": "app/admin/index.html",
+      "beforeSha256": "66e02ffff358cb5ac00f49bbe7ac40fe55b65fb471a24cbe87d12dc06fd36465",
+      "afterSha256": "03041e68e6c6ca963844442b879cf3cda4306c180746060be98e9223a842010e",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":77}]
+    },
+    {
+      "path": "app/release.json",
+      "beforeSha256": "5d243043588865ce46bc1e42f5ab271454acb3c011208eadec838acd1d30a738",
+      "afterSha256": "e4e2265b7c1a2de05e9a9cc8e790d8b3a14d03b32bb60c67324912222c147733",
+      "replacements": [
+        {"candidate":"1.0.549","base":"1.0.548","count":2},
+        {"candidate":"2026.10.19.01","base":"2026.10.13.02","count":1},
+        {"candidate":"2026-10-19T18:28:01+09:00","base":"2026-10-13T13:34:40+09:00","count":1}
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-release.js",
+      "beforeSha256": "6d8b0f075083b92545b9f1b8afc655d82b9ab31d9af0902743802c7beebe1408",
+      "afterSha256": "7b472df788f45c3bb1e92627014c373bd589c988c94c2f39069e73b7a5dc8970",
+      "replacements": [
+        {"candidate":"1.0.549","base":"1.0.548","count":2},
+        {"candidate":"2026.10.19.01","base":"2026.10.13.02","count":1},
+        {"candidate":"2026-10-19T18:28:01+09:00","base":"2026-10-13T13:34:40+09:00","count":1}
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/app.js",
+      "beforeSha256": "7e64fbc3d0e3c2dd8c305b3521729cea8221d4830728e788925d545ec05d5396",
+      "afterSha256": "73801c1150e327af5defe111284de2929c9ef23ddcec9ea8ce7442c17eaf62db",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":1}]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/coaches.js",
+      "beforeSha256": "7f0128b2140f5c6c50a420d4bc783f2dd20a71efcd8e9f829e7b5220a02456d2",
+      "afterSha256": "0f210bf48259929871c9e63711afc4a8e97cf6c0087d03eee11450b64ba5a9a3",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":1}]
+    },
+    {
+      "path": "app/tennis-note-coach-app/forms/common.js",
+      "beforeSha256": "2d8f3620a4347aed61d810a7dcc082074f4df252be3d0f1e385f632f24c75354",
+      "afterSha256": "73d7d9243b51510ac4c03ee1b3bc72c8f1ce4bc30cea30ed3b6f513d6a7baa83",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":1}]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "beforeSha256": "cd89ad7cfaabb1cb54c304372074b9b31335c4de08913ee6f48b4640d64dc725",
+      "afterSha256": "8706fc44fc147d1dc6d19a70d8d629d83a31ed43d8210946831b1cd4af9c6e04",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":60}]
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "0c9fa9d8c41fd9ffbf5eeff2a035e0cc91b50bb2f8229fd04550a13a0786ed7e",
+      "afterSha256": "bf22145f0410f37f639901cfef47086a30874dfac87c961525894ee6b2e8ed45",
+      "replacements": [
+        {"candidate":"1.0.549","base":"1.0.548","count":59},
+        {"candidate":"tennis-note-coach-mode-v558","base":"tennis-note-coach-mode-v557","count":1}
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "beforeSha256": "dc8180272f52bbcf6a34a626782a246799b08a5d8fcb5b2ee5117ebdfbfdc3a3",
+      "afterSha256": "332073db5eed44197f1f4b5cf626eab66dcf81335fc4557d144b9e96ca149697",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":2}]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "beforeSha256": "62ba1f9a6af22f5e9fad52fc56eb657b5df110890e216038cd397aa349a22440",
+      "afterSha256": "e5ee326ecd464a6fc0cc38a07a7e8cdb8d71deb7960e1667515a1559c60c6216",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":1}]
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "beforeSha256": "c814e5ca6a3d6bf20b8d54279a6b4a992c85aced019ff86d0aec41e74169880a",
+      "afterSha256": "6de1bc3b377e100cd0070eec2ad2df8137d1aece0b1a3f2bbe9238bfc56345e4",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":82}]
+    },
+    {
+      "path": "app/tennis-note-member-app/service-worker.js",
+      "beforeSha256": "625817909b23fffaa9880a4f4f5f69c2c0bac3a01e2c01d7ec425b8288043ea4",
+      "afterSha256": "c6a58ab395111757ad72434a8f9409c3d7dbf2fd6469b020ff9f34f0fba37382",
+      "replacements": [
+        {"candidate":"1.0.549","base":"1.0.548","count":79},
+        {"candidate":"tennis-note-member-pwa-v585","base":"tennis-note-member-pwa-v584","count":1}
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "beforeSha256": "a1472e2b061b2f6887380ce5cc2a165b2c44ef4f9b176702dba512c0d3eb4544",
+      "afterSha256": "bfd9db035e5b9d69ffed92b5ef73275fd281aff1ac60db5dbb48195c7ae15776",
+      "replacements": [{"candidate":"1.0.549","base":"1.0.548","count":1}]
+    }
+  ]
+}

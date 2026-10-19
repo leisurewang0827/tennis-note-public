@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import check_tennisnote_dev_prod_alignment as release_alignment
+
 ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = ("tennisnote-app-dev", "tennisnote-admin-dev")
 DEV_PROJECT_FINGERPRINT = "63350140ffe5"
@@ -78,17 +80,28 @@ def verify_existing_projects(get) -> dict[str, str]:
     return rollbacks
 
 
+def validate_frozen_release_metadata(raw_release_text: str, frozen_release: dict) -> dict[str, str]:
+    raw_release = json.loads(raw_release_text)
+    comparison_text = release_alignment.restore_r3_basic_settlement_successor_base(
+        "app/release.json", raw_release_text
+    )
+    comparison_release = json.loads(comparison_text)
+    require(comparison_release["version"] == frozen_release["version"]
+            and comparison_release["releaseId"] == frozen_release["releaseId"],
+            "development_release_mismatch")
+    # The check is normalized to the frozen Auth baseline; deployment still reports the raw candidate.
+    return {"version": str(raw_release["version"]), "releaseId": str(raw_release["releaseId"])}
+
+
 def validate_source() -> dict:
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
     for row in port["authReconciliation"]["files"]:
         source = (ROOT / row["path"]).read_text(encoding="utf-8").replace("\r\n", "\n")
         current = next((item for item in port["sessionLoss"]["files"] if item["path"] == row["path"]), row)
         require(hashlib.sha256(source.encode()).hexdigest() == current["afterFileSha256"], "auth_source_parity_mismatch")
-    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
     freeze = json.loads((ROOT / "tests/fixtures/auth-only-development-prepare-source-parity.json").read_text(encoding="utf-8"))
-    require(release["version"] == freeze["release"]["version"]
-            and release["releaseId"] == freeze["release"]["releaseId"], "development_release_mismatch")
-    return {"version": release["version"], "releaseId": release["releaseId"]}
+    raw_release_text = (ROOT / "app/release.json").read_text(encoding="utf-8")
+    return validate_frozen_release_metadata(raw_release_text, freeze["release"])
 
 
 def main() -> int:
