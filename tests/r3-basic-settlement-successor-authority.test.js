@@ -364,6 +364,133 @@ print('R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET
   assert.match(output, /R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS; AUTH_GOLDEN_ENTRY_LINK_PASS/);
 });
 
+test("R3 552 memoizes only bounded immutable full-SHA reads and keeps mutable drift live", () => {
+  const output = runPython(`
+import copy, hashlib, json, subprocess, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=json.loads(a.R3_POLICY_552_AUTHORITY_PATH.read_text(encoding='utf-8'))
+original_run=a.subprocess.run
+calls=[]
+def counted(cmd,*args,**kwargs):
+    if isinstance(cmd,list) and cmd and cmd[0]=='git': calls.append(tuple(cmd[1:]))
+    return original_run(cmd,*args,**kwargs)
+a._GIT_READ_CACHE.clear(); a._GIT_READ_CACHE_BYTES=0
+a.subprocess.run=counted
+try:
+    first=a._load_r3_policy_552_authority()
+    first_count=len(calls); first_unique=len(set(calls))
+    second=a._load_r3_policy_552_authority()
+    second_count=len(calls)-first_count
+    assert first==second and first_count==48 and first_unique==48
+    assert second_count==0, ('immutable reads repeated', second_count)
+    assert len(a._GIT_READ_CACHE)<=a._GIT_READ_CACHE_MAX_ENTRIES
+    assert a._GIT_READ_CACHE_BYTES<=a._GIT_READ_CACHE_MAX_BYTES
+    sample=('show',port['baseCommit']+':app/release.json')
+    key_text=a._immutable_git_read_key(sample,True)
+    key_bytes=a._immutable_git_read_key(sample,False)
+    assert key_text!=key_bytes and key_text[0]==str(a.ROOT.resolve())
+    original_root=a.ROOT
+    try:
+        a.ROOT=original_root/'__synthetic_cache_root_key_only__'
+        other_root_key=a._immutable_git_read_key(sample,True)
+    finally: a.ROOT=original_root
+    assert other_root_key!=key_text and other_root_key[0]!=key_text[0]
+    decoded=a.run_git(*sample,text=True)
+    raw=a.run_git(*sample,text=False)
+    assert isinstance(decoded,str) and isinstance(raw,bytes)
+    assert calls.count(sample)==2, 'text and bytes reads must keep distinct cache keys'
+    head_a=a.run_git('rev-parse','HEAD')
+    head_b=a.run_git('rev-parse','HEAD')
+    assert head_a==head_b and calls.count(('rev-parse','HEAD'))==2
+    status_a=a.run_git('status','--short','--branch')
+    status_b=a.run_git('status','--short','--branch')
+    diff_a=a.run_git('diff','--name-only')
+    diff_b=a.run_git('diff','--name-only')
+    assert status_a==status_b and calls.count(('status','--short','--branch'))==2
+    assert diff_a==diff_b and calls.count(('diff','--name-only'))==2
+    missing='__r3_missing_immutable_cache_probe__'
+    for _ in range(2):
+        try: a.run_git('show',port['baseCommit']+':'+missing,text=False)
+        except subprocess.CalledProcessError: pass
+        else: raise AssertionError('missing immutable object read unexpectedly succeeded')
+    assert calls.count(('show',port['baseCommit']+':'+missing))==2, 'failed reads must not be cached'
+    a._GIT_READ_CACHE.clear(); a._GIT_READ_CACHE_BYTES=0; calls.clear()
+    body=(a.ROOT/'app/release.json').read_text(encoding='utf-8')
+    outer_one=a.restore_auth_dev_prepare_base('app/release.json',body)
+    outer_first=len(calls); outer_unique=len(set(calls))
+    outer_entries=len(a._GIT_READ_CACHE); outer_bytes=a._GIT_READ_CACHE_BYTES
+    outer_two=a.restore_auth_dev_prepare_base('app/release.json',body)
+    outer_second=len(calls)-outer_first
+    assert outer_one==outer_two and outer_first==148 and outer_unique==148
+    assert outer_second==0, ('outer-entry immutable reads repeated', outer_second)
+    assert outer_entries==148 and outer_bytes<=a._GIT_READ_CACHE_MAX_BYTES
+    assert outer_entries<=a._GIT_READ_CACHE_MAX_ENTRIES
+finally:
+    a.subprocess.run=original_run
+
+bad=copy.deepcopy(port); bad['target']='public-main'
+class ChangedFixture:
+    def read_text(self,encoding='utf-8'): return json.dumps(bad)
+original_fixture_path=a.R3_POLICY_552_AUTHORITY_PATH
+a.R3_POLICY_552_AUTHORITY_PATH=ChangedFixture()
+try:
+    try: a._load_r3_policy_552_authority()
+    except RuntimeError as error: assert str(error)=='R3 552 successor authority context mismatch'
+    else: raise AssertionError('cached object reads bypassed fresh fixture validation')
+finally: a.R3_POLICY_552_AUTHORITY_PATH=original_fixture_path
+bad=copy.deepcopy(port); bad['files'][0]['afterSha256']='0'*64
+try: a._load_r3_policy_552_authority(bad)
+except RuntimeError as error: assert str(error).startswith('R3 552 release content drift:')
+else: raise AssertionError('cached object reads bypassed current hash contract')
+bad=copy.deepcopy(port); bad['commitStack']['releasePaths'].append('README.md')
+try: a._load_r3_policy_552_authority(bad)
+except RuntimeError as error: assert str(error)=='R3 552 successor authority context mismatch'
+else: raise AssertionError('cached object reads bypassed exact path-set validation')
+candidate=str(port['candidateCommit'])
+feature=a.run_git('rev-parse',candidate+'^').strip()
+original_run_git=a.run_git
+def wrong_parent(*args,text=True):
+    if args==('rev-list','--parents','-n','1',feature):
+        value=feature+' '+'0'*40
+        return value if text else value.encode()
+    return original_run_git(*args,text=text)
+a.run_git=wrong_parent
+try:
+    try: a._load_r3_policy_552_authority(port)
+    except RuntimeError as error: assert str(error)=='R3 552 commit parent mismatch'
+    else: raise AssertionError('cached reads bypassed exact parent validation')
+finally: a.run_git=original_run_git
+
+row=port['files'][0]
+current=(a.ROOT/row['path']).read_text(encoding='utf-8').replace('\\r\\n','\\n')
+assert hashlib.sha256(current.encode()).hexdigest()==row['afterSha256']
+try: a._restore_r3_policy_552_content(row['path'],current+'\\n',port)
+except RuntimeError as error: assert str(error)=='R3 552 successor candidate content drift: '+row['path']
+else: raise AssertionError('working source hash drift was accepted')
+
+old=(a._GIT_READ_CACHE_MAX_ENTRIES,a._GIT_READ_CACHE_MAX_BYTES,a._GIT_READ_CACHE_MAX_ITEM_BYTES)
+try:
+    a._GIT_READ_CACHE.clear(); a._GIT_READ_CACHE_BYTES=0
+    a._GIT_READ_CACHE_MAX_ENTRIES=2; a._GIT_READ_CACHE_MAX_BYTES=8; a._GIT_READ_CACHE_MAX_ITEM_BYTES=8
+    keys=[a._immutable_git_read_key(('show',port['baseCommit']+':'+path),False)
+          for path in ('app/release.json','app/admin/index.html','app/tennis-note-member-app/app.js')]
+    assert all(keys)
+    for key in keys[:2]: a._cache_git_output(key,b'1234')
+    assert len(a._GIT_READ_CACHE)==2 and a._GIT_READ_CACHE_BYTES==8
+    a._GIT_READ_CACHE.move_to_end(keys[0])
+    a._cache_git_output(keys[2],b'5678')
+    assert len(a._GIT_READ_CACHE)==2 and a._GIT_READ_CACHE_BYTES==8
+    assert keys[0] in a._GIT_READ_CACHE and keys[1] not in a._GIT_READ_CACHE and keys[2] in a._GIT_READ_CACHE
+    a._cache_git_output(keys[1],b'x'*9)
+    assert len(a._GIT_READ_CACHE)==2 and a._GIT_READ_CACHE_BYTES==8
+finally:
+    a._GIT_READ_CACHE_MAX_ENTRIES,a._GIT_READ_CACHE_MAX_BYTES,a._GIT_READ_CACHE_MAX_ITEM_BYTES=old
+print('R3_552_IMMUTABLE_GIT_READ_CACHE_PASS; loader_calls=48; loader_repeat=0; outer_calls=148; outer_unique=148; outer_repeat=0; outer_outputs_identical=1; mutable_ref_status_diff_fresh=PASS; str_bytes_separate=PASS; failed_reads_cached=0; exact_drift_gates=PASS; bounded_lru=PASS')
+`);
+  assert.match(output, /R3_552_IMMUTABLE_GIT_READ_CACHE_PASS; loader_calls=48; loader_repeat=0; outer_calls=148; outer_unique=148; outer_repeat=0; outer_outputs_identical=1; mutable_ref_status_diff_fresh=PASS; str_bytes_separate=PASS; failed_reads_cached=0; exact_drift_gates=PASS; bounded_lru=PASS/);
+});
+
 test("R3 basic settlement inverse dispatches exact 1.0.552 content before 1.0.551", () => {
   const output = runPython(`
 import subprocess, sys

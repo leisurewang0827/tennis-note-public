@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 
@@ -277,7 +278,62 @@ PRODUCTION_AUTHORITY_FEATURE_IDS = (
 )
 
 
+_GIT_READ_CACHE_MAX_ENTRIES = 512
+_GIT_READ_CACHE_MAX_BYTES = 16 * 1024 * 1024
+_GIT_READ_CACHE_MAX_ITEM_BYTES = 2 * 1024 * 1024
+_GIT_READ_CACHE: OrderedDict[tuple[str, tuple[str, ...], bool], str | bytes] = OrderedDict()
+_GIT_READ_CACHE_BYTES = 0
+
+
+def _immutable_git_read_key(args: tuple[str, ...], text: bool) -> tuple[str, tuple[str, ...], bool] | None:
+    """Cache only reads pinned to full object IDs; refs, HEAD, and worktree state stay live."""
+    full_sha = re.compile(r"[0-9a-fA-F]{40}")
+    root = str(ROOT.resolve())
+    if len(args) == 2 and args[0] == "show":
+        revision, separator, path = args[1].partition(":")
+        if separator and path and full_sha.fullmatch(revision):
+            return (root, args, text)
+    if len(args) == 5 and args[:4] == ("rev-list", "--parents", "-n", "1") and full_sha.fullmatch(args[4]):
+        return (root, args, text)
+    if len(args) == 5 and args[:4] == ("diff-tree", "--no-commit-id", "--name-only", "-r") and full_sha.fullmatch(args[4]):
+        return (root, args, text)
+    if len(args) == 4 and args[:2] == ("diff", "--name-only") and all(full_sha.fullmatch(value) for value in args[2:]):
+        return (root, args, text)
+    if len(args) == 5 and args[:3] == ("ls-tree", "-r", "--name-only") and full_sha.fullmatch(args[3]):
+        return (root, args, text)
+    if (len(args) == 4 and args[:3] == ("log", "--reverse", "--format=%H%x1f%s")
+            and re.fullmatch(r"[0-9a-fA-F]{40}\.\.[0-9a-fA-F]{40}", args[3])):
+        return (root, args, text)
+    return None
+
+
+def _git_output_size(output: str | bytes) -> int:
+    return len(output.encode("utf-8")) if isinstance(output, str) else len(output)
+
+
+def _cache_git_output(key: tuple[str, tuple[str, ...], bool], output: str | bytes) -> None:
+    global _GIT_READ_CACHE_BYTES
+    size = _git_output_size(output)
+    if size > _GIT_READ_CACHE_MAX_ITEM_BYTES or size > _GIT_READ_CACHE_MAX_BYTES:
+        return
+    previous = _GIT_READ_CACHE.pop(key, None)
+    if previous is not None:
+        _GIT_READ_CACHE_BYTES -= _git_output_size(previous)
+    while _GIT_READ_CACHE and (
+        len(_GIT_READ_CACHE) >= _GIT_READ_CACHE_MAX_ENTRIES
+        or _GIT_READ_CACHE_BYTES + size > _GIT_READ_CACHE_MAX_BYTES
+    ):
+        _, evicted = _GIT_READ_CACHE.popitem(last=False)
+        _GIT_READ_CACHE_BYTES -= _git_output_size(evicted)
+    _GIT_READ_CACHE[key] = output
+    _GIT_READ_CACHE_BYTES += size
+
+
 def run_git(*args: str, text: bool = True) -> str | bytes:
+    cache_key = _immutable_git_read_key(args, text)
+    if cache_key is not None and cache_key in _GIT_READ_CACHE:
+        _GIT_READ_CACHE.move_to_end(cache_key)
+        return _GIT_READ_CACHE[cache_key]
     result = subprocess.run(
         ["git", *args],
         cwd=ROOT,
@@ -287,7 +343,10 @@ def run_git(*args: str, text: bool = True) -> str | bytes:
         text=text,
         encoding="utf-8" if text else None,
     )
-    return result.stdout
+    output = result.stdout
+    if cache_key is not None:
+        _cache_git_output(cache_key, output)
+    return output
 
 
 def sha256(data: bytes) -> str:
