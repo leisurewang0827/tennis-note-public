@@ -1,9 +1,12 @@
 // 기존 bump script로 기능 체크포인트에서 릴리스를 재계산한다. 실제 파일 변경 없음.
 "use strict";
-const fs = require("node:fs"), cp = require("node:child_process"), assert = require("node:assert/strict");
+const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto"), cp = require("node:child_process"), assert = require("node:assert/strict");
+const root = path.resolve(__dirname, "../..");
 const normalize = s => s.replace(/\r\n/g, "\n");
+const hash = text => crypto.createHash("sha256").update(normalize(text)).digest("hex");
 const aOnly = require("./self-profile-a-only.cjs");
 const r3Promotion = require("./r3-production-promotion.cjs");
+const devWorkflowGuard = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-dev-deployment-workflow-guard.json"), "utf8"));
 const raw = p => aOnly.restoreCandidate(p, normalize(fs.readFileSync(p, "utf8")));
 const show = (sha, p) => normalize(cp.execFileSync("git", ["show", `${sha}:${p}`], {encoding:"utf8", maxBuffer:8e6}));
 const contract = JSON.parse(raw("tests/fixtures/production-excel-release.json"));
@@ -57,5 +60,15 @@ print(json.dumps({p.relative_to(b.ROOT).as_posix():{"before":original(p),"after"
                   for p,t in merged.items() if counts.get(p)}))
 `], {encoding:"utf8", input:JSON.stringify({...contract, removedR3Paths:r3Promotion.removedR3Paths}), maxBuffer:8e6}));
 for (const [p, plan] of Object.entries(plans)) assert.equal(raw(p), normalize(plan.after), `release drift: ${p}`);
-function readBeforeRelease(p) { return plans[p] ? normalize(plans[p].before) : raw(p); }
-module.exports = {readBeforeRelease, releasePaths:Object.keys(plans), contract, plans};
+function restoreDevWorkflowBeforeR3(text) {
+  const candidate = normalize(text);
+  assert.equal(hash(candidate), devWorkflowGuard.candidateSha256, "R3 development workflow candidate drift");
+  const baseline = show(devWorkflowGuard.base, devWorkflowGuard.path);
+  assert.equal(hash(baseline), devWorkflowGuard.baseSha256, "R3 development workflow baseline drift");
+  return baseline;
+}
+function readBeforeRelease(p) {
+  if (p === devWorkflowGuard.path) return restoreDevWorkflowBeforeR3(fs.readFileSync(path.join(root, p), "utf8"));
+  return plans[p] ? normalize(plans[p].before) : raw(p);
+}
+module.exports = {readBeforeRelease, restoreDevWorkflowBeforeR3, releasePaths:Object.keys(plans), contract, plans};

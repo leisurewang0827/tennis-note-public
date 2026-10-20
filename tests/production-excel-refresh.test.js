@@ -52,6 +52,13 @@ test("Excel 최소 조립: 신규 RPC·template/onboarding/payment HOLD 없음·
   assert.equal(JSON.parse(read("app/release.json")).version, "1.0.533");
   assert.equal(manifest.releaseUnchanged, true);
 });
+test("R3 개발 workflow 역변환은 고정 후보만 허용하고 알 수 없는 변경을 거부한다", () => {
+  const guard = JSON.parse(fs.readFileSync("tests/fixtures/r3-dev-deployment-workflow-guard.json", "utf8"));
+  const candidate = norm(fs.readFileSync(guard.path, "utf8"));
+  assert.equal(hash(candidate), guard.candidateSha256);
+  assert.equal(releaseGuard.restoreDevWorkflowBeforeR3(candidate), show(guard.base, guard.path));
+  assert.throws(() => releaseGuard.restoreDevWorkflowBeforeR3(`${candidate}\n`), /candidate drift/);
+});
 test("Excel 릴리스: 기능 checkpoint 이후 정확히 기존 script 371치환·13경로·native 불변", () => {
   assert.equal(releaseGuard.releasePaths.length, 13);
   assert.equal(releaseGuard.contract.version, "1.0.536");
