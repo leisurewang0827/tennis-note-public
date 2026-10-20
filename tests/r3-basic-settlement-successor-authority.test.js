@@ -281,3 +281,101 @@ print('R3_551_HASH_DRIFT_DENIAL_PASS')
 `);
   assert.match(output, /R3_551_HASH_DRIFT_DENIAL_PASS/);
 });
+
+const r3Policy552AuthorityPath = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "r3-coach-settlement-input-552-successor-authority.json",
+);
+const r3Policy552Authority = JSON.parse(readFileSync(r3Policy552AuthorityPath, "utf8"));
+
+test("R3 1.0.552 binds the exact feature/release stack and restores only its approved content", () => {
+  const output = runPython(`
+import copy, hashlib, json, subprocess, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=json.loads(a.R3_POLICY_552_AUTHORITY_PATH.read_text(encoding='utf-8'))
+loaded=a._load_r3_policy_552_authority(port)
+assert loaded['candidateCommit']=='c2d966a85f88644487c2ee3de40bb48737e4c664'
+assert len(port['commitStack']['featurePaths'])==2
+assert len(port['commitStack']['releasePaths'])==13
+assert len(port['files'])==14
+def git_text(revision,path):
+    return subprocess.check_output(['git','show',revision+':'+path]).decode('utf-8').replace('\\r\\n','\\n')
+feature=subprocess.check_output(['git','rev-parse',port['candidateCommit']+'^']).decode().strip()
+test_path=port['commitStack']['featureTestPath']
+assert hashlib.sha256(git_text(feature,test_path).encode()).hexdigest()==port['commitStack']['featureTestSha256']
+for row in port['files']:
+    candidate=git_text(port['candidateCommit'],row['path'])
+    original=candidate
+    restored=a._restore_r3_policy_552_content(row['path'],candidate,port)
+    base=git_text(port['baseCommit'],row['path'])
+    assert restored==base, row['path']
+    assert candidate==original, 'input mutated: '+row['path']
+    assert hashlib.sha256(restored.encode()).hexdigest()==row['beforeSha256']
+pending=copy.deepcopy(port)
+pending['bindingStatus']='PENDING_EXACT_TWO_COMMIT_STACK'
+pending['candidateCommit']=None
+try: a._load_r3_policy_552_authority(pending)
+except RuntimeError as error: assert str(error)=='R3 552 candidate commit binding pending'
+else: raise AssertionError('pending 552 candidate was accepted')
+bad=copy.deepcopy(port); bad['target']='public-main'
+try: a._validate_r3_policy_552_content_authority(bad)
+except RuntimeError as error: assert str(error)=='R3 552 successor authority context mismatch'
+else: raise AssertionError('wrong target was accepted')
+row=port['files'][1]
+candidate=git_text(port['candidateCommit'],row['path'])
+for mutated in (candidate+'\\n', candidate.replace('1.0.552','1.0.553',1)):
+    try: a._restore_r3_policy_552_content(row['path'],mutated,port)
+    except RuntimeError: pass
+    else: raise AssertionError('552 body/hash drift was accepted')
+original_run_git=a.run_git
+feature=subprocess.check_output(['git','rev-parse',port['candidateCommit']+'^']).decode().strip()
+def wrong_parent(*args, text=True):
+    if args[:3]==('rev-list','--parents','-n') and args[-1]==feature:
+        result=feature+' '+'0'*40
+        return result if text else result.encode()
+    return original_run_git(*args,text=text)
+a.run_git=wrong_parent
+try:
+    try: a._load_r3_policy_552_authority(port)
+    except RuntimeError as error: assert str(error)=='R3 552 commit parent mismatch'
+    else: raise AssertionError('wrong parent binding was accepted')
+finally:
+    a.run_git=original_run_git
+bad=copy.deepcopy(port); bad['commitStack']['releasePaths'].append('README.md')
+try: a._validate_r3_policy_552_content_authority(bad)
+except RuntimeError as error: assert str(error)=='R3 552 successor authority context mismatch'
+else: raise AssertionError('unexpected path was accepted')
+print('R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS')
+`);
+  assert.match(output, /R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS/);
+});
+
+test("R3 basic settlement inverse dispatches exact 1.0.552 content before 1.0.551", () => {
+  const output = runPython(`
+import subprocess, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=a._load_r3_policy_552_authority()
+original=a.restore_r3_hourly_input_successor_base
+observed=[]
+def capture_551_dispatch(path,text):
+    observed.append((path,text))
+    return original(path,text)
+a.restore_r3_hourly_input_successor_base=capture_551_dispatch
+try:
+    for row in port['files']:
+        candidate=subprocess.check_output(['git','show',port['candidateCommit']+':'+row['path']]).decode('utf-8').replace('\\r\\n','\\n')
+        a.restore_r3_basic_settlement_successor_base(row['path'],candidate)
+        expected_551=subprocess.check_output(['git','show',port['baseCommit']+':'+row['path']]).decode('utf-8').replace('\\r\\n','\\n')
+        if row['path'] in a.R3_POLICY_551_EXPECTED_PATHS:
+            assert observed[-1]==(row['path'],expected_551), '552 inverse must feed exact 551 source to the next inverse'
+finally:
+    a.restore_r3_hourly_input_successor_base=original
+assert len(observed)==len(a.R3_POLICY_551_EXPECTED_PATHS & a.R3_POLICY_552_CONTENT_PATHS)
+print('R3_552_TOP_LEVEL_TO_551_EXACT_DISPATCH_PASS')
+`);
+  assert.match(output, /R3_552_TOP_LEVEL_TO_551_EXACT_DISPATCH_PASS/);
+});
