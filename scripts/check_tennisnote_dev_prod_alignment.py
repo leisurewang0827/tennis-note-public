@@ -22,6 +22,30 @@ R3_SUCCESSOR_BASE_SHA = "582ebd00f31654233ecc77c1bf2efdd4fde0beec"
 R3_SUCCESSOR_CANDIDATE_SHA = "3f52094ad45979ceb5a732d56aaca1445f5ecae6"
 R3_SUCCESSOR_TARGET = "public-dev"
 R3_SUCCESSOR_BRANCH = "dev"
+R3_POLICY_550_AUTHORITY_PATH = ROOT / "tests" / "fixtures" / "r3-coach-schedule-policy-550-successor-authority.json"
+R3_POLICY_550_BASE_SHA = "20fec3232cf66b99f16f5edebee8aa7d9843405a"
+R3_POLICY_550_EXPECTED_PATHS = frozenset({
+    "app/admin/actions/coach.js",
+    "app/admin/data/schedule.js",
+    "app/admin/index.html",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/domain/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/ui/screens.js",
+})
+R3_POLICY_550_FEATURE_PATHS = frozenset({
+    "app/admin/actions/coach.js",
+    "app/admin/data/schedule.js",
+})
+R3_POLICY_550_RELEASE_PATHS = R3_POLICY_550_EXPECTED_PATHS - R3_POLICY_550_FEATURE_PATHS
 R3_SUCCESSOR_EXPECTED_PATHS = frozenset({
     "app/admin/actions/coach.js",
     "app/admin/domain/coaches.js",
@@ -509,14 +533,139 @@ def _load_r3_successor_authority(authority: dict[str, object] | None = None) -> 
     return port
 
 
+def _validate_r3_policy_550_content_authority(port: dict[str, object]) -> dict[str, object]:
+    if (port.get("contract") != "r3-coach-schedule-policy-successor-authority-v1"
+            or port.get("baseCommit") != R3_POLICY_550_BASE_SHA
+            or port.get("baseVersion") != "1.0.549"
+            or port.get("candidateVersion") != "1.0.550"
+            or port.get("baseReleaseId") != "2026.10.19.01"
+            or port.get("candidateReleaseId") != "2026.10.20.01"
+            or port.get("target") != R3_SUCCESSOR_TARGET
+            or port.get("targetBranch") != R3_SUCCESSOR_BRANCH):
+        raise RuntimeError("R3 550 successor content authority context mismatch")
+    stack = port.get("commitStack")
+    feature_paths = stack.get("featurePaths") if isinstance(stack, dict) else None
+    release_paths = stack.get("releasePaths") if isinstance(stack, dict) else None
+    if (not isinstance(feature_paths, list) or not isinstance(release_paths, list)
+            or any(not isinstance(path, str) for path in [*(feature_paths or []), *(release_paths or [])])
+            or len(feature_paths) != len(set(feature_paths)) or len(release_paths) != len(set(release_paths))
+            or set(feature_paths) != R3_POLICY_550_FEATURE_PATHS
+            or set(release_paths) != R3_POLICY_550_RELEASE_PATHS):
+        raise RuntimeError("R3 550 documented two-commit path contract mismatch")
+    files = port.get("files")
+    if not isinstance(files, list):
+        raise RuntimeError("R3 550 successor content file list invalid")
+    paths = [row.get("path") for row in files if isinstance(row, dict)]
+    if len(paths) != len(files) or len(paths) != len(set(paths)) or set(paths) != R3_POLICY_550_EXPECTED_PATHS:
+        raise RuntimeError("R3 550 successor exact path set mismatch")
+    for row in files:
+        if not re.fullmatch(r"[a-f0-9]{64}", str(row.get("beforeSha256", ""))) or not re.fullmatch(r"[a-f0-9]{64}", str(row.get("afterSha256", ""))):
+            raise RuntimeError("R3 550 successor content hash invalid")
+        replacements = row.get("replacements", [])
+        hunks = row.get("hunks", [])
+        if not isinstance(replacements, list) or not isinstance(hunks, list) or bool(replacements) == bool(hunks):
+            raise RuntimeError("R3 550 successor inverse contract invalid")
+    return port
+
+
+def _load_r3_policy_550_authority(authority: dict[str, object] | None = None) -> dict[str, object]:
+    port = _validate_r3_policy_550_content_authority(
+        authority if authority is not None else json.loads(R3_POLICY_550_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    candidate = port.get("candidateCommit")
+    if port.get("bindingStatus") != "BOUND_TO_EXACT_TWO_COMMIT_STACK" or not re.fullmatch(r"[a-f0-9]{40}", str(candidate or "")):
+        raise RuntimeError("R3 550 candidate commit binding pending")
+    # Project policy requires one product commit followed by a separate release commit.
+    # candidateCommit binds the latter; its first parent is derived, never guessed.
+    base_tree = str(port["baseCommit"])
+    candidate = str(candidate)
+    if not re.fullmatch(r"[a-f0-9]{40}", base_tree):
+        raise RuntimeError("R3 550 base commit invalid")
+
+    def single_parent(revision: str, expected_parent: str | None = None) -> str:
+        ancestry = str(run_git("rev-list", "--parents", "-n", "1", revision)).split()
+        if len(ancestry) != 2 or ancestry[0] != revision:
+            raise RuntimeError("R3 550 stack contains a merge or root commit")
+        parent = ancestry[1]
+        if expected_parent is not None and parent != expected_parent:
+            raise RuntimeError("R3 550 commit stack parent mismatch")
+        return parent
+
+    feature = single_parent(candidate)
+    single_parent(feature, base_tree)
+
+    def changed_paths(*args: str) -> set[str]:
+        return set(str(run_git(*args)).splitlines())
+
+    if changed_paths("diff-tree", "--no-commit-id", "--name-only", "-r", feature) != R3_POLICY_550_FEATURE_PATHS:
+        raise RuntimeError("R3 550 feature commit path set mismatch")
+    if changed_paths("diff-tree", "--no-commit-id", "--name-only", "-r", candidate) != R3_POLICY_550_RELEASE_PATHS:
+        raise RuntimeError("R3 550 release commit path set mismatch")
+    if changed_paths("diff", "--name-only", base_tree, candidate) != R3_POLICY_550_EXPECTED_PATHS:
+        raise RuntimeError("R3 550 cumulative candidate path set mismatch")
+    for row in port["files"]:
+        path = str(row["path"])
+        base = run_git("show", f"{base_tree}:{path}", text=False)
+        feature_blob = run_git("show", f"{feature}:{path}", text=False)
+        after = run_git("show", f"{candidate}:{path}", text=False)
+        if sha256(base.replace(b"\r\n", b"\n")) != row["beforeSha256"]:
+            raise RuntimeError(f"R3 550 base commit content drift: {path}")
+        if sha256(after.replace(b"\r\n", b"\n")) != row["afterSha256"]:
+            raise RuntimeError(f"R3 550 candidate commit content drift: {path}")
+        expected_feature_hash = row["afterSha256"] if path in R3_POLICY_550_FEATURE_PATHS else row["beforeSha256"]
+        if sha256(feature_blob.replace(b"\r\n", b"\n")) != expected_feature_hash:
+            raise RuntimeError(f"R3 550 feature commit content drift: {path}")
+    return port
+
+
+def _restore_r3_policy_550_content(path: str, text: str, port: dict[str, object]) -> str:
+    """Content-only inverse used by offline tests; live callers require commit binding."""
+    _validate_r3_policy_550_content_authority(port)
+    normalized_path = Path(path).as_posix()
+    row = next((item for item in port["files"] if item["path"] == normalized_path), None)
+    if row is None:
+        return text
+    candidate_text = text.replace("\r\n", "\n")
+    if sha256(candidate_text.encode("utf-8")) != row["afterSha256"]:
+        raise RuntimeError(f"R3 550 successor candidate content drift: {normalized_path}")
+    for rule in row.get("replacements", []):
+        candidate, base, count = rule.get("candidate"), rule.get("base"), rule.get("count")
+        if not isinstance(candidate, str) or not candidate or not isinstance(base, str) or not isinstance(count, int) or count < 1:
+            raise RuntimeError(f"R3 550 replacement authority invalid: {normalized_path}")
+        if candidate_text.count(candidate) != count:
+            raise RuntimeError(f"R3 550 replacement count drift: {normalized_path}")
+        candidate_text = candidate_text.replace(candidate, base)
+    for hunk in row.get("hunks", []):
+        after, before = hunk.get("candidate"), hunk.get("base")
+        if not isinstance(after, str) or not after or not isinstance(before, str) or hunk.get("count") != 1:
+            raise RuntimeError(f"R3 550 hunk authority invalid: {normalized_path}")
+        if candidate_text.count(after) != 1:
+            raise RuntimeError(f"R3 550 exact hunk count drift: {normalized_path}")
+        candidate_text = candidate_text.replace(after, before)
+    if sha256(candidate_text.encode("utf-8")) != row["beforeSha256"]:
+        raise RuntimeError(f"R3 550 restored baseline content drift: {normalized_path}")
+    return candidate_text
+
+
+def restore_r3_coach_schedule_policy_successor_base(path: str, text: str) -> str:
+    """Strict 1.0.550 successor inverse; requires a bound exact commit stack."""
+    return _restore_r3_policy_550_content(path, text, _load_r3_policy_550_authority())
+
+
 def restore_r3_basic_settlement_successor_base(
     path: str,
     text: str,
     authority: dict[str, object] | None = None,
 ) -> str:
-    """Restore only the pinned 1.0.549 successor delta to its exact 1.0.548 parent."""
-    port = _load_r3_successor_authority(authority)
+    """Restore 1.0.550 when present, then the pinned 1.0.549 successor delta."""
     normalized_path = Path(path).as_posix()
+    pending_550 = _validate_r3_policy_550_content_authority(
+        json.loads(R3_POLICY_550_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    pending_row = next((item for item in pending_550["files"] if item["path"] == normalized_path), None)
+    if pending_row is not None and sha256(text.replace("\r\n", "\n").encode("utf-8")) == pending_row["afterSha256"]:
+        text = restore_r3_coach_schedule_policy_successor_base(normalized_path, text)
+    port = _load_r3_successor_authority(authority)
     row = next((item for item in port["files"] if item["path"] == normalized_path), None)
     if row is None:
         return text
@@ -747,8 +896,19 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
-    # The current release successor must be restored before consulting the frozen
-    # 1.0.548 Auth parity row (including its row-none decision).
+    # The frozen 1.0.549 artifact is the exact 1.0.550 before-blob. Preserve that
+    # historical route, but require a real two-commit binding for any 1.0.550 after-blob.
+    normalized_path = Path(path).as_posix()
+    pending_550 = _validate_r3_policy_550_content_authority(
+        json.loads(R3_POLICY_550_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    row = next((item for item in pending_550["files"] if item["path"] == normalized_path), None)
+    if row is not None:
+        digest = sha256(text.replace("\r\n", "\n").encode("utf-8"))
+        if digest == row["afterSha256"]:
+            text = restore_r3_coach_schedule_policy_successor_base(normalized_path, text)
+        elif digest != row["beforeSha256"]:
+            raise RuntimeError(f"R3 550 source is neither pinned 1.0.549 nor exact 1.0.550: {normalized_path}")
     text = restore_r3_basic_settlement_successor_base(path, text)
     return restore_auth_dev_prepare_base_legacy(path, text)
 
