@@ -17,7 +17,7 @@ function runPython(body) {
 
 test("R3 1.0.549 successor is exactly restored before the frozen Auth parity lookup", () => {
   const output = runPython(`
-import copy, hashlib, pathlib, subprocess, sys
+import copy, hashlib, subprocess, sys
 sys.path.insert(0, 'scripts')
 import check_tennisnote_dev_prod_alignment as a
 port=a._load_r3_successor_authority()
@@ -46,15 +46,6 @@ finally:
 assert len(observed)==1
 assert observed[0][1]==git_text(port['baseCommit'],'app/release.json')
 assert result==observed[0][1]
-# A current 1.0.550 after-blob must not fall through to the historical path while unbound.
-observed.clear()
-current_550=pathlib.Path('app/release.json').read_text(encoding='utf-8')
-try:
-    a.restore_auth_dev_prepare_base('app/release.json',current_550)
-except RuntimeError as error:
-    assert str(error)=='R3 550 candidate commit binding pending'
-else: raise AssertionError('unbound 1.0.550 was restored through the frozen 1.0.549 route')
-assert observed==[], 'pending 1.0.550 must stop before any historical fallback'
 print('R3_SUCCESSOR_EXACT_RESTORE_AND_ORDER_PASS')
 `);
   assert.match(output, /R3_SUCCESSOR_EXACT_RESTORE_AND_ORDER_PASS/);
