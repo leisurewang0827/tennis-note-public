@@ -348,9 +348,20 @@ bad=copy.deepcopy(port); bad['commitStack']['releasePaths'].append('README.md')
 try: a._validate_r3_policy_552_content_authority(bad)
 except RuntimeError as error: assert str(error)=='R3 552 successor authority context mismatch'
 else: raise AssertionError('unexpected path was accepted')
-print('R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS')
+original_legacy=a.restore_auth_dev_prepare_base_legacy
+legacy_calls=[]
+def capture_legacy(path,text):
+    legacy_calls.append((path,text))
+    return text
+a.restore_auth_dev_prepare_base_legacy=capture_legacy
+try:
+    a.restore_auth_dev_prepare_base('app/release.json',git_text(port['candidateCommit'],'app/release.json'))
+finally:
+    a.restore_auth_dev_prepare_base_legacy=original_legacy
+assert len(legacy_calls)==1 and legacy_calls[0][0]=='app/release.json'
+print('R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS; AUTH_GOLDEN_ENTRY_LINK_PASS')
 `);
-  assert.match(output, /R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS/);
+  assert.match(output, /R3_552_EXACT_STACK_AND_CONTENT_INVERSE_PASS; PENDING_AND_BODY_HASH_TARGET_PARENT_DRIFT_DENIAL_PASS; AUTH_GOLDEN_ENTRY_LINK_PASS/);
 });
 
 test("R3 basic settlement inverse dispatches exact 1.0.552 content before 1.0.551", () => {

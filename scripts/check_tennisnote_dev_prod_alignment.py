@@ -1203,6 +1203,15 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
+    pending_552 = _validate_r3_policy_552_content_authority(
+        json.loads(R3_POLICY_552_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    normalized_path = Path(path).as_posix()
+    row_552 = next((item for item in pending_552["files"] if item["path"] == normalized_path), None)
+    if row_552 is not None:
+        digest_552 = sha256(text.replace("\r\n", "\n").encode("utf-8"))
+        if digest_552 == row_552["afterSha256"]:
+            text = restore_r3_coach_settlement_input_successor_base(normalized_path, text)
     pending_551 = _validate_r3_policy_551_content_authority(
         json.loads(R3_POLICY_551_AUTHORITY_PATH.read_text(encoding="utf-8"))
     )
