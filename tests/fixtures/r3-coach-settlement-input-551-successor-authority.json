@@ -1,0 +1,247 @@
+{
+  "contract": "r3-coach-settlement-input-successor-authority-v1",
+  "bindingStatus": "BOUND_TO_EXACT_TWO_COMMIT_STACK",
+  "baseCommit": "8bb7b3fe3f13904203b7eccd5946104ddf34fa15",
+  "candidateCommit": "f2d65a56c252e7df5d3fb4b70093f57841205ab8",
+  "commitStack": {
+    "featurePaths": [
+      "app/admin/domain/coaches.js",
+      "app/admin/forms/coach.js"
+    ],
+    "releasePaths": [
+      "app/admin/index.html",
+      "app/release.json",
+      "app/shared/tennisnote-release.js",
+      "app/tennis-note-coach-app/app.js",
+      "app/tennis-note-coach-app/domain/coaches.js",
+      "app/tennis-note-coach-app/forms/common.js",
+      "app/tennis-note-coach-app/index.html",
+      "app/tennis-note-coach-app/service-worker.js",
+      "app/tennis-note-member-app/app.js",
+      "app/tennis-note-member-app/forms/common.js",
+      "app/tennis-note-member-app/index.html",
+      "app/tennis-note-member-app/service-worker.js",
+      "app/tennis-note-member-app/ui/screens.js"
+    ]
+  },
+  "target": "public-dev",
+  "targetBranch": "dev",
+  "baseVersion": "1.0.550",
+  "candidateVersion": "1.0.551",
+  "baseReleaseId": "2026.10.20.01",
+  "candidateReleaseId": "2026.10.20.02",
+  "files": [
+    {
+      "path": "app/admin/domain/coaches.js",
+      "beforeSha256": "d1a509670a11e019b7ad0e26e0ec79488121bbf26d33d20fda91edad9cd98f48",
+      "afterSha256": "5d9efde6d2cad1ebf6060314a8d9360476cfa70ef02d36858db83ecb87f1addc",
+      "replacements": [
+        {
+          "candidate": "      <label class=\"form-field ${ratio ? \"is-hidden\" : \"\"}\" data-settlement-mode-field=\"hourly\"><span>\uc2dc\uae09(\uc6d0/\uc2dc\uac04)</span><input id=\"coachStaffSettlementHourly\" type=\"number\" min=\"1\" step=\"1\" value=\"${escapeHtml(settlement.hourly)}\" /></label>\n",
+          "base": "      <label class=\"form-field ${ratio ? \"is-hidden\" : \"\"}\" data-settlement-mode-field=\"hourly\"><span>\uc2dc\uae09(\uc6d0/\uc2dc\uac04)</span><input id=\"coachStaffSettlementHourly\" type=\"number\" min=\"1\" step=\"1000\" value=\"${escapeHtml(settlement.hourly)}\" /></label>\n",
+          "count": 1
+        }
+      ],
+      "featureSha256": "5d9efde6d2cad1ebf6060314a8d9360476cfa70ef02d36858db83ecb87f1addc"
+    },
+    {
+      "path": "app/admin/forms/coach.js",
+      "beforeSha256": "2433f0e629ebec326e9b266a424ff5e968954d9f2534e520632f8a388bc47cdb",
+      "afterSha256": "58467d8e0276eefd9eebdd0cbfae100ed029e219b758c109411b4780e3c28120",
+      "replacements": [
+        {
+          "candidate": "function syncCoachStaffSettlementFieldVisibility(method) {\n  const root = $(\"#coachStaffModalContent\") || document;\n  [\"ratio\", \"hourly\"].forEach((settlementMethod) => {\n    const active = method === settlementMethod;\n    [...root.querySelectorAll(`[data-settlement-mode-field=\"${settlementMethod}\"]`)].forEach((element) => {\n      element.classList.toggle(\"is-hidden\", !active);\n      [...element.querySelectorAll(\"input, select, textarea\")].forEach((control) => {\n        control.disabled = !active;\n      });\n    });\n  });\n}\n",
+          "base": "function syncCoachStaffSettlementFieldVisibility(method) {\n  const root = $(\"#coachStaffModalContent\") || document;\n  [...root.querySelectorAll('[data-settlement-mode-field=\"ratio\"]')].forEach((element) => {\n    element.classList.toggle(\"is-hidden\", method !== \"ratio\");\n  });\n  [...root.querySelectorAll('[data-settlement-mode-field=\"hourly\"]')].forEach((element) => {\n    element.classList.toggle(\"is-hidden\", method !== \"hourly\");\n  });\n}\n",
+          "count": 1
+        }
+      ],
+      "featureSha256": "58467d8e0276eefd9eebdd0cbfae100ed029e219b758c109411b4780e3c28120"
+    },
+    {
+      "path": "app/admin/index.html",
+      "beforeSha256": "69efce32700ffd21f25d063664ea11f65ac273bdcb8d3113197d0690a1e26381",
+      "afterSha256": "b4b22df1c79dd8ce0d010401bab51ece801f8457bf8e039bb877cfb2bb7a9f83",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 77
+        }
+      ]
+    },
+    {
+      "path": "app/release.json",
+      "beforeSha256": "dd148c15af386cd022bf1e69f7bead94356f6ff72c3438c4049963fccf9f87da",
+      "afterSha256": "f26abdb309651e46f411ea43cf249fcedabe7d4cb56127bd80f4cd4c489dcc78",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 2
+        },
+        {
+          "candidate": "2026.10.20.02",
+          "base": "2026.10.20.01",
+          "count": 1
+        },
+        {
+          "candidate": "2026-10-20T15:17:27+09:00",
+          "base": "2026-10-20T11:22:42+09:00",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-release.js",
+      "beforeSha256": "d483812db9f2ed51b1e2f29bfedba119ea27b8be672c05d375d27f1c60514c66",
+      "afterSha256": "306c82b42eeb608227988c40c253c3ecb7d2cad3b2481aeca475653f9f529b97",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 2
+        },
+        {
+          "candidate": "2026.10.20.02",
+          "base": "2026.10.20.01",
+          "count": 1
+        },
+        {
+          "candidate": "2026-10-20T15:17:27+09:00",
+          "base": "2026-10-20T11:22:42+09:00",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/app.js",
+      "beforeSha256": "8fa548933c401f5d1fe83332581010b9dc2d4b2656dc5788051fc55946886169",
+      "afterSha256": "6f7a7ed6b0496641123cf464c5696aa21ae2ebc35e14f51afcb09d46df6f2eb5",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/coaches.js",
+      "beforeSha256": "ed2cbc448549b2888515f4c7618c02bb1159ea9cb30bf999b65abf80b1a920c1",
+      "afterSha256": "e218ec6e6187cb53a62a55d65b9fdabfa8c663d7cd3494da3eb5e6d90429b26d",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/forms/common.js",
+      "beforeSha256": "7c22b26754dddd4d3ce3b07840cb9526a6b59c0231dd4e8ef27138f9aa5f5474",
+      "afterSha256": "4582e0e0d9fef2650d1222cbbf876f17dfd72fc3c597eb79731617eb86752be7",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "beforeSha256": "0fa9265501b29b72fa3a28fb33d91f0a25f9ff4592afa91260b9721d9945b9f2",
+      "afterSha256": "b39660526878bf9c38ebdb8921e44ce39f9746bd74fa08332e681683d112cba5",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 60
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "9d252dce90ea4c6bfcf26f8428db6067c6a197280b37a78c7ad1ea49327b8b70",
+      "afterSha256": "d2f20575502b717e479de62e5906500c9e25f6c845d6370145de15217d650dfb",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 59
+        },
+        {
+          "candidate": "v560",
+          "base": "v559",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "beforeSha256": "ca535a44421cd792496ee6bb73b24c82fd1ffd2cdd94bd4f0ee91d7419fc47b4",
+      "afterSha256": "466072dd6190ce055fe5e01d240b8850645147844b7ec86e02737ce3f7f66bfd",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "beforeSha256": "f489bcc3b47f4b1e9b94b72978d5596bdd6f15338054a160222d83efd441fee0",
+      "afterSha256": "9e7df653f5bb3ee1e4d96b91ef5db4fbc87636a238d4c139b391a2a07030cfb6",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "beforeSha256": "8ddeeafdb2b670d36b1cb776fc85b75457e56cb073c49300606593d9320f51ae",
+      "afterSha256": "0d721d2f54f4be87c6dbecc53a9617b67395a6149fb19aa52d8f8d397c27d69f",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 82
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/service-worker.js",
+      "beforeSha256": "3646a7a711d17e11659ad6be7cca725805a98292dca2cd29607e3b3c3ba63015",
+      "afterSha256": "37e5058cfc2045eedde9b1c8301b73f08590e80f5c94b844ecb97b4a168951c4",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 79
+        },
+        {
+          "candidate": "v587",
+          "base": "v586",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "beforeSha256": "bb8e3ecfe9ee5108bcf07bfc95b0a43c31eca97b95eadc2eb4a4d983c5de03c3",
+      "afterSha256": "d1627840670389d6528c3c84e1c02511cd8518a98fe732e559f468832770e3d4",
+      "replacements": [
+        {
+          "candidate": "1.0.551",
+          "base": "1.0.550",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

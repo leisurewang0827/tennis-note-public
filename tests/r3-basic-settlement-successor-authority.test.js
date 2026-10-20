@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -107,7 +108,7 @@ except RuntimeError as error: assert str(error)=='R3 550 candidate commit bindin
 else: raise AssertionError('pending candidate authority was accepted')
 assert len(port['files'])==15
 for row in port['files']:
-    candidate=pathlib.Path(row['path']).read_text(encoding='utf-8').replace('\\r\\n','\\n')
+    candidate=subprocess.check_output(['git','show',port['candidateCommit']+':'+row['path']]).decode('utf-8').replace('\\r\\n','\\n')
     original=candidate
     restored=a._restore_r3_policy_550_content(row['path'],candidate,port)
     base=subprocess.check_output(['git','show',port['baseCommit']+':'+row['path']]).decode('utf-8').replace('\\r\\n','\\n')
@@ -118,15 +119,17 @@ for row in port['files']:
         prior=a.restore_r3_basic_settlement_successor_base(row['path'],restored)
         old_row=next(item for item in a._load_r3_successor_authority()['files'] if item['path']==row['path'])
         assert hashlib.sha256(prior.encode('utf-8')).hexdigest()==old_row['beforeSha256'], row['path']
-restored_550=a.restore_r3_coach_schedule_policy_successor_base('app/release.json',pathlib.Path('app/release.json').read_text(encoding='utf-8'))
+release_candidate=subprocess.check_output(['git','show',port['candidateCommit']+':app/release.json']).decode('utf-8')
+restored_550=a.restore_r3_coach_schedule_policy_successor_base('app/release.json',release_candidate)
 restored_release=json.loads(restored_550)
 assert restored_release['version']=='1.0.549' and restored_release['releaseId']=='2026.10.19.01'
 row=port['files'][0]
-candidate=pathlib.Path(row['path']).read_text(encoding='utf-8').replace('\\r\\n','\\n')+'\\n'
+candidate=subprocess.check_output(['git','show',port['candidateCommit']+':'+row['path']]).decode('utf-8').replace('\\r\\n','\\n')+'\\n'
 try: a._restore_r3_policy_550_content(row['path'],candidate,port)
 except RuntimeError: pass
 else: raise AssertionError('candidate content drift accepted')
 feature='b'*40; release='a'*40
+actual_feature=subprocess.check_output(['git','rev-parse',port['candidateCommit']+'^']).decode().strip()
 product=a.R3_POLICY_550_FEATURE_PATHS; release_paths=a.R3_POLICY_550_RELEASE_PATHS
 original=a.run_git
 def fake_run_git(*args, text=True):
@@ -142,10 +145,12 @@ def fake_run_git(*args, text=True):
         revision,path=args[1].split(':',1)
         if revision==port['baseCommit']:
             result=original(*args,text=False)
-        elif revision==feature and path not in product:
-            result=original('show',f"{port['baseCommit']}:{path}",text=False)
+        elif revision==feature:
+            result=original('show',f"{actual_feature}:{path}",text=False)
+        elif revision==release:
+            result=original('show',f"{port['candidateCommit']}:{path}",text=False)
         else:
-            result=pathlib.Path(path).read_bytes()
+            result=original(*args,text=False)
     else:
         return original(*args,text=text)
     return result if text else result.encode('utf-8') if isinstance(result,str) else result
@@ -176,20 +181,103 @@ print('R3_550_CONTENT_INVERSE_PASS; TWO_COMMIT_CONTRACT_PASS; UNBOUND_FAIL_CLOSE
 
 test("DEV source gate accepts only the exact bound 1.0.550 release candidate", () => {
   const output = runPython(`
-import json, sys
+import json, subprocess, sys
 sys.path.insert(0, 'scripts')
 import check_tennisnote_dev_prod_alignment as alignment
 import check_tennisnote_development_deploy_scope as deploy_scope
 path=deploy_scope.ROOT/'app/release.json'
-raw=path.read_text(encoding='utf-8')
+raw=subprocess.check_output(['git','show',alignment.R3_POLICY_551_BASE_SHA+':app/release.json']).decode('utf-8')
 original=raw
 frozen={'version':'1.0.548','releaseId':'2026.10.13.02'}
 assert json.loads(raw)['version']=='1.0.550'
 try: deploy_scope.validate_frozen_release_metadata(raw,frozen)
 except RuntimeError as error: raise AssertionError('exact bound 1.0.550 candidate was rejected: '+str(error))
 else: assert json.loads(raw)['releaseId']=='2026.10.20.01'
-assert raw==original and path.read_text(encoding='utf-8')==original
+assert raw==original
 print('DEV_550_UNBOUND_RELEASE_FAIL_CLOSED_PASS')
 `);
   assert.match(output, /DEV_550_UNBOUND_RELEASE_FAIL_CLOSED_PASS/);
+});
+
+const r3Policy551AuthorityPath = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "r3-coach-settlement-input-551-successor-authority.json",
+);
+const r3Policy551Authority = JSON.parse(readFileSync(r3Policy551AuthorityPath, "utf8"));
+
+test("R3 1.0.551 accepts the actual bound exact two-commit candidate", {
+  skip: r3Policy551Authority.bindingStatus !== "BOUND_TO_EXACT_TWO_COMMIT_STACK",
+}, () => {
+  const output = runPython(`
+import hashlib, json, subprocess, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=json.loads(a.R3_POLICY_551_AUTHORITY_PATH.read_text(encoding='utf-8'))
+loaded=a._load_r3_policy_551_authority(port)
+assert loaded['bindingStatus']=='BOUND_TO_EXACT_TWO_COMMIT_STACK'
+assert loaded['candidateCommit']==port['candidateCommit']
+assert len(port['commitStack']['featurePaths'])==2
+assert len(port['commitStack']['releasePaths'])==13
+assert len(port['files'])==len(a.R3_POLICY_551_EXPECTED_PATHS)
+def git_text(revision,path):
+    return subprocess.check_output(['git','show',revision+':'+path]).decode('utf-8').replace('\\r\\n','\\n')
+for row in port['files']:
+    candidate=git_text(port['candidateCommit'],row['path'])
+    restored=a._restore_r3_policy_551_content(row['path'],candidate,port)
+    base=git_text(port['baseCommit'],row['path'])
+    assert restored==base, row['path']
+    assert hashlib.sha256(restored.encode('utf-8')).hexdigest()==row['beforeSha256']
+print('R3_551_ACTUAL_BOUND_TWO_COMMIT_ACCEPTANCE_PASS')
+`);
+  assert.match(output, /R3_551_ACTUAL_BOUND_TWO_COMMIT_ACCEPTANCE_PASS/);
+});
+
+test("R3 1.0.551 cloned pending authority is denied by the deploy gate", () => {
+  const output = runPython(`
+import copy, json, pathlib, sys, tempfile
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=json.loads(a.R3_POLICY_551_AUTHORITY_PATH.read_text(encoding='utf-8'))
+pending=copy.deepcopy(port)
+pending['bindingStatus']='PENDING_EXACT_TWO_COMMIT_STACK'
+pending['candidateCommit']=None
+try: a._load_r3_policy_551_authority(pending)
+except RuntimeError as error: assert str(error)=='R3 551 candidate commit binding pending'
+else: raise AssertionError('cloned pending candidate authority was accepted')
+original_path=a.R3_POLICY_551_AUTHORITY_PATH
+with tempfile.TemporaryDirectory(prefix='tn-r3-551-pending-') as directory:
+    pending_path=pathlib.Path(directory)/'authority.json'
+    pending_path.write_text(json.dumps(pending),encoding='utf-8')
+    a.R3_POLICY_551_AUTHORITY_PATH=pending_path
+    try:
+        current=pathlib.Path('app/release.json').read_text(encoding='utf-8')
+        try: a.restore_r3_basic_settlement_successor_base('app/release.json',current)
+        except RuntimeError as error: assert str(error)=='R3 551 candidate commit binding pending'
+        else: raise AssertionError('deploy gate accepted cloned pending authority')
+    finally: a.R3_POLICY_551_AUTHORITY_PATH=original_path
+print('R3_551_CLONED_PENDING_DENIAL_PASS')
+`);
+  assert.match(output, /R3_551_CLONED_PENDING_DENIAL_PASS/);
+});
+
+test("R3 1.0.551 content-hash drift is denied independently", () => {
+  const output = runPython(`
+import copy, json, pathlib, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port=json.loads(a.R3_POLICY_551_AUTHORITY_PATH.read_text(encoding='utf-8'))
+assert a._validate_r3_policy_551_content_authority(port) is port
+assert len(port['files'])==len(a.R3_POLICY_551_EXPECTED_PATHS)
+row=port['files'][0]
+candidate=pathlib.Path(row['path']).read_text(encoding='utf-8').replace('\\r\\n','\\n')
+bad=copy.deepcopy(port)
+bad['files'][0]['afterSha256']='0'*64
+try: a._restore_r3_policy_551_content(row['path'],candidate,bad)
+except RuntimeError as error: assert str(error).startswith('R3 551 successor candidate content drift:')
+else: raise AssertionError('551 content drift accepted')
+print('R3_551_HASH_DRIFT_DENIAL_PASS')
+`);
+  assert.match(output, /R3_551_HASH_DRIFT_DENIAL_PASS/);
 });

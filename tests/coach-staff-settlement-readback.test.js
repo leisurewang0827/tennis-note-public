@@ -15,6 +15,7 @@ const domainPath = "app/admin/domain/coaches.js";
 const actionPath = "app/admin/actions/coach.js";
 const commonPath = "app/admin/data/common.js";
 const schedulePath = "app/admin/data/schedule.js";
+const formPath = "app/admin/forms/coach.js";
 
 function readPublicSource(relativePath) {
   const absolutePath = resolve(repoRoot, relativePath);
@@ -372,6 +373,48 @@ test("source adapters resolve actual checkout and pinned offline candidate", () 
     console.log(`PATCH_SHA256=${sha256(offline.patchText)}`);
       console.log(`OFFLINE_FRESH_VERIFIER_PRESENT=${Boolean(verifier)}`);
   }
+});
+
+test("hourly input accepts whole-won values and inactive settlement controls are disabled", () => {
+  const domainSource = readPublicSource(domainPath);
+  const formSource = readPublicSource(formPath);
+  assert.match(domainSource, /id="coachStaffSettlementHourly" type="number" min="1" step="1"/,
+    "hourly amount uses one-won precision without changing the positive minimum");
+
+  const elements = Object.fromEntries(["ratio", "hourly"].map((method) => {
+    const controls = [{ disabled: null, value: method === "ratio" ? "50" : "43200" }];
+    const element = {
+      hidden: false,
+      controls,
+      classList: { toggle(name, force) { if (name === "is-hidden") element.hidden = force; } },
+      querySelectorAll(selector) { assert.equal(selector, "input, select, textarea"); return controls; },
+    };
+    return [method, element];
+  }));
+  const root = {
+    querySelectorAll(selector) {
+      const match = selector.match(/data-settlement-mode-field="(ratio|hourly)"/);
+      return match ? [elements[match[1]]] : [];
+    },
+  };
+  const invoke = (method) => runInNewContext(
+    `${extractFunction(formSource, "syncCoachStaffSettlementFieldVisibility")}\nsyncCoachStaffSettlementFieldVisibility(method);`,
+    { method, document: {}, $: () => root },
+  );
+
+  invoke("ratio");
+  assert.equal(elements.ratio.hidden, false);
+  assert.equal(elements.ratio.controls[0].disabled, false);
+  assert.equal(elements.hourly.hidden, true);
+  assert.equal(elements.hourly.controls[0].disabled, true);
+  assert.equal(elements.hourly.controls[0].value, "43200", "disabling preserves the inactive draft value");
+
+  invoke("hourly");
+  assert.equal(elements.ratio.hidden, true);
+  assert.equal(elements.ratio.controls[0].disabled, true);
+  assert.equal(elements.hourly.hidden, false);
+  assert.equal(elements.hourly.controls[0].disabled, false);
+  assert.equal(elements.hourly.controls[0].value, "43200");
 });
 
 test("actual public save -> refresh -> raw verifier blocks false-success in memory", async () => {
