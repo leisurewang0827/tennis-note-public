@@ -304,7 +304,11 @@ def _http_read(endpoint_role: str, candidate_sha: str) -> object:
     url = f"{origin}{path}?__tn_preflight={urllib.parse.quote(candidate_sha, safe='')}"
     request = urllib.request.Request(
         url,
-        headers={"Accept": "application/json" if json_body else "text/plain", "Cache-Control": "no-cache"},
+        headers={
+            "Accept": "application/json" if json_body else "text/plain",
+            "Cache-Control": "no-cache",
+            "User-Agent": "TennisNote-Release-Preflight/1.0",
+        },
         method="GET",
     )
     for attempt in range(2):

@@ -42,6 +42,7 @@ test("R3 live development read guard retries only known transient GET failures o
     "            request=call.args[0]",
     "            assert request.get_method()=='GET'",
     "            assert request.full_url==f'{m.DEV_MEMBER_ORIGIN}/release.json?__tn_preflight={sha}'",
+    "            assert request.get_header('User-agent')=='TennisNote-Release-Preflight/1.0'",
     "            assert call.kwargs.get('timeout')==15",
     "with patch.object(m._LIVE_READ_OPENER,'open',side_effect=[ConnectionResetError('synthetic-private-reset'),Response(b'{\\\"version\\\":\\\"1.0.552\\\"}')]) as opened:",
     "    assert m._http_read('member_release',sha)=={'version':'1.0.552'}",
