@@ -174,6 +174,8 @@ SELECTED_NET_NEW_PATHS = {
 }
 
 DEV_WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
+DEV_CHECKOUT_HISTORY_AUTHORITY_PATH = "tests/fixtures/development-checkout-history-source-parity.json"
+DEV_CHECKOUT_HISTORY_BEFORE_SHA256 = "26d40bdb3e4961a79cdd83e71df40d34e8097d2d0beb77f81cc49e8268881712"
 DEV_WORKFLOW_LINES = (
     '      TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED: "true"',
     '          grep -q \'"developmentEmailSignIn": true\' dist/member-dev/shared/config.local.js',
@@ -910,7 +912,49 @@ def restore_auth_dev_prepare_base(path: str, text: str) -> str:
         elif digest != row["beforeSha256"]:
             raise RuntimeError(f"R3 550 source is neither pinned 1.0.549 nor exact 1.0.550: {normalized_path}")
     text = restore_r3_basic_settlement_successor_base(path, text)
+    text = restore_development_checkout_history_base(path, text)
     return restore_auth_dev_prepare_base_legacy(path, text)
+
+
+def restore_development_checkout_history_base(path: str, text: str, authority: dict[str, object] | None = None) -> str:
+    """Remove only the pinned DEV checkout-history addition before frozen Auth normalization."""
+    port = authority if authority is not None else json.loads(
+        (ROOT / DEV_CHECKOUT_HISTORY_AUTHORITY_PATH).read_text(encoding="utf-8")
+    )
+    if not isinstance(port, dict) or port.get("contract") != "development-checkout-history-source-parity/1":
+        raise RuntimeError("Development checkout-history authority contract invalid")
+    files = port.get("files")
+    if not isinstance(files, list) or len(files) != 1 or not isinstance(files[0], dict):
+        raise RuntimeError("Development checkout-history authority file set invalid")
+    row = files[0]
+    if set(row) != {"path", "beforeSha256", "afterSha256", "hunks"} or row.get("path") != DEV_WORKFLOW:
+        raise RuntimeError("Development checkout-history authority path invalid")
+    before_hash, after_hash = row.get("beforeSha256"), row.get("afterSha256")
+    if not re.fullmatch(r"[a-f0-9]{64}", str(before_hash or "")) or not re.fullmatch(r"[a-f0-9]{64}", str(after_hash or "")):
+        raise RuntimeError("Development checkout-history authority hash invalid")
+    if before_hash != DEV_CHECKOUT_HISTORY_BEFORE_SHA256:
+        raise RuntimeError("Development checkout-history historical baseline invalid")
+    hunks = row.get("hunks")
+    if not isinstance(hunks, list) or len(hunks) != 1 or not isinstance(hunks[0], dict):
+        raise RuntimeError("Development checkout-history authority hunk count invalid")
+    hunk = hunks[0]
+    expected_before = "          ref: ${{ github.sha }}\n"
+    expected_after = expected_before + "          fetch-depth: 0\n"
+    if set(hunk) != {"before", "after", "count"} or hunk.get("before") != expected_before or hunk.get("after") != expected_after or hunk.get("count") != 1:
+        raise RuntimeError("Development checkout-history authority hunk invalid")
+    normalized_path = Path(path).as_posix()
+    if normalized_path != DEV_WORKFLOW:
+        return text
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    digest = sha256(text.encode("utf-8"))
+    if digest == before_hash:
+        return text
+    if digest != after_hash or text.count(expected_after) != 1:
+        raise RuntimeError("Development checkout-history candidate drift")
+    text = text.replace(expected_after, expected_before, 1)
+    if sha256(text.encode("utf-8")) != before_hash:
+        raise RuntimeError("Development checkout-history baseline drift")
+    return text
 
 
 def restore_auth_dev_prepare_base_legacy(path: str, text: str) -> str:
