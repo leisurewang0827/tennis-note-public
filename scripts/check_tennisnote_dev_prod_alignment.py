@@ -68,6 +68,32 @@ R3_POLICY_551_RELEASE_PATHS = frozenset({
     "app/tennis-note-member-app/ui/screens.js",
 })
 R3_POLICY_551_EXPECTED_PATHS = R3_POLICY_551_FEATURE_PATHS | R3_POLICY_551_RELEASE_PATHS
+R3_POLICY_552_AUTHORITY_PATH = ROOT / "tests" / "fixtures" / "r3-coach-settlement-input-552-successor-authority.json"
+R3_POLICY_552_BASE_SHA = "bd384cd0182bfc51dcc56fce0de03da2c011126b"
+R3_POLICY_552_FEATURE_PATHS = frozenset({
+    "app/admin/views/settings.js",
+    "tests/coach-staff-settlement-readback.test.js",
+})
+R3_POLICY_552_RELEASE_PATHS = frozenset({
+    "app/admin/index.html",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/domain/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/ui/screens.js",
+})
+R3_POLICY_552_CONTENT_PATHS = frozenset({
+    "app/admin/views/settings.js",
+    *R3_POLICY_552_RELEASE_PATHS,
+})
+R3_POLICY_552_EXPECTED_PATHS = R3_POLICY_552_FEATURE_PATHS | R3_POLICY_552_RELEASE_PATHS
 R3_SUCCESSOR_EXPECTED_PATHS = frozenset({
     "app/admin/actions/coach.js",
     "app/admin/domain/coaches.js",
@@ -795,13 +821,145 @@ def restore_r3_hourly_input_successor_base(path: str, text: str) -> str:
     return _restore_r3_policy_551_content(path, text, _load_r3_policy_551_authority())
 
 
+def _validate_r3_policy_552_content_authority(port: dict[str, object]) -> dict[str, object]:
+    stack = port.get("commitStack")
+    feature_paths = stack.get("featurePaths") if isinstance(stack, dict) else None
+    release_paths = stack.get("releasePaths") if isinstance(stack, dict) else None
+    if (port.get("contract") != "r3-coach-settlement-input-successor-authority-v2"
+            or port.get("baseCommit") != R3_POLICY_552_BASE_SHA
+            or port.get("candidateVersion") != "1.0.552"
+            or port.get("baseVersion") != "1.0.551"
+            or port.get("candidateReleaseId") != "2026.10.20.03"
+            or port.get("baseReleaseId") != "2026.10.20.02"
+            or port.get("target") != "public-dev" or port.get("targetBranch") != "dev"
+            or not isinstance(feature_paths, list) or set(feature_paths) != R3_POLICY_552_FEATURE_PATHS
+            or not isinstance(release_paths, list) or set(release_paths) != R3_POLICY_552_RELEASE_PATHS):
+        raise RuntimeError("R3 552 successor authority context mismatch")
+    if (len(feature_paths) != len(set(feature_paths)) or len(release_paths) != len(set(release_paths))
+            or port.get("bindingStatus") not in {"PENDING_EXACT_TWO_COMMIT_STACK", "BOUND_TO_EXACT_TWO_COMMIT_STACK"}):
+        raise RuntimeError("R3 552 successor authority stack contract invalid")
+    if (not isinstance(stack, dict)
+            or stack.get("featureTestPath") != "tests/coach-staff-settlement-readback.test.js"
+            or not re.fullmatch(r"[a-f0-9]{64}", str(stack.get("featureTestSha256", "")))):
+        raise RuntimeError("R3 552 feature test blob authority invalid")
+    files = port.get("files")
+    if not isinstance(files, list):
+        raise RuntimeError("R3 552 successor authority file list invalid")
+    paths = [row.get("path") for row in files if isinstance(row, dict)]
+    if len(paths) != len(files) or len(paths) != len(set(paths)) or set(paths) != R3_POLICY_552_CONTENT_PATHS:
+        raise RuntimeError("R3 552 successor authority exact content path set mismatch")
+    for row in files:
+        for name in ("beforeSha256", "afterSha256"):
+            if not re.fullmatch(r"[a-f0-9]{64}", str(row.get(name, ""))):
+                raise RuntimeError("R3 552 successor authority hash invalid")
+        if row["path"] == "app/admin/views/settings.js":
+            if not re.fullmatch(r"[a-f0-9]{64}", str(row.get("featureSha256", ""))):
+                raise RuntimeError("R3 552 feature-stage hash invalid")
+        elif "featureSha256" in row:
+            raise RuntimeError("R3 552 unexpected feature-stage hash")
+        replacements, hunks = row.get("replacements", []), row.get("hunks", [])
+        if (not isinstance(replacements, list) or not isinstance(hunks, list)
+                or bool(replacements) == bool(hunks)):
+            raise RuntimeError("R3 552 inverse contract invalid")
+    return port
+
+
+def _load_r3_policy_552_authority(authority: dict[str, object] | None = None) -> dict[str, object]:
+    port = _validate_r3_policy_552_content_authority(
+        authority if authority is not None else json.loads(R3_POLICY_552_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    candidate = port.get("candidateCommit")
+    if (port.get("bindingStatus") != "BOUND_TO_EXACT_TWO_COMMIT_STACK"
+            or not re.fullmatch(r"[a-f0-9]{40}", str(candidate or ""))):
+        raise RuntimeError("R3 552 candidate commit binding pending")
+    base = str(port["baseCommit"])
+
+    def parent(revision: str, expected: str | None = None) -> str:
+        row = str(run_git("rev-list", "--parents", "-n", "1", revision)).split()
+        if len(row) != 2 or row[0] != revision:
+            raise RuntimeError("R3 552 stack contains a merge or root commit")
+        if expected is not None and row[1] != expected:
+            raise RuntimeError("R3 552 commit parent mismatch")
+        return row[1]
+
+    feature = parent(str(candidate))
+    parent(feature, base)
+
+    def paths(*args: str) -> set[str]:
+        return set(str(run_git(*args)).splitlines())
+
+    if paths("diff-tree", "--no-commit-id", "--name-only", "-r", feature) != R3_POLICY_552_FEATURE_PATHS:
+        raise RuntimeError("R3 552 feature commit path set mismatch")
+    if paths("diff-tree", "--no-commit-id", "--name-only", "-r", str(candidate)) != R3_POLICY_552_RELEASE_PATHS:
+        raise RuntimeError("R3 552 release commit path set mismatch")
+    if paths("diff", "--name-only", base, str(candidate)) != R3_POLICY_552_EXPECTED_PATHS:
+        raise RuntimeError("R3 552 cumulative candidate path set mismatch")
+    test_path = str(port["commitStack"]["featureTestPath"])
+    test_blob = run_git("show", f"{feature}:{test_path}", text=False).replace(b"\r\n", b"\n")
+    if sha256(test_blob) != port["commitStack"]["featureTestSha256"]:
+        raise RuntimeError("R3 552 feature test blob drift")
+    for row in port["files"]:
+        path = str(row["path"])
+        base_blob = run_git("show", f"{base}:{path}", text=False).replace(b"\r\n", b"\n")
+        feature_blob = run_git("show", f"{feature}:{path}", text=False).replace(b"\r\n", b"\n")
+        candidate_blob = run_git("show", f"{candidate}:{path}", text=False).replace(b"\r\n", b"\n")
+        digest = lambda content: sha256(content)
+        if digest(base_blob) != row["beforeSha256"]:
+            raise RuntimeError(f"R3 552 base content drift: {path}")
+        expected_feature = row.get("featureSha256", row["beforeSha256"])
+        if digest(feature_blob) != expected_feature:
+            raise RuntimeError(f"R3 552 feature content drift: {path}")
+        if digest(candidate_blob) != row["afterSha256"]:
+            raise RuntimeError(f"R3 552 release content drift: {path}")
+    return port
+
+
+def _restore_r3_policy_552_content(path: str, text: str, port: dict[str, object]) -> str:
+    _validate_r3_policy_552_content_authority(port)
+    normalized = Path(path).as_posix()
+    row = next((item for item in port["files"] if item["path"] == normalized), None)
+    if row is None:
+        return text
+    candidate_text = text.replace("\r\n", "\n")
+    if sha256(candidate_text.encode("utf-8")) != row["afterSha256"]:
+        raise RuntimeError(f"R3 552 successor candidate content drift: {normalized}")
+    for rule in row.get("replacements", []):
+        after, before, count = rule.get("candidate"), rule.get("base"), rule.get("count")
+        if not isinstance(after, str) or not after or not isinstance(before, str) or not isinstance(count, int) or count < 1:
+            raise RuntimeError(f"R3 552 replacement authority invalid: {normalized}")
+        if candidate_text.count(after) != count:
+            raise RuntimeError(f"R3 552 replacement drift: {normalized}")
+        candidate_text = candidate_text.replace(after, before)
+    for hunk in row.get("hunks", []):
+        after, before = hunk.get("candidate"), hunk.get("base")
+        if not isinstance(after, str) or not after or not isinstance(before, str) or hunk.get("count") != 1:
+            raise RuntimeError(f"R3 552 inverse hunk invalid: {normalized}")
+        if candidate_text.count(after) != 1:
+            raise RuntimeError(f"R3 552 inverse hunk drift: {normalized}")
+        candidate_text = candidate_text.replace(after, before)
+    if sha256(candidate_text.encode("utf-8")) != row["beforeSha256"]:
+        raise RuntimeError(f"R3 552 restored baseline drift: {normalized}")
+    return candidate_text
+
+
+def restore_r3_coach_settlement_input_successor_base(path: str, text: str) -> str:
+    """Strict 1.0.552 successor inverse; requires the exact feature/release commit stack."""
+    return _restore_r3_policy_552_content(path, text, _load_r3_policy_552_authority())
+
+
 def restore_r3_basic_settlement_successor_base(
     path: str,
     text: str,
     authority: dict[str, object] | None = None,
 ) -> str:
-    """Restore 1.0.551, 1.0.550, then the pinned 1.0.549 successor delta."""
+    """Restore 1.0.552, 1.0.551, 1.0.550, then the pinned 1.0.549 successor delta."""
     normalized_path = Path(path).as_posix()
+    pending_552 = _validate_r3_policy_552_content_authority(
+        json.loads(R3_POLICY_552_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    row_552 = next((item for item in pending_552["files"] if item["path"] == normalized_path), None)
+    if row_552 is not None and sha256(text.replace("\r\n", "\n").encode("utf-8")) == row_552["afterSha256"]:
+        text = restore_r3_coach_settlement_input_successor_base(normalized_path, text)
     pending_551 = _validate_r3_policy_551_content_authority(
         json.loads(R3_POLICY_551_AUTHORITY_PATH.read_text(encoding="utf-8"))
     )
@@ -1045,6 +1203,15 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
+    pending_552 = _validate_r3_policy_552_content_authority(
+        json.loads(R3_POLICY_552_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    )
+    normalized_path = Path(path).as_posix()
+    row_552 = next((item for item in pending_552["files"] if item["path"] == normalized_path), None)
+    if row_552 is not None:
+        digest_552 = sha256(text.replace("\r\n", "\n").encode("utf-8"))
+        if digest_552 == row_552["afterSha256"]:
+            text = restore_r3_coach_settlement_input_successor_base(normalized_path, text)
     pending_551 = _validate_r3_policy_551_content_authority(
         json.loads(R3_POLICY_551_AUTHORITY_PATH.read_text(encoding="utf-8"))
     )

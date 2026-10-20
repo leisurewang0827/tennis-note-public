@@ -16,6 +16,7 @@ const actionPath = "app/admin/actions/coach.js";
 const commonPath = "app/admin/data/common.js";
 const schedulePath = "app/admin/data/schedule.js";
 const formPath = "app/admin/forms/coach.js";
+const settingsViewPath = "app/admin/views/settings.js";
 
 function readPublicSource(relativePath) {
   const absolutePath = resolve(repoRoot, relativePath);
@@ -415,6 +416,88 @@ test("hourly input accepts whole-won values and inactive settlement controls are
   assert.equal(elements.hourly.hidden, false);
   assert.equal(elements.hourly.controls[0].disabled, false);
   assert.equal(elements.hourly.controls[0].value, "43200");
+});
+
+test("settlement modal initial render disables inactive required controls before validation", () => {
+  const formSource = readPublicSource(formPath);
+  const settingsSource = readPublicSource(settingsViewPath);
+  const controlsByMethod = Object.fromEntries(["ratio", "hourly"].map((method) => {
+    const control = {
+      disabled: false,
+      required: true,
+      value: method === "ratio" ? "50" : "",
+      get willValidate() { return !this.disabled; },
+      get validity() { return { valid: this.disabled || Boolean(this.value) }; },
+    };
+    const field = {
+      hidden: false,
+      classList: { toggle(name, force) { if (name === "is-hidden") field.hidden = force; } },
+      querySelectorAll(selector) {
+        assert.equal(selector, "input, select, textarea");
+        return [control];
+      },
+    };
+    return [method, { field, control }];
+  }));
+  let rendered = false;
+  const content = {
+    set innerHTML(value) { rendered = value.includes("settlement"); },
+    querySelectorAll(selector) {
+      assert.equal(rendered, true, "visibility sync runs only after the settlement markup is rendered");
+      const match = selector.match(/data-settlement-mode-field="(ratio|hourly)"/);
+      return match ? [controlsByMethod[match[1]].field] : [];
+    },
+  };
+  const elements = {
+    "#coachStaffModal": { hidden: true },
+    "#coachStaffModalContent": content,
+    "#coachStaffModalTitle": { textContent: "" },
+    "#coachStaffMoreMenu": { hidden: true },
+    "#coachStaffMessage": { textContent: "" },
+  };
+  const context = {
+    coachStaffEditorState: {
+      tab: "settlement", mode: "edit", message: "",
+      draft: { name: "fixture", coachRoleId: "", settlement: { method: "ratio" } },
+    },
+    $: (selector) => elements[selector] || null,
+    $$: () => [],
+    operationsRole: () => "admin",
+    renderCoachStaffSettlementTab: () => "<form>settlement</form>",
+  };
+  const program = [
+    extractFunction(formSource, "syncCoachStaffSettlementFieldVisibility"),
+    extractFunction(settingsSource, "renderCoachStaffModal"),
+    "renderCoachStaffModal();",
+  ].join("\n");
+  runInNewContext(program, context);
+
+  assert.equal(controlsByMethod.ratio.field.hidden, false);
+  assert.equal(controlsByMethod.ratio.control.disabled, false);
+  assert.equal(controlsByMethod.hourly.field.hidden, true);
+  assert.equal(controlsByMethod.hourly.control.disabled, true);
+  assert.equal(controlsByMethod.hourly.control.willValidate, false);
+  assert.equal(Object.values(controlsByMethod).filter(({ control }) => control.willValidate && !control.validity.valid).length, 0,
+    "an empty hidden hourly amount does not contribute to native form validation");
+
+  context.coachStaffEditorState.draft.settlement.method = "hourly";
+  runInNewContext(program, context);
+  assert.equal(controlsByMethod.ratio.field.hidden, true);
+  assert.equal(controlsByMethod.ratio.control.disabled, true);
+  assert.equal(controlsByMethod.hourly.field.hidden, false);
+  assert.equal(controlsByMethod.hourly.control.disabled, false);
+  controlsByMethod.hourly.control.value = "43200";
+
+  context.coachStaffEditorState.tab = "basic";
+  context.renderCoachStaffBasicTab = () => "<form>basic</form>";
+  runInNewContext(program, context);
+  context.coachStaffEditorState.tab = "settlement";
+  runInNewContext(program, context);
+  assert.equal(controlsByMethod.ratio.field.hidden, true, "settlement tab re-entry restores the selected hourly mode");
+  assert.equal(controlsByMethod.ratio.control.disabled, true);
+  assert.equal(controlsByMethod.hourly.field.hidden, false);
+  assert.equal(controlsByMethod.hourly.control.disabled, false);
+  assert.equal(controlsByMethod.hourly.control.value, "43200", "tab re-entry preserves the hourly draft");
 });
 
 test("actual public save -> refresh -> raw verifier blocks false-success in memory", async () => {
