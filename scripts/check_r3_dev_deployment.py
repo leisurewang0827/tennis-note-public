@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import http.client
 import json
 import os
 import re
+import socket
+import ssl
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -54,6 +59,23 @@ EXPECTED_PROJECT_DOMAINS = {
 }
 DEV_MEMBER_ORIGIN = "https://tennisnote-app-dev.pages.dev"
 DEV_ADMIN_ORIGIN = "https://tennisnote-admin-dev.pages.dev"
+LIVE_READ_ENDPOINTS = {
+    "member_release": (DEV_MEMBER_ORIGIN, "/release.json", True),
+    "admin_release": (DEV_ADMIN_ORIGIN, "/release.json", True),
+    "member_worker": (DEV_MEMBER_ORIGIN, "/service-worker.js", False),
+    "coach_worker": (DEV_MEMBER_ORIGIN, "/tennis-note-coach-app/service-worker.js", False),
+}
+LIVE_READ_RETRYABLE_HTTP_STATUSES = frozenset({502, 503, 504})
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        return None
+
+
+# Keep urllib's default HTTPS certificate validation and proxy handling, but do
+# not let an approved endpoint silently redirect the bounded live-read guard.
+_LIVE_READ_OPENER = urllib.request.build_opener(_NoRedirectHandler())
 EXPECTED_REMOVED_PATH = "app/shared/tennisnote-settlement-adjustment.js"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -240,37 +262,94 @@ def verify_monotonic_release(candidate_release: dict[str, object], member_cache:
             fail("candidate coach cache would roll back a development site")
 
 
-def _http_read(url: str, json_body: bool) -> object:
-    request = urllib.request.Request(url, headers={"Accept": "application/json" if json_body else "text/plain", "Cache-Control": "no-cache"})
-    try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            raw = response.read(1_000_001)
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError("live development release read failed") from exc
-    if len(raw) > 1_000_000:
-        fail("live development release response too large")
-    try:
-        text = raw.decode("utf-8")
-        return json.loads(text) if json_body else text
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("live development release response malformed") from exc
+def _network_error_kind(exc: BaseException) -> tuple[str, bool]:
+    pending: list[BaseException] = [exc]
+    visited: set[int] = set()
+    while pending:
+        item = pending.pop()
+        if id(item) in visited:
+            continue
+        visited.add(id(item))
+        if isinstance(item, ssl.SSLCertVerificationError):
+            return "TLS_CERT", False
+        if isinstance(item, socket.gaierror):
+            if item.errno == socket.EAI_AGAIN:
+                return "DNS_AGAIN", True
+            return "DNS_PERMANENT", False
+        if isinstance(item, (TimeoutError, socket.timeout)):
+            return "TIMEOUT", True
+        if isinstance(item, ConnectionResetError) or getattr(item, "errno", None) == errno.ECONNRESET:
+            return "CONNECTION_RESET", True
+        reason = getattr(item, "reason", None)
+        if isinstance(reason, BaseException):
+            pending.append(reason)
+        for chained in (getattr(item, "__cause__", None), getattr(item, "__context__", None)):
+            if isinstance(chained, BaseException):
+                pending.append(chained)
+    return "OTHER", False
+
+
+def _live_read_failure(endpoint_role: str, reason: str, http_status: int | None = None) -> RuntimeError:
+    detail = f" endpoint={endpoint_role} reason={reason}"
+    if http_status is not None:
+        detail += f" status={http_status}"
+    return RuntimeError("live development release read failed" + detail)
+
+
+def _http_read(endpoint_role: str, candidate_sha: str) -> object:
+    endpoint = LIVE_READ_ENDPOINTS.get(endpoint_role)
+    if endpoint is None or not SHA40_RE.fullmatch(candidate_sha):
+        fail("live development release read endpoint or candidate invalid")
+    origin, path, json_body = endpoint
+    url = f"{origin}{path}?__tn_preflight={urllib.parse.quote(candidate_sha, safe='')}"
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json" if json_body else "text/plain", "Cache-Control": "no-cache"},
+        method="GET",
+    )
+    for attempt in range(2):
+        try:
+            with _LIVE_READ_OPENER.open(request, timeout=15) as response:
+                raw = response.read(1_000_001)
+        except urllib.error.HTTPError as exc:
+            status = int(exc.code)
+            exc.close()
+            retryable = status in LIVE_READ_RETRYABLE_HTTP_STATUSES
+            if retryable and attempt == 0:
+                time.sleep(0.2)
+                continue
+            raise _live_read_failure(endpoint_role, "HTTP_STATUS", status) from None
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+            reason, retryable = _network_error_kind(exc)
+            if retryable and attempt == 0:
+                time.sleep(0.2)
+                continue
+            raise _live_read_failure(endpoint_role, reason) from None
+        if len(raw) > 1_000_000:
+            raise _live_read_failure(endpoint_role, "BODY_TOO_LARGE") from None
+        try:
+            text = raw.decode("utf-8")
+            return json.loads(text) if json_body else text
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise _live_read_failure(endpoint_role, "MALFORMED_BODY") from None
+    raise _live_read_failure(endpoint_role, "OTHER") from None
 
 
 def read_live_dev_states(candidate_sha: str) -> list[dict[str, object]]:
-    nonce = urllib.parse.quote(candidate_sha, safe="")
-    states = []
-    for origin in (DEV_MEMBER_ORIGIN, DEV_ADMIN_ORIGIN):
-        release = _http_read(f"{origin}/release.json?__tn_preflight={nonce}", True)
-        if not isinstance(release, dict):
-            fail("live development release JSON malformed")
-        member_worker = _http_read(f"{DEV_MEMBER_ORIGIN}/service-worker.js?__tn_preflight={nonce}", False)
-        coach_worker = _http_read(f"{DEV_MEMBER_ORIGIN}/tennis-note-coach-app/service-worker.js?__tn_preflight={nonce}", False)
-        states.append({
-            "release": release,
-            "member_cache": _cache_counter(str(member_worker), "tennis-note-member-pwa-"),
-            "coach_cache": _cache_counter(str(coach_worker), "tennis-note-coach-mode-"),
-        })
-    return states
+    if not SHA40_RE.fullmatch(candidate_sha):
+        fail("live development candidate SHA invalid")
+    member_release = _http_read("member_release", candidate_sha)
+    admin_release = _http_read("admin_release", candidate_sha)
+    if not isinstance(member_release, dict) or not isinstance(admin_release, dict):
+        fail("live development release JSON malformed")
+    member_worker = _http_read("member_worker", candidate_sha)
+    coach_worker = _http_read("coach_worker", candidate_sha)
+    member_cache = _cache_counter(str(member_worker), "tennis-note-member-pwa-")
+    coach_cache = _cache_counter(str(coach_worker), "tennis-note-coach-mode-")
+    return [
+        {"release": member_release, "member_cache": member_cache, "coach_cache": coach_cache},
+        {"release": admin_release, "member_cache": member_cache, "coach_cache": coach_cache},
+    ]
 
 
 def verify_monotonic_live_candidate(candidate_sha: str, member_root: Path, admin_root: Path,
