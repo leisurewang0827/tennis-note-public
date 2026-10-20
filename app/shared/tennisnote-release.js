@@ -3,7 +3,7 @@
     version: "1.0.547",
     releaseId: "2026.10.09.04",
     appSurfaceVersion: "1.0.547",
-    deployedAt: "2026-10-09T22:27:48+09:00",
+    deployedAt: "2026-10-21T00:30:02+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {
       version: "1.0.428",

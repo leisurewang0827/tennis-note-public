@@ -62,6 +62,7 @@ const APP_SHELL = [
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",
   "../shared/tennisnote-ui-language.js?v=1.0.547",
   "../shared/tennisnote-ticket-state.js?v=1.0.547",
+  "../shared/tennisnote-settlement-adjustment.js?v=1.0.547",
   "../shared/tennisnote-mode-transition.js?v=1.0.547",
   "../shared/tennisnote-comment-draft.js?v=1.0.547",
   "../shared/tennisnote-input-guard.js?v=1.0.547",

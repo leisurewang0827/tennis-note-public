@@ -14,10 +14,56 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SELF_PROFILE_CONTRACT = json.loads((ROOT / "tests/fixtures/self-profile-a-only.json").read_text(encoding="utf-8"))
+R3_PROMOTION_CONTRACT = json.loads((ROOT / "tests/fixtures/r3-production-promotion.json").read_text(encoding="utf-8"))
+R3_DEV_WORKFLOW_CONTRACT_PATH = ROOT / "tests/fixtures/r3-dev-deployment-workflow.json"
+R3_DEV_WORKFLOW_GUARD_PATH = ROOT / "tests/fixtures/r3-dev-deployment-workflow-guard.json"
+R3_PROMOTION_BASE = "686cc97d9676da2d16ca3cdfbd862dc9cd19434e"
+R3_PROMOTION_FILE_COUNT = 35
+R3_NEW_PATHS = {"app/shared/tennisnote-settlement-adjustment.js"}
+
+
+def before_r3_candidate(path: str, data: bytes) -> bytes:
+    """R3 공개 후보는 공용 exact SHA 계약으로 기준 tree에 복원한다."""
+    row = next((item for item in R3_PROMOTION_CONTRACT["files"] if item["path"] == path), None)
+    if not row:
+        return data
+    try:
+        candidate = data.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f"R3 candidate is not UTF-8 text: {path}") from exc
+    if sha256(candidate) != row["candidateSha256"]:
+        raise RuntimeError(f"R3 promotion exact candidate mismatch: {path}")
+    if row["baseSha256"] is None:
+        return b""
+    base = run_git("show", f"{R3_PROMOTION_CONTRACT['base']}:{path}", text=False)
+    assert isinstance(base, bytes)
+    base = base.replace(b"\r\n", b"\n")
+    if sha256(base) != row["baseSha256"]:
+        raise RuntimeError(f"R3 promotion exact base mismatch: {path}")
+    return base
+
+
+def before_r3_dev_workflow(data: bytes) -> bytes:
+    """새 개발 배포 guard만 정확히 되돌린 뒤 역사적 4줄 검사를 재사용한다."""
+    contract = json.loads(R3_DEV_WORKFLOW_GUARD_PATH.read_text(encoding="utf-8"))
+    if set(contract) != {"path", "base", "baseSha256", "candidateSha256"}:
+        raise RuntimeError("R3 development workflow guard schema mismatch")
+    if contract["path"] != DEV_WORKFLOW or contract["base"] != R3_PROMOTION_BASE:
+        raise RuntimeError("R3 development workflow guard scope mismatch")
+    candidate = data.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
+    if sha256(candidate) != contract["candidateSha256"]:
+        raise RuntimeError("R3 development workflow guard candidate drift")
+    base = run_git("show", f"{contract['base']}:{DEV_WORKFLOW}", text=False)
+    assert isinstance(base, bytes)
+    base = base.replace(b"\r\n", b"\n")
+    if sha256(base) != contract["baseSha256"]:
+        raise RuntimeError("R3 development workflow guard base drift")
+    return base
 
 
 def before_self_profile_candidate(path: str, data: bytes) -> bytes:
     """검증된 증분만 역변환. 기존 운영 golden/hash는 변경하지 않는다."""
+    data = before_r3_candidate(path, data)
     try:
         text = data.decode("utf-8").replace("\r\n", "\n")
     except UnicodeDecodeError:
@@ -215,6 +261,38 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def validate_r3_promotion_contract() -> None:
+    if set(R3_PROMOTION_CONTRACT) != {"base", "files"}:
+        raise RuntimeError("R3 promotion manifest schema mismatch")
+    if R3_PROMOTION_CONTRACT["base"] != R3_PROMOTION_BASE:
+        raise RuntimeError("R3 promotion base mismatch")
+    rows = R3_PROMOTION_CONTRACT["files"]
+    if not isinstance(rows, list) or len(rows) != R3_PROMOTION_FILE_COUNT:
+        raise RuntimeError("R3 promotion file count mismatch")
+    paths = []
+    removed = set()
+    for row in rows:
+        if set(row) != {"path", "baseSha256", "candidateSha256"}:
+            raise RuntimeError("R3 promotion row schema mismatch")
+        path = row["path"]
+        if not isinstance(path, str) or not path.startswith("app/") or ".." in Path(path).parts:
+            raise RuntimeError("R3 promotion path invalid")
+        paths.append(path)
+        if row["baseSha256"] is None:
+            removed.add(path)
+        elif not isinstance(row["baseSha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", row["baseSha256"]):
+            raise RuntimeError("R3 promotion base SHA invalid")
+        if not isinstance(row["candidateSha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", row["candidateSha256"]):
+            raise RuntimeError("R3 promotion candidate SHA invalid")
+    if len(paths) != len(set(paths)):
+        raise RuntimeError("R3 promotion paths are not unique")
+    if removed != R3_NEW_PATHS:
+        raise RuntimeError("R3 promotion new-path set mismatch")
+
+
+validate_r3_promotion_contract()
+
+
 def authority_bytes(path: str) -> bytes:
     return run_git("show", f"{AUTHORITY_SHA}:{path}", text=False)
 
@@ -324,6 +402,22 @@ def candidate_cache(path: Path) -> str:
     if not match:
         raise RuntimeError(f"CACHE_NAME not found: {path}")
     return match.group(1)
+
+
+def product_app_paths() -> list[str]:
+    discovered_paths = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "app").rglob("*")
+        if path.is_file() and path.name != "config.local.js"
+    )
+    for path in sorted(R3_NEW_PATHS):
+        if path not in discovered_paths:
+            raise RuntimeError(f"expected R3 new source missing: {path}")
+        # Only after the exact candidate hash passes may this one additive
+        # source be removed from the frozen pre-R3 product-tree comparison.
+        if before_r3_candidate(path, (ROOT / path).read_bytes()) != b"":
+            raise RuntimeError(f"R3 new source inverse did not empty: {path}")
+    return [path for path in discovered_paths if path not in R3_NEW_PATHS]
 
 
 def generate() -> None:
@@ -441,11 +535,7 @@ def verify() -> None:
         raise RuntimeError("coach cache is not the approved monotonic value")
 
     expected_hashes = manifest["product_tree"]["normalized_sha256_by_path"]
-    actual_paths = sorted(
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "app").rglob("*")
-        if path.is_file() and path.name != "config.local.js"
-    )
+    actual_paths = product_app_paths()
     if actual_paths != sorted(expected_hashes):
         missing = sorted(set(expected_hashes) - set(actual_paths))
         extra = sorted(set(actual_paths) - set(expected_hashes))
@@ -459,14 +549,15 @@ def verify() -> None:
     if mismatches:
         raise RuntimeError(f"product hash drift outside approved literals: {mismatches[:20]}")
 
-    workflow = (ROOT / DEV_WORKFLOW).read_bytes()
+    workflow = before_r3_dev_workflow((ROOT / DEV_WORKFLOW).read_bytes())
     workflow_text = workflow.decode("utf-8").replace("\r\n", "\n")
     for line in DEV_WORKFLOW_LINES:
         if workflow_text.splitlines().count(line) != 1:
             raise RuntimeError(f"development workflow line missing or duplicated: {line}")
     expected_workflow_hash = manifest["development_workflow"]["authority_sha256_without_dev_lines"]
-    if sha256(workflow_normalized(workflow)) != expected_workflow_hash:
-        raise RuntimeError("development workflow differs from production beyond the approved four lines")
+    authority_workflow_hash = sha256(workflow_normalized(authority_bytes(DEV_WORKFLOW)))
+    if authority_workflow_hash != expected_workflow_hash:
+        raise RuntimeError("development workflow authority baseline mismatch")
 
     entries = manifest["dev_ahead_commits"]
     if len(entries) != 93:
@@ -484,7 +575,9 @@ def verify() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--generate", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--generate", action="store_true")
+    mode.add_argument("--verify", action="store_true")
     args = parser.parse_args()
     try:
         generate() if args.generate else verify()

@@ -3,6 +3,7 @@
 const fs = require("node:fs"), cp = require("node:child_process"), assert = require("node:assert/strict");
 const normalize = s => s.replace(/\r\n/g, "\n");
 const aOnly = require("./self-profile-a-only.cjs");
+const r3Promotion = require("./r3-production-promotion.cjs");
 const raw = p => aOnly.restoreCandidate(p, normalize(fs.readFileSync(p, "utf8")));
 const show = (sha, p) => normalize(cp.execFileSync("git", ["show", `${sha}:${p}`], {encoding:"utf8", maxBuffer:8e6}));
 const contract = JSON.parse(raw("tests/fixtures/production-excel-release.json"));
@@ -14,7 +15,7 @@ assert.equal(raw("scripts/bump_release.py"), show(contract.base, "scripts/bump_r
 const release = JSON.parse(raw("app/release.json"));
 for (const key of ["version", "releaseId", "deployedAt"]) assert.equal(release[key], contract[key]);
 const python = process.env.TENNISNOTE_PYTHON || (process.platform === "win32" ? "python" : "python3");
-const plans = JSON.parse(cp.execFileSync(python, ["-c", String.raw`
+const plans = JSON.parse(cp.execFileSync(python, ["-B", "-X", "utf8", "-c", String.raw`
 import importlib.util, io, json, subprocess, sys, tarfile
 from pathlib import Path
 from unittest.mock import patch
@@ -31,6 +32,9 @@ def original(path, *args, **kwargs):
     if p == "app/shared/config.local.js":
         assert not subprocess.check_output(["git", "ls-files", "--", p]).strip()
         subprocess.run(["git", "check-ignore", "-q", "--", p], check=True)
+        return ""
+    if p in c["removedR3Paths"]:
+        assert p not in originals, p
         return ""
     return originals[p]
 merged, counts = {}, {}
@@ -51,7 +55,7 @@ assert sum(counts.values()) == 371
 assert sum(bool(n) for n in counts.values()) == 13
 print(json.dumps({p.relative_to(b.ROOT).as_posix():{"before":original(p),"after":t}
                   for p,t in merged.items() if counts.get(p)}))
-`], {encoding:"utf8", input:JSON.stringify(contract), maxBuffer:8e6}));
+`], {encoding:"utf8", input:JSON.stringify({...contract, removedR3Paths:r3Promotion.removedR3Paths}), maxBuffer:8e6}));
 for (const [p, plan] of Object.entries(plans)) assert.equal(raw(p), normalize(plan.after), `release drift: ${p}`);
 function readBeforeRelease(p) { return plans[p] ? normalize(plans[p].before) : raw(p); }
 module.exports = {readBeforeRelease, releasePaths:Object.keys(plans), contract, plans};

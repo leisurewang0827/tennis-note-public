@@ -5,7 +5,23 @@
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
 function renderCoachSettlementPreview() {
+  renderAdminSettlementHistory();
   if (!["billing", "settings"].includes(state.view)) return;
+  if (!adminDemoMode) {
+    const signature = effectiveSettlementPreviewSignature();
+    if (effectiveSettlementPreview.context && !effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context, false)) {
+      invalidateEffectiveSettlementPreview();
+      renderEffectiveSettlementPreview();
+      return;
+    }
+    // 원본 신원 검증을 재사용합니다. 일반 서버 오류는 context가 있어 자동 재조회하지 않습니다.
+    const identityRecovered = !effectiveSettlementPreview.loading && effectiveSettlementPreview.context === null
+      && Boolean(effectiveSettlementPreview.error)
+      && effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreviewContext(signature));
+    if (effectiveSettlementPreview.signature !== signature || identityRecovered) void refreshEffectiveSettlementPreview(signature);
+    else renderEffectiveSettlementPreview();
+    return;
+  }
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const ticketById = new Map();
@@ -606,6 +622,9 @@ function paymentConfirmationMarkup(item = {}) {
 function billingSettlementApprovalMarkup(item = {}) {
   if (item.status !== "paid") return '<span class="billing-settlement-pending">승인 후 자동계산</span>';
   if (paymentRequiresTicketRepair(item)) return '<span class="payment-link-warning">회원권 연결 후 계산</span>';
+  // A payment-row total cannot stand in for lesson-month settlement. Keep the
+  // existing monthly preview as authority instead of a second name-based sum.
+  if (!adminDemoMode) return '<span class="billing-settlement-pending">월 정산에서 적용일별 계산 확인</span>';
   const rows = settlementRowsForBilling(item);
   const amount = rows.reduce((sum, row) => sum + settlementAmountFor(row), 0);
   const coachNames = [...new Set(rows.map((row) => settlementCoachNameFor(row)).filter(Boolean))];
@@ -619,4 +638,88 @@ function memberTicketPaymentStatusMarkup(paymentGrid) {
     <strong>${escapeHtml(paymentGrid.label || "결제 확인")}</strong>
     <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
   </span>`;
+}
+
+function renderEffectiveSettlementPreview() {
+  const rows = $("#coachSettlementPreviewRows");
+  const summary = $("#coachSettlementSummary");
+  if (!rows) return;
+  const current = effectiveSettlementPreview;
+  if ((current.context || current.results.length) && !effectiveSettlementPreviewContextIsCurrent(current.context)) {
+    invalidateEffectiveSettlementPreview();
+  }
+  if (current.error) {
+    rows.innerHTML = `<tr><td colspan="6">${escapeHtml(current.error)}</td></tr>`;
+    if (summary) summary.textContent = "정산 조회 권한과 범위를 다시 확인해 주세요.";
+    renderDashboardPager("#coachSettlementPreviewPager", 0, 0, "settlement", billingPageSize);
+    return;
+  }
+  if (current.loading) {
+    rows.innerHTML = '<tr><td colspan="6">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';
+    if (summary) summary.textContent = "정산 확인 중";
+    return;
+  }
+  if (summary) summary.innerHTML = current.results.map((entry) => `<article>
+    <span>${escapeHtml(entry.coach.name)}</span>
+    <strong>${entry.error ? "확인 필요" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>
+    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? "" : " · 새 계산 미리보기 / 기존 확정 내역 유지"}`)}</small>
+  </article>`).join("") || "계산할 코치가 없습니다.";
+  const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]
+    : entry.value.rows.map((row) => ({ ...entry, row })));
+  state.settlementPage = normalizeDashboardPage(items.length, state.settlementPage, billingPageSize);
+  rows.innerHTML = items.slice(state.settlementPage * billingPageSize, (state.settlementPage + 1) * billingPageSize)
+    .map(({ coach, row, error }) => {
+      if (error) return `<tr><td colspan="6">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;
+      const exactTicket = [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])]
+        .find((ticket) => String(ticket.serverTicketId || ticket.id) === row.ticketId);
+      return `<tr><td>${escapeHtml(exactTicket?.member || "회원권 근거 확인")}</td>
+        <td>${escapeHtml(coach.name)}</td><td>${money.format(row.amount)}원</td>
+        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>
+        <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;
+    }).join("") || '<tr><td colspan="6">선택한 달의 계산 근거가 없습니다.</td></tr>';
+  renderDashboardPager("#coachSettlementPreviewPager", items.length, state.settlementPage, "settlement", billingPageSize);
+}
+function renderAdminSettlementHistory() {
+  const section = $("#adminSettlementHistory");
+  if (!section) return;
+  const scope = adminSettlementHistoryScope();
+  const token = window.TennisNoteDataClient?.getSession?.()?.access_token || "";
+  const eligible = adminSettlementHistoryCoaches();
+  const ready = adminSettlementHistoryAccessReady() && Boolean(token) && Boolean(adminImportAuthState.profile?.id);
+  if (!ready || (adminSettlementHistory.key && (adminSettlementHistory.key !== adminSettlementHistoryScopeKey(scope) || adminSettlementHistory.sessionToken !== token || adminSettlementHistory.profileId !== String(adminImportAuthState.profile?.id || ""))) || (scope.coachRoleId && eligible.filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length !== 1)) resetAdminSettlementHistory();
+  const select = $("#adminSettlementHistoryCoach");
+  const options = [{ serverRoleId: "", name: eligible.length ? "코치 선택" : "조회 가능한 코치 없음" }, ...eligible];
+  const optionKey = JSON.stringify(options.map((coach) => [String(coach.serverRoleId), String(coach.name || "코치")]));
+  if (select.dataset.options !== optionKey) {
+    select.replaceChildren(...options.map((coach) => {
+      const option = document.createElement("option"); option.value = String(coach.serverRoleId); option.textContent = String(coach.name || "코치"); return option;
+    }));
+    select.dataset.options = optionKey;
+  }
+  select.value = scope.coachRoleId;
+  select.disabled = !ready || adminSettlementHistory.loading;
+  const button = $("#adminSettlementHistoryRead");
+  button.disabled = !ready || !select.value || adminSettlementHistory.loading;
+  button.textContent = adminSettlementHistory.loading ? "조회 중" : "확정 이력 조회";
+  section.setAttribute("aria-busy", String(adminSettlementHistory.loading));
+  $("#adminSettlementHistoryMessage").textContent = !ready ? "관리자 로그인과 잠금 해제 후 조회할 수 있습니다." : adminSettlementHistory.message;
+  const details = $("#adminSettlementHistoryDetails");
+  details.replaceChildren();
+  const value = adminSettlementHistory.value;
+  details.hidden = !value;
+  if (!value) return;
+  const snapshot = value.snapshot;
+  const totals = snapshot.totals;
+  const rows = [
+    ["확정 정산", `${money.format(totals.totalSettlementAmount)}원`],
+    ["진행 수업", `${totals.settledSessions}회 · ${totals.settledMinutes}분`],
+    ["계산 계약", snapshot.calculationVersion === "r3_monthly_settlement_v1" ? "기존 v1 계산본" : "적용일별 v2 계산본"],
+    ["계산본", `revision ${snapshot.revision} · ${snapshot.sourceFingerprint.slice(0, 8)}`],
+    ["확정 시각", new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value.confirmation.confirmedAt))],
+    ["코치 응답", value.reconciliation?.status === "ACKNOWLEDGED" ? "확인 완료" : value.reconciliation?.status === "DISPUTED" ? "이의 접수" : "응답 대기"],
+  ];
+  if (value.reconciliation?.reason) rows.push(["이의 사유", normalizeAdminHistoryReason(value.reconciliation.reason)]);
+  for (const [label, content] of rows) {
+    const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
+  }
 }

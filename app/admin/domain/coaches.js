@@ -357,7 +357,7 @@ function renderCoachStaffSettlementTab(draft) {
         </select>
       </label>
       <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="0.1" value="${escapeHtml(settlement.ratio)}" /></label>
-      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급(원/시간)</span><input id="coachStaffSettlementHourly" type="number" min="1" step="1000" value="${escapeHtml(settlement.hourly)}" /></label>
+      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급(원/시간)</span><input id="coachStaffSettlementHourly" type="number" min="1" step="1" value="${escapeHtml(settlement.hourly)}" /></label>
     </section>
     <details id="coachStaffSettlementDetails" class="coach-staff-settlement-details" ${coachStaffEditorState.settlementDetailsOpen ? "open" : ""}>
       <summary>상세 설정</summary>
@@ -932,10 +932,47 @@ function coachStaffServerMatches(saved, draft) {
   if (coachBlockSignature(normalizeCoachBreakBlocks(saved)) !== coachBlockSignature(draft.breakBlocks)) return false;
   const settlement = coachSettlementRule(saved);
   if (settlement.method !== draft.settlement.method) return false;
+  const settlementBasisToCardBase = { cash_ex_vat: "cash", actual_paid_inc_vat: "paid" };
+  const expectedCardBase = settlementBasisToCardBase[draft.settlement.basis];
+  const substitutePolicies = ["actualCoach", "originalCoach", "manual"];
+  if (!expectedCardBase || settlement.cardBase !== expectedCardBase) return false;
+  if (!substitutePolicies.includes(settlement.substitute)
+    || !substitutePolicies.includes(draft.settlement.substitute)
+    || settlement.substitute !== draft.settlement.substitute) return false;
   if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
   if (draft.settlement.method === "ratio" && Math.abs(((Number(settlement.ratio) || 0) * 100) - Number(draft.settlement.ratio)) > 0.001) return false;
   if (draft.settlement.method === "ratio" && (settlement.calculationMode || "session_progress") !== draft.settlement.calculationMode) return false;
   if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
+  return true;
+}
+
+function coachStaffFreshSettlementTermMatches(terms, coachRoleId, settlementDraft) {
+  if (!Array.isArray(terms) || !coachRoleId || !settlementDraft) return false;
+  const roleId = String(coachRoleId).trim();
+  const effectiveFrom = String(settlementDraft.effectiveFrom || "").trim();
+  if (!roleId || !effectiveFrom) return false;
+  const matches = terms.filter((term) => (
+    String(term?.coach_role_id || "").trim() === roleId
+    && String(term?.effective_from || "").trim() === effectiveFrom
+  ));
+  if (matches.length !== 1) return false;
+  const term = matches[0];
+  if (!["active", "scheduled", "ended"].includes(String(term.status || "").toLowerCase())) return false;
+  if (term.settlement_type !== settlementDraft.method
+    || term.settlement_basis !== settlementDraft.basis
+    || term.settlement_calculation_mode !== settlementDraft.calculationMode
+    || term.substitute_policy !== settlementDraft.substitute) return false;
+  if (settlementDraft.method === "ratio") {
+    if (term.coach_rate === null || term.coach_rate === undefined || term.coach_rate === ""
+      || !Number.isFinite(Number(term.coach_rate))
+      || Math.abs(Number(term.coach_rate) * 100 - Number(settlementDraft.ratio)) > 0.001) return false;
+  } else if (settlementDraft.method === "hourly") {
+    if (term.hourly_rate === null || term.hourly_rate === undefined || term.hourly_rate === ""
+      || !Number.isFinite(Number(term.hourly_rate))
+      || Number(term.hourly_rate) !== Number(settlementDraft.hourly)) return false;
+  } else {
+    return false;
+  }
   return true;
 }
 

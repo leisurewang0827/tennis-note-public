@@ -54,6 +54,12 @@ function applyAdminSecurityMode(mode) {
   renderAdminSecurity();
 }
 
+function reconcileAdminBillingLockUi() {
+  if (state.view !== "billing") return;
+  // 잠금 상태만 다시 판정합니다. 자동 조회나 전체 화면 재렌더는 하지 않습니다.
+  renderAdminSettlementHistory({ refresh: false });
+}
+
 async function confirmAdminUnlock() {
   if (adminPinNeedsSetup()) {
     closeAdminLockModal();
@@ -79,6 +85,7 @@ async function confirmAdminUnlock() {
     }, 5000);
   } else {
     adminLockSession.unlockedUntil = Date.now() + adminLockSettings.timeoutMinutes * 60000;
+    window.setTimeout(reconcileAdminBillingLockUi, adminLockSettings.timeoutMinutes * 60000 + 1);
   }
   const targetView = adminLockSession.pendingView;
   const callback = adminLockSession.afterUnlock;
@@ -87,6 +94,7 @@ async function confirmAdminUnlock() {
   showToast(oneTimeAction ? "관리자 확인 완료" : `관리자 잠금 해제 · ${adminLockSettings.timeoutMinutes}분 유지`);
   if (callback) callback();
   else if (targetView) setView(targetView, { skipLock: true });
+  reconcileAdminBillingLockUi();
 }
 
 async function changeAdminPin() {
@@ -170,6 +178,7 @@ function updateAdminSaveState(message = "") {
 }
 
 function setView(view, options = {}) {
+  reconcileAdminBillingLockUi();
   if (!operationsAccessReady()) {
     renderOperationsLoginGate();
     return;
@@ -225,6 +234,8 @@ function setView(view, options = {}) {
     });
   } else if (!reuseRenderedView) {
     renderAdminView(view);
+  } else if (view === "billing") {
+    reconcileAdminBillingLockUi();
   }
   window.dispatchEvent(new CustomEvent("tennisnote:admin-view-change", {
     detail: { view, previousView },

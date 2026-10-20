@@ -415,3 +415,135 @@ async function loadAdminSettlementSupportData() {
   });
   return true;
 }
+
+const effectiveSettlementPreview = { signature: "", loading: false, results: [], requestId: 0, context: null, error: "" };
+
+async function refreshEffectiveSettlementPreview(signature) {
+  const branchId = activeOperationBranchId();
+  const settlementMonth = `${state.billingMonth}-01`;
+  const client = window.TennisNoteDataClient;
+  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);
+  const context = effectiveSettlementPreviewContext(signature);
+  effectiveSettlementPreview.signature = signature;
+  if (!effectiveSettlementPreviewContextIsCurrent(context)) {
+    invalidateEffectiveSettlementPreview("관리자 로그인과 서버 연결을 확인한 뒤 다시 불러와 주세요.");
+    renderEffectiveSettlementPreview();
+    return;
+  }
+  const requestId = ++effectiveSettlementPreview.requestId;
+  const requestIsCurrent = () => requestId === effectiveSettlementPreview.requestId
+    && effectiveSettlementPreviewContextIsCurrent(context);
+  effectiveSettlementPreview.context = context;
+  effectiveSettlementPreview.results = [];
+  effectiveSettlementPreview.error = "";
+  effectiveSettlementPreview.loading = true;
+  renderEffectiveSettlementPreview();
+  const results = await Promise.all(entries.map(async (coach) => {
+    try {
+      if (!requestIsCurrent()) return null;
+      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
+      const result = await client.rpc("tn_coach_settlement_scope_v2", {
+        target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
+      });
+      if (!requestIsCurrent()) return null;
+      return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };
+    } catch (error) {
+      if (!requestIsCurrent()) return null;
+      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };
+    }
+  }));
+  if (requestId !== effectiveSettlementPreview.requestId) return;
+  if (!requestIsCurrent()) {
+    invalidateEffectiveSettlementPreview();
+    renderEffectiveSettlementPreview();
+    return;
+  }
+  effectiveSettlementPreview.results = results.filter(Boolean);
+  effectiveSettlementPreview.loading = false;
+  renderEffectiveSettlementPreview();
+}
+const adminSettlementHistory = { coachRoleId: "", key: "", request: 0, loading: false, value: null, message: "코치를 선택한 뒤 확정 이력을 조회해 주세요.", sessionToken: "", profileId: "" };
+function resetAdminSettlementHistory() {
+  adminSettlementHistory.request += 1;
+  adminSettlementHistory.loading = false;
+  adminSettlementHistory.value = null;
+  adminSettlementHistory.key = "";
+  adminSettlementHistory.sessionToken = "";
+  adminSettlementHistory.profileId = "";
+  adminSettlementHistory.message = "코치를 선택한 뒤 확정 이력을 조회해 주세요.";
+}
+function adminSettlementHistoryAccessReady() {
+  return operationsRole() === "admin" && operationsAccessReady() && adminApprovalReady() && !adminPinNeedsSetup() && (!isAdminViewLocked("billing") || isAdminUnlocked()) && !adminDemoMode;
+}
+async function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = "") {
+  return window.TennisNoteDataClient.rpc("tn_admin_monthly_settlement_scope_state", {
+    target_branch_id: scope.branchId,
+    target_coach_role_id: scope.coachRoleId,
+    target_month: scope.settlementMonth,
+    expected_source_fingerprint: expectedSourceFingerprint,
+  });
+}
+async function refreshAdminSettlementHistory() {
+  const scope = adminSettlementHistoryScope();
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(adminImportAuthState.profile?.id || "");
+  const eligible = adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId);
+  if (!adminSettlementHistoryAccessReady() || !profileId || !token || !client?.rpc || eligible.length !== 1 || !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(scope.settlementMonth)) {
+    resetAdminSettlementHistory();
+    adminSettlementHistory.message = "관리자 권한·잠금·지점과 정확한 코치를 먼저 확인해 주세요.";
+    renderAdminSettlementHistory();
+    return false;
+  }
+  const key = adminSettlementHistoryScopeKey(scope);
+  if (adminSettlementHistory.loading && adminSettlementHistory.key === key && adminSettlementHistory.sessionToken === token && adminSettlementHistory.profileId === profileId) return false;
+  const request = ++adminSettlementHistory.request;
+  Object.assign(adminSettlementHistory, { key, loading: true, value: null, message: "확정 이력을 확인하고 있습니다.", sessionToken: token, profileId });
+  renderAdminSettlementHistory();
+  const current = () => request === adminSettlementHistory.request && key === adminSettlementHistoryScopeKey() && token === client.getSession?.()?.access_token && profileId === String(adminImportAuthState.profile?.id || "") && adminSettlementHistoryAccessReady() && adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length === 1;
+  try {
+    const value = await readMonthlySettlementConfirmation(scope);
+    if (!current()) return false;
+    if (!adminSettlementHistoryPayloadIsExact(value, scope)) throw Error("history_scope_invalid");
+    adminSettlementHistory.value = value.state === "CONFIRMED" ? value : null;
+    adminSettlementHistory.message = value.state === "CONFIRMED" ? "확정 당시 계산본입니다. 현재 예상 정산과 구분되며 이 화면에서 확정·지급하지 않습니다." : value.state === "CALCULATED" ? "계산본은 있으나 아직 확정되지 않았습니다." : "선택한 월의 확정 이력이 없습니다.";
+    return true;
+  } catch (error) {
+    if (current()) { adminSettlementHistory.value = null; adminSettlementHistory.message = "확정 이력을 불러오지 못했습니다. 권한·네트워크와 대상 범위를 확인한 뒤 다시 조회해 주세요."; }
+    return false;
+  } finally {
+    if (request === adminSettlementHistory.request) {
+      if (!current()) resetAdminSettlementHistory();
+      adminSettlementHistory.loading = false;
+      renderAdminSettlementHistory();
+    }
+  }
+}
+function effectiveSettlementPreviewContext(signature = effectiveSettlementPreviewSignature()) {
+  const client = window.TennisNoteDataClient;
+  // Credential comparison is memory-only, never part of a serialized signature.
+  return {
+    signature,
+    client,
+    sessionToken: client?.getSession?.()?.access_token || "",
+    profileId: String(adminImportAuthState.profile?.id || ""),
+    authUserId: String(adminImportAuthState.user?.id || ""),
+  };
+}
+function effectiveSettlementPreviewContextIsCurrent(context, includeScope = true) {
+  return Boolean(context?.client?.rpc && context.sessionToken && context.profileId && context.authUserId
+    && (!includeScope || context.signature === effectiveSettlementPreviewSignature())
+    && context.client === window.TennisNoteDataClient
+    && context.sessionToken === (context.client.getSession?.()?.access_token || "")
+    && context.profileId === String(adminImportAuthState.profile?.id || "")
+    && context.authUserId === String(adminImportAuthState.user?.id || "")
+    && operationsRole() === "admin" && adminApprovalReady());
+}
+function invalidateEffectiveSettlementPreview(message = "로그인 또는 조회 범위가 변경되었습니다. 현재 권한으로 다시 불러와 주세요.") {
+  effectiveSettlementPreview.requestId += 1;
+  effectiveSettlementPreview.signature = effectiveSettlementPreviewSignature();
+  effectiveSettlementPreview.loading = false;
+  effectiveSettlementPreview.results = [];
+  effectiveSettlementPreview.context = null;
+  effectiveSettlementPreview.error = message;
+}

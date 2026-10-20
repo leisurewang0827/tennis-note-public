@@ -22,7 +22,12 @@ test("정산·첨부·표시명은 최신 private 권위 함수 9개와 공용 �
   assert.equal(manifest.privateMainSha, "f408dae5c6918139c4d95067808b221439eb14da");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
-    assert.equal(hash(extract(read(item.publicModule), item.function)), item.sha256, item.function);
+    const actual = extract(read(item.publicModule), item.function);
+    if (item.function === "logoutCoach") {
+      const beforeR3 = actual.replace("  resetCoachSettlementHistory();\n  renderCoachSettlementHistory();\n", "");
+      assert.equal(hash(beforeR3), item.sha256, item.function);
+      assert.match(actual, /resetCoachSettlementHistory\(\);\n  renderCoachSettlementHistory\(\);/);
+    } else assert.equal(hash(actual), item.sha256, item.function);
   }
   for (const item of manifest.sharedFiles) assert.equal(hash(read(item.publicModule)), item.sha256);
 });
@@ -51,7 +56,11 @@ test("정산 월은 KST 현재 월과 실행 중 명시 선택을 구분한다",
 test("실제 modular entry는 월 선택·logout·error capture를 연결하고 기존 RPC를 유지한다", () => {
   assert.match(read(coach + "events/delegated.js"), /selectCoachSettlementMonth\(settlementMonth.value\)/);
   assert.match(extract(read(coach + "data/auth.js"), "logoutCoach"), /coachSettlementSelection = null/);
-  assert.ok(read(coach + "data/sync.js").includes('target_month: `${coachSettlementMonth()}-01`'));
+  const settlementScope = extract(read(coach + "domain/settlement.js"), "coachSettlementReconciliationScope");
+  assert.match(settlementScope, /settlementMonth: `\$\{coachSettlementMonth\(\)\}-01`/);
+  const settlementRead = extract(read(coach + "data/sync.js"), "syncCoachSettlementFromServer");
+  assert.match(settlementRead, /rpc\("tn_coach_settlement_scope_v2"/);
+  assert.match(settlementRead, /target_month: scope\.settlementMonth/);
   assert.match(read(member + "events/delegated.js"), /document.addEventListener\("error", handleJournalMediaPreviewError, true\)/);
   for (const [surface, modules] of [[coach, ["domain/settlement.js", "data/auth.js", "events/delegated.js"]], [member, ["domain/journal.js", "views/journal.js", "ui/common.js", "events/delegated.js"]]]) {
     for (const module of modules) {

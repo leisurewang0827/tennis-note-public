@@ -185,6 +185,16 @@
               </div>
             </details>
           </details>
+          <section id="coachSettlementReconciliation" class="coach-settlement-history" aria-label="관리자 확정 정산 이력">
+            <div class="coach-settlement-history-head">
+              <strong>관리자 확정 내역</strong>
+              <span id="coachSettlementReconciliationStateBadge">확정 대기</span>
+            </div>
+            <p>현재 예상액과 별도인 확정 계산본입니다. 조건 변경은 과거 확정액을 바꾸지 않습니다.</p>
+            <p id="coachSettlementReconciliationMessage" role="status" aria-live="polite"></p>
+            <div id="coachSettlementReconciliationSummary" class="coach-settlement-history-summary" hidden></div>
+            <button id="coachSettlementReconciliationRetry" class="small-button" type="button" hidden>확정 내역 다시 확인</button>
+          </section>
           <div id="memberList" class="member-grid"></div>
           <div id="memberPager" class="member-pager"></div>
           <div id="memberRecordPanel" class="member-record-panel" aria-label="회원 처리 일정"></div>
@@ -371,6 +381,7 @@
     <script defer src="../shared/tennisnote-release-updater.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-ui-language.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.547"></script>
+    <script defer src="../shared/tennisnote-settlement-adjustment.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-input-guard.js?v=1.0.547"></script>
