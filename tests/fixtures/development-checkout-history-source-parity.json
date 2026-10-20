@@ -1,0 +1,17 @@
+{
+  "contract": "development-checkout-history-source-parity/1",
+  "files": [
+    {
+      "path": ".github/workflows/deploy-cloudflare-pages-dev.yml",
+      "beforeSha256": "26d40bdb3e4961a79cdd83e71df40d34e8097d2d0beb77f81cc49e8268881712",
+      "afterSha256": "3a6363b8fbe0fdbe0b55fb2c472c3c1b1ea36a68cd53c5bb8d2e9261af3daa3f",
+      "hunks": [
+        {
+          "before": "          ref: ${{ github.sha }}\n",
+          "after": "          ref: ${{ github.sha }}\n          fetch-depth: 0\n",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}
