@@ -14,6 +14,7 @@ const sourceMode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actual";
 const domainPath = "app/admin/domain/coaches.js";
 const actionPath = "app/admin/actions/coach.js";
 const commonPath = "app/admin/data/common.js";
+const schedulePath = "app/admin/data/schedule.js";
 
 function readPublicSource(relativePath) {
   const absolutePath = resolve(repoRoot, relativePath);
@@ -67,6 +68,11 @@ function extractFunction(source, name) {
   return source.slice(start, end + 2);
 }
 
+function extractOptionalFunction(source, name) {
+  const declaration = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`);
+  return declaration.test(source) ? extractFunction(source, name) : "";
+}
+
 function loadSourceBundle(mode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actual") {
   if (mode === "actual") {
     return {
@@ -75,6 +81,7 @@ function loadSourceBundle(mode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actua
       actionSource: readPublicSource(actionPath),
       // The unchanged read dependency remains live so refresh failure is not mocked.
       commonSource: readPublicSource(commonPath),
+      scheduleSource: readPublicSource(schedulePath),
     };
   }
   if (mode === "offline") {
@@ -90,12 +97,27 @@ function loadSourceBundle(mode = process.env.TENNISNOTE_R3_SOURCE_MODE || "actua
       domainSource: applyUnifiedPatchInMemory(readGitSource(sourceSha, domainPath), patchText, domainPath),
       actionSource: applyUnifiedPatchInMemory(readGitSource(sourceSha, actionPath), patchText, actionPath),
       commonSource: readGitSource(sourceSha, commonPath),
+      scheduleSource: readGitSource(sourceSha, schedulePath),
     };
   }
   throw new Error(`unsupported source mode: ${mode}`);
 }
 
 function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
+  const saveSource = extractFunction(actionSource, "saveCoachStaff");
+  const scheduleSource = scenario.scheduleSource || "";
+  const freshSettlementVerifier = extractOptionalFunction(domainSource, "coachStaffFreshSettlementTermMatches");
+  const scheduleSignature = extractOptionalFunction(scheduleSource, "liveSchedulePolicySignature");
+  const scheduleSync = extractOptionalFunction(scheduleSource, "syncLiveSchedulePolicyToServer");
+  if (/\bcoachStaffFreshSettlementTermMatches\s*\(/.test(saveSource) && !freshSettlementVerifier) {
+    throw new Error("saveCoachStaff requires its source-version settlement verifier");
+  }
+  if (/\bsyncLiveSchedulePolicyToServer\s*\(/.test(saveSource) && !scheduleSync) {
+    throw new Error("saveCoachStaff requires its source-version schedule sync");
+  }
+  if (/\bliveSchedulePolicySignature\s*\(/.test(scheduleSync) && !scheduleSignature) {
+    throw new Error("schedule sync requires its source-version signature helper");
+  }
   const functionSource = [
     extractFunction(domainSource, "coachStaffPayload"),
     extractFunction(domainSource, "coachBlockSignature"),
@@ -103,9 +125,13 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
     extractFunction(domainSource, "normalizeCoachBreakBlocks"),
     extractFunction(domainSource, "coachSettlementRule"),
     extractFunction(domainSource, "coachStaffServerMatches"),
-    extractFunction(domainSource, "coachStaffFreshSettlementTermMatches"),
+    freshSettlementVerifier,
     extractFunction(commonSource, "refreshCoachStaffData"),
-    extractFunction(actionSource, "saveCoachStaff"),
+    saveSource,
+    scheduleSignature,
+    scheduleSync,
+    extractFunction(readPublicSource("app/admin/domain/common.js"), "postgresDayOfWeek"),
+    extractFunction(readPublicSource("app/admin/domain/values.js"), "timeToMinutes"),
   ].join("\n\n");
   const branchId = "synthetic-public-branch";
   const roleId = "synthetic-public-role";
@@ -143,13 +169,31 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
     effectiveFrom,
   };
   const counters = { rpc: 0, termReads: 0, close: 0, toast: 0, renderError: 0 };
+  counters.scheduleReads = 0;
+  counters.scheduleInserts = 0;
+  counters.scheduleUpdates = 0;
+  counters.scheduleRefresh = 0;
+  counters.scheduleUpdateFilters = [];
+  const defaultWorkBlocks = [];
+  const schedulePolicyState = {
+    value: {
+      version: 5,
+      updatedAt: "before-save",
+      operationProfiles: [{ id: "profile-1", updatedAt: "before-save", coaches: [{ serverRoleId: roleId, workBlocks: defaultWorkBlocks }] }],
+      coaches: [{ serverRoleId: roleId, workBlocks: defaultWorkBlocks }],
+    },
+  };
   const button = { disabled: false, textContent: "저장" };
   const context = {
     console,
     window: {},
     state: { view: "coaches" },
+    scheduleDays: ["월", "화", "수", "목", "금", "토", "일"],
     adminLiveDataState: { coachSettlementTerms: [row] },
-    coaches: [],
+      coaches: [{
+        id: "synthetic-local-coach", serverRoleId: roleId, branchId, name: "Synthetic QA Coach",
+        approvalStatus: "approved", employmentStatus: "active", workBlocks: defaultWorkBlocks, breakBlocks: [],
+      }],
     coachSettlementRules: [displayedRule],
     coachStaffEditorState: {
       mode: "edit", saving: false, message: "", settlementDetailsOpen: false,
@@ -167,7 +211,7 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
         employmentStatus: "active",
         employmentStartedOn: effectiveFrom,
         employmentEndedOn: "",
-        workBlocks: [],
+        workBlocks: scenario.draftWorkBlocks ?? [],
         breakBlocks: [],
         settlement: {
           method: "ratio", ratio: 50, hourly: 0, basis: "cash_ex_vat",
@@ -194,16 +238,25 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
         bio: "",
         approvalStatus: item.status,
         employmentStatus: item.employment_status,
-        workBlocks: [],
+        workBlocks: scenario.savedWorkBlocks ?? defaultWorkBlocks,
         breakBlocks: [],
       })));
+      const nextBlocks = scenario.savedWorkBlocks ?? defaultWorkBlocks;
+      schedulePolicyState.value = {
+        ...schedulePolicyState.value,
+        updatedAt: "after-save-volatile",
+        operationProfiles: [{
+          id: "profile-1", updatedAt: "after-save-volatile",
+          coaches: [{ serverRoleId: roleId, workBlocks: nextBlocks }],
+        }],
+        coaches: [{ serverRoleId: roleId, workBlocks: nextBlocks }],
+      };
     },
     normalizedMemberPhone: (value) => String(value || "").replace(/\D/g, ""),
     normalizeCoachWorkBlocks: (coach) => Array.isArray(coach?.workBlocks) ? coach.workBlocks : [],
     normalizeCoachBreakBlocks: (coach) => Array.isArray(coach?.breakBlocks) ? coach.breakBlocks : [],
     closeCoachStaffModal: () => { counters.close += 1; },
     updateActiveOperationProfileFromCurrent: () => {},
-    syncLiveSchedulePolicyToServer: async () => "ok",
     loadLiveSchedulePolicyFromServer: async () => {},
     showToast: () => { counters.toast += 1; },
     $: () => button,
@@ -212,12 +265,18 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
   context.coachBlockSignature = undefined;
   context.window.TennisNoteInputGuard = { markSaved: () => {} };
   context.window.TennisNoteDataClient = {
+    readiness: () => ({ ready: true }),
+    getSession: () => ({ access_token: "synthetic-session" }),
     rpc: async (name) => {
       assert.equal(name, "tn_admin_save_coach_staff_v2");
       counters.rpc += 1;
       return { coachRoleId: roleId };
     },
     selectRows: async (table) => {
+      if (table === "tn_admin_settings") {
+        counters.scheduleReads += 1;
+        return scenario.scheduleExistingRow ? [{ updated_at: scenario.scheduleExistingRowUpdatedAt || "server-newer" }] : [];
+      }
       if (table === "tn_coach_roles") return [role];
       if (table === "tn_coach_settlement_terms") {
         counters.termReads += 1;
@@ -226,7 +285,27 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
       }
       return [];
     },
+    insertRows: async (table, payload) => {
+      assert.equal(table, "tn_admin_settings");
+      counters.scheduleInserts += 1;
+      counters.scheduleInsertPayload = payload;
+      return [{ updated_at: "schedule-inserted" }];
+    },
+    updateRows: async (table, filters, payload) => {
+      assert.equal(table, "tn_admin_settings");
+      counters.scheduleUpdates += 1;
+      counters.scheduleUpdateFilters.push(filters);
+      counters.scheduleUpdatePayload = payload;
+      return scenario.scheduleConflict ? [] : [{ updated_at: payload.updated_at }];
+    },
   };
+  context.liveSchedulePolicyPayload = () => {
+    return { ...schedulePolicyState.value, updatedAt: schedulePolicyState.value.updatedAt };
+  };
+  context.liveSchedulePolicyServerUpdatedAt = scenario.scheduleUpdatedAt ?? "schedule-before-save";
+  context.liveSchedulePolicyKey = "app_schedule_policy";
+  context.loadLiveSchedulePolicyFromServer = async () => { counters.scheduleRefresh += 1; };
+  scenario.scheduleSource = scenario.scheduleSource || readPublicSource(schedulePath);
   runInNewContext(functionSource, context);
   return { context, counters, button };
 }
@@ -280,16 +359,23 @@ test("source adapters resolve actual checkout and pinned offline candidate", () 
   console.log(`ACTUAL_CHECKOUT_SAVE_FUNCTION_SHA256=${sha256(save)}`);
   if (sourceMode === "offline") {
     const offline = loadSourceBundle("offline");
-    const verifier = extractFunction(offline.domainSource, "coachStaffFreshSettlementTermMatches");
+      const verifier = extractOptionalFunction(offline.domainSource, "coachStaffFreshSettlementTermMatches");
     assert.equal(offline.sourceSha, PINNED_PUBLIC_SHA);
+      assert.doesNotMatch(offline.scheduleSource, /function\s+liveSchedulePolicySignature\s*\(/,
+        "the pinned 1.0.548 schedule source remains unmodified and is not replaced with a copied 1.0.550 implementation");
+      assert.match(actual.scheduleSource, /function\s+liveSchedulePolicySignature\s*\(/,
+        "the current 1.0.550 source contains its schedule signature dependency");
+      assert.doesNotThrow(() => publicSaveHarness(offline.domainSource, offline.actionSource, offline.commonSource, {
+        scheduleSource: offline.scheduleSource,
+      }), "the pinned offline source bundle enters the harness using only dependencies it actually contains");
     console.log(`PINNED_BASE_SHA=${offline.sourceSha}`);
     console.log(`PATCH_SHA256=${sha256(offline.patchText)}`);
-    console.log(`OFFLINE_FRESH_VERIFIER_FUNCTION_SHA256=${sha256(verifier)}`);
+      console.log(`OFFLINE_FRESH_VERIFIER_PRESENT=${Boolean(verifier)}`);
   }
 });
 
 test("actual public save -> refresh -> raw verifier blocks false-success in memory", async () => {
-  const { domainSource, actionSource, commonSource } = loadSourceBundle();
+  const { domainSource, actionSource, commonSource, scheduleSource } = loadSourceBundle();
   const cases = [
     { name: "exact fresh row", scenario: {}, success: true },
     { name: "query rejection despite display fallback", scenario: { rejectTerms: true }, success: false },
@@ -300,13 +386,70 @@ test("actual public save -> refresh -> raw verifier blocks false-success in memo
     { name: "wrong persisted policy", scenario: { terms: [{ ...baseTerm(), settlement_basis: "actual_paid_inc_vat" }] }, success: false },
   ];
   for (const item of cases) {
-    const harness = publicSaveHarness(domainSource, actionSource, commonSource, item.scenario);
+    const harness = publicSaveHarness(domainSource, actionSource, commonSource, { ...item.scenario, scheduleSource });
     await harness.context.saveCoachStaff();
     assert.equal(harness.counters.rpc, 1, `${item.name}: one explicit save RPC only`);
     assert.equal(harness.counters.close, item.success ? 1 : 0, `${item.name}: modal close follows verification`);
     assert.equal(harness.counters.toast, item.success ? 1 : 0, `${item.name}: success toast follows verification`);
-    if (!item.success) assert.match(harness.context.coachStaffEditorState.message, /재확인에 실패/,
-      `${item.name}: existing fail-closed message is shown`);
+    if (!item.success) {
+      assert.match(harness.context.coachStaffEditorState.message, /재확인에 실패/,
+        `${item.name}: existing fail-closed message is shown`);
+      assert.equal(harness.counters.scheduleInserts + harness.counters.scheduleUpdates, 0,
+        `${item.name}: failed coach save never writes schedule policy`);
+    }
   }
   console.log("PUBLIC_ACTUAL_SAVE_REFRESH_RAW_TERM_PASS=7_CASES; RPC_FAKE=1_PER_CASE; DB=0; WORKTREE_WRITE=0");
+});
+
+test("actual coach save syncs only a changed schedule policy and preserves optimistic guards", async () => {
+  const { domainSource, actionSource, commonSource, scheduleSource } = loadSourceBundle();
+  const same = publicSaveHarness(domainSource, actionSource, commonSource, {
+    scheduleSource,
+    scheduleUpdatedAt: "schedule-before-save",
+  });
+  await same.context.saveCoachStaff();
+  assert.equal(same.counters.rpc, 1, "settlement-only save uses the existing coach RPC once");
+  assert.equal(same.counters.scheduleReads, 0, "volatile timestamps do not trigger schedule policy read");
+  assert.equal(same.counters.scheduleInserts, 0);
+  assert.equal(same.counters.scheduleUpdates, 0, "settlement-only save does not rewrite schedule settings");
+
+  const changed = publicSaveHarness(domainSource, actionSource, commonSource, {
+    scheduleSource,
+    draftWorkBlocks: [{ days: ["화"], start: "10:00", end: "11:00", label: "근무" }],
+    savedWorkBlocks: [{ days: ["화"], start: "10:00", end: "11:00", label: "근무" }],
+    scheduleUpdatedAt: "expected-prior-revision",
+  });
+  await changed.context.saveCoachStaff();
+  assert.equal(changed.counters.scheduleUpdates, 1,
+    `a real availability change sends one optimistic update; saveMessage=${changed.context.coachStaffEditorState.message}`);
+  assert.equal(changed.counters.scheduleUpdateFilters[0].key, "app_schedule_policy");
+  assert.equal(changed.counters.scheduleUpdateFilters[0].updated_at, "expected-prior-revision");
+  assert.equal(changed.counters.scheduleInserts, 0);
+
+  const missingBaseline = publicSaveHarness(domainSource, actionSource, commonSource, {
+    scheduleSource,
+    draftWorkBlocks: [{ days: ["목"], start: "12:00", end: "13:00", label: "근무" }],
+    savedWorkBlocks: [{ days: ["목"], start: "12:00", end: "13:00", label: "근무" }],
+    scheduleUpdatedAt: "",
+    scheduleExistingRow: true,
+  });
+  await missingBaseline.context.saveCoachStaff();
+  assert.equal(missingBaseline.counters.scheduleReads, 1, "missing baseline reads server revision before deciding");
+  assert.equal(missingBaseline.counters.scheduleInserts, 0, "existing server row is never overwritten by insert fallback");
+  assert.equal(missingBaseline.counters.scheduleUpdates, 0);
+  assert.equal(missingBaseline.counters.scheduleRefresh, 1, "conflict triggers server read-back");
+
+  const staleRevision = publicSaveHarness(domainSource, actionSource, commonSource, {
+    scheduleSource,
+    draftWorkBlocks: [{ days: ["수"], start: "11:00", end: "12:00", label: "근무" }],
+    savedWorkBlocks: [{ days: ["수"], start: "11:00", end: "12:00", label: "근무" }],
+    scheduleUpdatedAt: "stale-prior-revision",
+    scheduleConflict: true,
+  });
+  await staleRevision.context.saveCoachStaff();
+  assert.equal(staleRevision.counters.scheduleUpdates, 1, "stale revision is submitted only once");
+  assert.equal(staleRevision.counters.scheduleUpdateFilters[0].key, "app_schedule_policy");
+  assert.equal(staleRevision.counters.scheduleUpdateFilters[0].updated_at, "stale-prior-revision");
+  assert.equal(staleRevision.counters.scheduleRefresh, 1, "optimistic conflict refreshes authoritative policy");
+  assert.equal(staleRevision.counters.scheduleInserts, 0, "conflict is never retried as insert");
 });

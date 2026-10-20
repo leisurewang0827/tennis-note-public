@@ -3,10 +3,37 @@
 // 서버에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function syncLiveSchedulePolicyToServer() {
+function liveSchedulePolicySignature(value) {
+  if (!value || typeof value !== "object") return "";
+  const comparable = { ...value };
+  delete comparable.updatedAt;
+  if (Array.isArray(comparable.operationProfiles)) {
+    comparable.operationProfiles = comparable.operationProfiles.map((profile) => {
+      const normalized = { ...profile };
+      delete normalized.updatedAt;
+      if (Array.isArray(normalized.coaches)) {
+        normalized.coaches = [...normalized.coaches].sort((left, right) => (
+          String(left?.serverRoleId || left?.id || "").localeCompare(String(right?.serverRoleId || right?.id || ""))
+        ));
+      }
+      return normalized;
+    });
+  }
+  if (Array.isArray(comparable.coaches)) {
+    comparable.coaches = [...comparable.coaches].sort((left, right) => (
+      String(left?.serverRoleId || left?.id || "").localeCompare(String(right?.serverRoleId || right?.id || ""))
+    ));
+  }
+  return JSON.stringify(comparable);
+}
+
+async function syncLiveSchedulePolicyToServer(previousValue = null) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready || !client.getSession?.()?.access_token) return "local";
   const value = liveSchedulePolicyPayload();
+  if (previousValue && liveSchedulePolicySignature(previousValue) === liveSchedulePolicySignature(value)) {
+    return "unchanged";
+  }
   try {
     if (!liveSchedulePolicyServerUpdatedAt) {
       const existing = await client.selectRows("tn_admin_settings", {
