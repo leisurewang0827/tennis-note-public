@@ -80,8 +80,8 @@ for deployments in ([], [dict(good_deploy, deployment_trigger={"metadata":{"bran
     else: raise AssertionError("missing safe rollback proof accepted")
 m.validate_cache_floor_provenance()
 assert (m.EXPECTED_MEMBER_CACHE,m.EXPECTED_COACH_CACHE)==(589,562)
-m.verify_monotonic_release({"version":"1.0.547","releaseId":"2026.10.09.04"},589,562,[{"release":{"version":"1.0.552","releaseId":"2026.10.20.01"},"member_cache":588,"coach_cache":561},{"release":{"version":"1.0.547","releaseId":"2026.10.09.04"},"member_cache":564,"coach_cache":537}])
-try: m.verify_monotonic_release({"version":"1.0.547","releaseId":"2026.10.09.04"},588,561,[{"release":{"version":"1.0.552","releaseId":"2026.10.20.01"},"member_cache":589,"coach_cache":562},{"release":{"version":"1.0.547","releaseId":"2026.10.09.04"},"member_cache":564,"coach_cache":537}])
+m.verify_monotonic_release({"version":"1.0.553","releaseId":"2026.10.21.01"},589,562,[{"release":{"version":"1.0.552","releaseId":"2026.10.20.01"},"member_cache":588,"coach_cache":561},{"release":{"version":"1.0.547","releaseId":"2026.10.09.04"},"member_cache":564,"coach_cache":537}])
+try: m.verify_monotonic_release({"version":"1.0.553","releaseId":"2026.10.21.01"},588,561,[{"release":{"version":"1.0.552","releaseId":"2026.10.20.01"},"member_cache":589,"coach_cache":562},{"release":{"version":"1.0.547","releaseId":"2026.10.09.04"},"member_cache":564,"coach_cache":537}])
 except RuntimeError: pass
 else: raise AssertionError("release rollback accepted")
 class Oversized:
@@ -133,7 +133,7 @@ with tempfile.TemporaryDirectory() as temp:
     roots=[Path(temp)/"member",Path(temp)/"admin"]
     ref="synthetic-project-ref"
     fp=m.EXPECTED_DEV_PROJECT_FINGERPRINT
-    release={"version":"1.0.547","releaseId":"2026.10.09.04"}
+    release={"version":"1.0.553","releaseId":"2026.10.21.01"}
     config=("window.TENNISNOTE_CONFIG = "+json.dumps({"environment":"development","supabaseUrl":f"https://{ref}.supabase.co","projectFingerprint":fp,"supabasePublishableKey":"synthetic-only"})+";\n\nwindow.TENNIS_NOTE_PAYMENT_CONFIG = "+json.dumps({"enabled":False,"mode":"disabled","allowedMethods":[],"bankTransfer":{"enabled":False},"channels":{}})+";")
     for root in roots:
         (root/"shared").mkdir(parents=True)

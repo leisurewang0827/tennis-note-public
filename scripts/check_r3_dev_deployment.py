@@ -24,8 +24,8 @@ EXPECTED_BRANCH = "codex/tennisnote-r3-prod-promotion-20261021"
 EXPECTED_REPOSITORY = "leisurewang0827/tennis-note-public"
 EXPECTED_WORKFLOW_REF = f"{EXPECTED_REPOSITORY}/.github/workflows/deploy-cloudflare-pages-dev.yml@refs/heads/{EXPECTED_BRANCH}"
 EXPECTED_WORKFLOW_NAME = "Deploy Tennis Note development sites"
-EXPECTED_VERSION = "1.0.547"
-EXPECTED_RELEASE_ID = "2026.10.09.04"
+EXPECTED_VERSION = "1.0.553"
+EXPECTED_RELEASE_ID = "2026.10.21.01"
 CACHE_FLOOR_CONTRACT = json.loads(CACHE_FLOOR_CONTRACT_PATH.read_text(encoding="utf-8"))
 EXPECTED_MEMBER_CACHE = max(CACHE_FLOOR_CONTRACT["development"]["member"], CACHE_FLOOR_CONTRACT["production"]["member"]) + 1
 EXPECTED_COACH_CACHE = max(CACHE_FLOOR_CONTRACT["development"]["coach"], CACHE_FLOOR_CONTRACT["production"]["coach"]) + 1

@@ -41,7 +41,7 @@ const canonicalFunctions = [
   ["app/tennis-note-coach-app/domain/settlement.js", "coachSettlementMonth", "f5f1e4ebbcbc1f4272506b08f49cdcddfe02298459a7faf89f32697eb8d3380b"],
 ];
 
-test("R3 production candidate is exact to production base and release 1.0.547", () => {
+test("R3 production candidate is exact to production base and release 1.0.553", () => {
   execFileSync("git", ["merge-base", "--is-ancestor", base, "HEAD"]);
   assert.deepEqual(changedAppPaths(base), files.map(([path]) => path).sort());
   for (const [path, baseSha256, candidateSha256] of files) {
@@ -51,11 +51,11 @@ test("R3 production candidate is exact to production base and release 1.0.547", 
   }
   const release = JSON.parse(read("app/release.json"));
   const baseRelease = JSON.parse(show(base, "app/release.json"));
-  assert.equal(release.version, "1.0.547");
-  assert.equal(release.releaseId, "2026.10.09.04");
+  assert.equal(release.version, "1.0.553");
+  assert.equal(release.releaseId, "2026.10.21.01");
   assert.deepEqual(release.nativePlatforms, baseRelease.nativePlatforms);
-  assert.match(read("app/tennis-note-member-app/service-worker.js"), /CACHE_NAME\s*=\s*["']tennis-note-member-pwa-v564["']/);
-  assert.match(read("app/tennis-note-coach-app/service-worker.js"), /CACHE_NAME\s*=\s*["']tennis-note-coach-mode-v537["']/);
+  assert.match(read("app/tennis-note-member-app/service-worker.js"), /CACHE_NAME\s*=\s*["']tennis-note-member-pwa-v589["']/);
+  assert.match(read("app/tennis-note-coach-app/service-worker.js"), /CACHE_NAME\s*=\s*["']tennis-note-coach-mode-v562["']/);
 });
 
 test("R3 canonical settlement source, admin identity/scope fences and coach entry remain exact", () => {
