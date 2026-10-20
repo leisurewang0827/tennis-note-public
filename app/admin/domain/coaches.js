@@ -357,7 +357,7 @@ function renderCoachStaffSettlementTab(draft) {
         </select>
       </label>
       <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="0.1" value="${escapeHtml(settlement.ratio)}" /></label>
-      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급(원/시간)</span><input id="coachStaffSettlementHourly" type="number" min="1" step="1000" value="${escapeHtml(settlement.hourly)}" /></label>
+      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급(원/시간)</span><input id="coachStaffSettlementHourly" type="number" min="1" step="1" value="${escapeHtml(settlement.hourly)}" /></label>
     </section>
     <details id="coachStaffSettlementDetails" class="coach-staff-settlement-details" ${coachStaffEditorState.settlementDetailsOpen ? "open" : ""}>
       <summary>상세 설정</summary>
