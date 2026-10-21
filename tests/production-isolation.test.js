@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import releaseGuard from "./helpers/production-excel-release.cjs";
 import aOnly from "./helpers/self-profile-a-only.cjs";
+import r3Promotion from "./helpers/r3-production-promotion.cjs";
 const norm = s => s.replace(/\r\n/g, "\n");
 const read = p => releaseGuard.readBeforeRelease(p);
 const hash = s => crypto.createHash("sha256").update(s).digest("hex");
@@ -44,7 +45,7 @@ const releaseHashes = release.version === baseRelease.version ? {} : (() => {
   assert.equal(release.releaseId, "2026.10.06.01");
   assert.match(release.deployedAt, /^2026-10-06T\d{2}:\d{2}:\d{2}\+09:00$/);
   const python = process.env.TENNISNOTE_PYTHON || (process.platform === "win32" ? "python" : "python3");
-  return JSON.parse(execFileSync(python, ["-c", String.raw`
+  return JSON.parse(execFileSync(python, ["-B", "-X", "utf8", "-c", String.raw`
 import hashlib, importlib.util, io, json, subprocess, sys, tarfile
 from pathlib import Path
 from unittest.mock import patch
@@ -64,6 +65,9 @@ def original(path, *args, **kwargs):
         assert not subprocess.check_output(["git", "ls-files", "--", relative]).strip()
         subprocess.run(["git", "check-ignore", "-q", "--", relative], check=True)
         return ""
+    if relative in payload["removedR3Paths"]:
+        assert relative not in originals, relative
+        return ""
     return originals[relative]
 merged, counts = {}, {}
 def read(path):
@@ -79,9 +83,9 @@ with patch.object(Path, "read_text", original):
     absorb(bump.plan_version_queries(payload["old"], r["version"], read))
     absorb(bump.plan_app_literals(payload["old"], r["version"], read))
     absorb([(p, t, c) for p, t, c, _, _ in bump.plan_cache_names(read)])
-print(json.dumps({p.relative_to(bump.ROOT).as_posix(): hashlib.sha256(t.encode()).hexdigest()
+print(json.dumps({p.relative_to(bump.ROOT).as_posix(): hashlib.sha256(t.encode("utf-8")).hexdigest()
                   for p, t in merged.items() if counts.get(p)}))
-`], { encoding: "utf8", maxBuffer: 8e6, input: JSON.stringify({ base: manifest.base, old: baseRelease.version, release, sources: Object.fromEntries(approvedSources) }) }));
+`], { encoding: "utf8", maxBuffer: 8e6, input: JSON.stringify({ base: manifest.base, old: baseRelease.version, release, sources: Object.fromEntries(approvedSources), removedR3Paths: r3Promotion.removedR3Paths }) }));
 })();
 test("운영 분리: 정확한 13제품 경로·hunk 외 원본 보존·신규 RPC 없음", () => {
   assert.equal(manifest.base, "648ac3387f11ad65e7631ad32e4a9a06b511d49c");

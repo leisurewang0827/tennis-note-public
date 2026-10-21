@@ -22,6 +22,7 @@ function bindAccountEvents() {
     setCoachProfileEditOpen($("#coachProfileFormCard")?.hidden !== false);
   });
   $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
+  $("#coachSettlementReconciliationRetry")?.addEventListener("click", () => void syncCoachSettlementHistoryFromServer());
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
   $("#coachPushPrimerModal")?.addEventListener("click", (event) => {

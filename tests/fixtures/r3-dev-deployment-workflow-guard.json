@@ -1,0 +1,6 @@
+{
+  "path": ".github/workflows/deploy-cloudflare-pages-dev.yml",
+  "base": "686cc97d9676da2d16ca3cdfbd862dc9cd19434e",
+  "baseSha256": "3d47cdfcd43c823c4ebbd16ef52fb178ea2544b0c35df19bcc284d9360dcc261",
+  "candidateSha256": "2118c7c378086e74262b48b0a0495e42abe35f9e34f2e7d3f4f50f6762b3bdd9"
+}

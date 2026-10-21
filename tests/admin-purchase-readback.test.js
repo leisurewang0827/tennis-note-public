@@ -11,6 +11,20 @@ const sha = value => createHash("sha256").update(value).digest("hex");
 const refresh = JSON.parse(current("tests/fixtures/production-excel-refresh-source.json"));
 function read(path) {
   let text = current(path);
+  if (path === "app/admin/actions/common.js") {
+    // R3 adds a read-only settlement-history lock refresh around the pinned PR565 code.
+    // Remove only those exact additions before applying this unrelated historical inverse.
+    const additions = [
+      "function reconcileAdminBillingLockUi() {\n  if (state.view !== \"billing\") return;\n  // 잠금 상태만 다시 판정합니다. 자동 조회나 전체 화면 재렌더는 하지 않습니다.\n  renderAdminSettlementHistory({ refresh: false });\n}\n\n",
+      "    window.setTimeout(reconcileAdminBillingLockUi, adminLockSettings.timeoutMinutes * 60000 + 1);\n",
+      "  } else if (view === \"billing\") {\n    reconcileAdminBillingLockUi();\n",
+      "  reconcileAdminBillingLockUi();\n",
+    ];
+    for (const addition of additions) {
+      assert.equal(text.split(addition).length - 1, addition === "  reconcileAdminBillingLockUi();\n" ? 2 : 1);
+      text = text.replaceAll(addition, "");
+    }
+  }
   const patch = refresh.products.find(row => row.path === path);
   if (!patch) return text;
   assert.equal(sha(text), patch.candidateSha256, path);
@@ -31,6 +45,9 @@ test("저장 후 대상 조회와 기존 결제 검증 VM 계약", () => {
 });
 
 test("private PR565 조회 helper 및 등록·추가·연장 호출 이식 범위", () => {
+  const commonWithR3 = current("app/admin/actions/common.js");
+  assert.match(commonWithR3, /function reconcileAdminBillingLockUi\(\)[\s\S]*?renderAdminSettlementHistory\(\{ refresh: false \}\)/);
+  assert.equal((commonWithR3.match(/reconcileAdminBillingLockUi\(\);/g) || []).length, 3);
   const common = read("app/admin/actions/common.js");
   const member = read("app/admin/actions/member.js");
   const helper = common.match(/async function loadAdminPostWriteMemberRows\([\s\S]*?\n\}/)[0];

@@ -2946,3 +2946,8 @@ function accountDeletionServerStatusCopy() {
   }
   return { title: "삭제 서버 확인 실패", detail: "네트워크 상태를 확인한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
 }
+
+function effectiveSettlementPreviewSignature() {
+  return JSON.stringify([activeOperationBranchId(), state.billingMonth,
+    serverPaymentSyncState.lastLoadedAt, operationBranchCoaches().map((coach) => coach.serverRoleId), coachSettlementRules]);
+}

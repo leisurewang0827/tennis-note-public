@@ -1,0 +1,17 @@
+{
+  "contract": "r3-dev-cache-floors/1",
+  "development": {
+    "source": "8406c9a70ee4299e60a0c5a2a536040d116fe3f0",
+    "member": 588,
+    "coach": 561,
+    "memberSourceSha256": "eaecc1146d63c0321e67152ba7baf639f82828e699bca5bab7880977038d5f78",
+    "coachSourceSha256": "86f70f7ee7815fc1c2bbbe7db76825846d8b4caa2e4dd8efcc90ec8e19c44630"
+  },
+  "production": {
+    "source": "686cc97d9676da2d16ca3cdfbd862dc9cd19434e",
+    "member": 564,
+    "coach": 537,
+    "memberSourceSha256": "4917794c174a2ab6fe54d61a52830d23008145c3d0efcc83a942845d6d87a7e8",
+    "coachSourceSha256": "22de0462978fb2ec7ebf334a362f909e85340a3fb7728b20290117df9440eb43"
+  }
+}

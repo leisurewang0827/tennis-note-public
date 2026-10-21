@@ -28,6 +28,7 @@ const PAGES = [
     pathname: "/app/admin/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-settlement-adjustment.js",
       "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-single-sheet-snapshot.js",
       "app/shared/tennisnote-single-sheet-batch.js",
@@ -176,6 +177,7 @@ const PAGES = [
     scripts: [
       "app/shared/tennisnote-runtime-environment.js",
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-settlement-adjustment.js",
       "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-app-common.js",
       "app/tennis-note-coach-app/settings.js",

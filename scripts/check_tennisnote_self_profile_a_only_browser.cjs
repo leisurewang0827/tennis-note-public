@@ -3,12 +3,14 @@ const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("n
 const {execFileSync}=require("node:child_process"),{createHash}=require("node:crypto"),{chromium,webkit}=require("playwright");
 const root=path.resolve(__dirname,"../tests/fixtures"),repo=path.resolve(__dirname,"..");
 const guard=require("../tests/helpers/self-profile-a-only.cjs");
+const r3Promotion=require("../tests/helpers/r3-production-promotion.cjs");
 const manifest=guard.contract,rows=manifest.files;
 const hash=s=>createHash("sha256").update(s).digest("hex"),member=p=>"app/tennis-note-member-app/"+p;
 const git=(sha,p)=>execFileSync("git",["show",`${sha}:${p}`],{cwd:repo,encoding:"utf8",maxBuffer:12e6}).replace(/\r\n/g,"\n");
+const undoCurrentRelease=file=>guard.undoRelease(file,r3Promotion.restoreBeforeR3(file,fs.readFileSync(path.join(repo,file),"utf8"),repo));
 const sources=new Map();let checks=0;
-for(const row of rows){let s=git(manifest.base,row.path);assert.equal(hash(s),row.beforeHash);for(const p of row.patches){assert.equal(s.split(p.before).length,2);s=s.replace(p.before,()=>p.after);}assert.equal(hash(s),row.afterHash);if(row.path.endsWith(".js"))new vm.Script(s);let inverse=s;for(const p of [...row.patches].reverse()){assert.equal(inverse.split(p.after).length,2);inverse=inverse.replace(p.after,()=>p.before);}assert.equal(hash(inverse),row.beforeHash);const actual=guard.undoRelease(row.path,fs.readFileSync(path.join(repo,row.path),"utf8"));assert.equal(actual,s,"actual source matches verified A-only projection");sources.set(row.path,actual);checks++;}
-const read=p=>sources.get(p)||guard.undoRelease(p,fs.readFileSync(path.join(repo,p),"utf8"));
+for(const row of rows){let s=git(manifest.base,row.path);assert.equal(hash(s),row.beforeHash);for(const p of row.patches){assert.equal(s.split(p.before).length,2);s=s.replace(p.before,()=>p.after);}assert.equal(hash(s),row.afterHash);if(row.path.endsWith(".js"))new vm.Script(s);let inverse=s;for(const p of [...row.patches].reverse()){assert.equal(inverse.split(p.after).length,2);inverse=inverse.replace(p.after,()=>p.before);}assert.equal(hash(inverse),row.beforeHash);const actual=undoCurrentRelease(row.path);assert.equal(actual,s,"actual source matches verified A-only projection");sources.set(row.path,actual);checks++;}
+const read=p=>sources.get(p)||undoCurrentRelease(p);
 function fn(s,name,indent=""){const m=[...s.matchAll(new RegExp("^"+indent+"(?:async )?function "+name+"\\([^\\n]*\\)[^{]*\\{[\\s\\S]*?^"+indent+"}","gm"))];assert.equal(m.length,1,"exact function "+name);return m[0][0];}
 const auth=read(member("data/auth.js")),enroll=read(member("actions/enrollment.js")),actions=read(member("actions/profile.js")),view=read(member("views/profile.js"));
 const originalSignup=fn(git(manifest.base,member("data/auth.js")),"persistIdentityProfile"),candidateSignup=fn(auth,"persistIdentityProfile");
