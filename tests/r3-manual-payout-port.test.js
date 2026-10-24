@@ -6,9 +6,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import historyPort from "./helpers/r3-history-port.cjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const read = (file) => readFileSync(path.join(root, file), "utf8");
+const read = (file) => historyPort.restoreOpenRefresh(file, readFileSync(path.join(root, file), "utf8"));
 const sha256 = (value) => createHash("sha256").update(String(value)).digest("hex");
 const canonicalText = (value) => String(value).replace(/\r\n/g, "\n");
 const gitBlobOid = (value) => createHash("sha1").update(`blob ${Buffer.byteLength(value, "utf8")}\0`).update(value, "utf8").digest("hex");

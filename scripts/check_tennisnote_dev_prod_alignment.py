@@ -1212,8 +1212,21 @@ def restore_r3_coach_open_refresh_base(
 
 def restore_r3_manual_payout_successor_base(path: str, text: str, *, strict: bool = True) -> str:
     """Remove only the pinned 1.0.554 payout feature/release stack before older inverses."""
-    text = restore_r3_coach_open_refresh_base(path, text, strict=strict)
     normalized = Path(path).as_posix()
+    if normalized in R3_OPEN_REFRESH_PATHS:
+        # Only the new exact after-blob enters the new layer. Older pinned
+        # stages keep their original verifier/read set; no broad version bypass.
+        port = json.loads(R3_OPEN_REFRESH_AUTHORITY_PATH.read_text(encoding="utf-8"))
+        row = next((item for item in port["files"] if item["path"] == normalized), None)
+        if row is None:
+            raise RuntimeError("R3 open refresh source path missing")
+        canonical = text.replace("\r\n", "\n")
+        if sha256(canonical.encode()) == row["afterSha256"] or "1.0.555" in canonical:
+            text = restore_r3_coach_open_refresh_base(path, text, strict=True)
+        elif normalized in R3_OPEN_REFRESH_PRODUCTS and strict:
+            before = run_git("show", f"{R3_OPEN_REFRESH_BASE_SHA}:{normalized}", text=False)
+            if canonical != before.decode("utf-8").replace("\r\n", "\n"):
+                raise RuntimeError(f"R3 open refresh source stage drift: {normalized}")
     if normalized not in R3_MANUAL_PAYOUT_SOURCE_PATHS:
         return text
     _load_r3_manual_payout_release_authority()

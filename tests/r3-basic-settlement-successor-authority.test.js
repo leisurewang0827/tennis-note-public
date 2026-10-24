@@ -416,8 +416,9 @@ try:
         except subprocess.CalledProcessError: pass
         else: raise AssertionError('missing immutable object read unexpectedly succeeded')
     assert calls.count(('show',port['baseCommit']+':'+missing))==2, 'failed reads must not be cached'
+    # 과거158/156/158 계측은 실제 pinned554 입력에서 보존한다.
+    body=subprocess.check_output(['git','show',a.R3_MANUAL_PAYOUT_CANDIDATE_SHA+':app/release.json']).decode('utf-8').replace('\\r\\n','\\n')
     a._GIT_READ_CACHE.clear(); a._GIT_READ_CACHE_BYTES=0; calls.clear()
-    body=(a.ROOT/'app/release.json').read_text(encoding='utf-8')
     outer_one=a.restore_auth_dev_prepare_base('app/release.json',body)
     outer_first=len(calls); outer_unique=len(set(calls))
     outer_entries=len(a._GIT_READ_CACHE); outer_bytes=a._GIT_READ_CACHE_BYTES

@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
+import { createRequire } from "node:module";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const python = process.env.TENNISNOTE_PYTHON || "python";
+const require = createRequire(import.meta.url);
 const setup = String.raw`
 import copy, hashlib, json, subprocess, sys
 sys.path.insert(0, 'scripts')
@@ -117,4 +120,122 @@ assert a.restore_r3_coach_open_refresh_base(path,historical,strict=False)==histo
 assert a.restore_r3_manual_payout_successor_base(path,historical)==git_text(old['baseCommit'],path)
 print('FROZEN_HISTORY_BASIC_COMPUTATION_PASS')
 `), /FROZEN_HISTORY_BASIC_COMPUTATION_PASS/);
+});
+
+test("555 JS historical routes prove exact inverses and reject drift without changing old golden", () => {
+  const helper = require("./helpers/r3-history-port.cjs");
+  const renewal = require("./helpers/renewal-hold-port.cjs");
+  const authorityPath = path.join(root, "tests/fixtures/r3-coach-open-refresh-source-parity.json");
+  const raw = fs.readFileSync(authorityPath, "utf8");
+  const port = JSON.parse(raw);
+  const gitText = (revision, file) => execFileSync("git", ["show", revision + ":" + file],
+    {cwd: root, encoding: "utf8"}).replace(/\r\n/g, "\n");
+  for (const row of port.files) {
+    const current = gitText(port.candidateCommit, row.path);
+    assert.equal(helper.restoreOpenRefresh(row.path, current), gitText(port.baseCommit, row.path));
+    for (const inputVersion of ["1.0.555", "1.0.554", "1.0.552"]) {
+      assert.throws(() => helper.restoreOpenRefresh(row.path, current + " ", {inputVersion}), /stage drift/);
+      assert.throws(() => helper.restoreOpenRefresh(row.path, current + row.hunks[0].after, {inputVersion}), /stage drift/);
+    }
+  }
+  const file = "app/admin/index.html";
+  const current = gitText(port.candidateCommit, file);
+  const old = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-manual-payout-port-source-authority.json"), "utf8")).releaseSuccessor;
+  assert.equal(renewal.restoreManualPayoutAdminIndex(file, current, port.targetVersion), gitText(old.baseCommit, file));
+  assert.equal(renewal.restoreManualPayoutAdminIndex(file, current, old.targetVersion), gitText(old.baseCommit, file));
+  assert.throws(() => renewal.restoreManualPayoutAdminIndex(file, current + " ", port.targetVersion), /stage drift/);
+  // 이전에 검증된 module cache가 변조된 새 fixture를 가리지 않아야 한다.
+  const originalRead = fs.readFileSync;
+  for (const change of [
+    p => { p.target = "public-main"; },
+    p => { p.files[0].beforeGitBlob = "0".repeat(40); },
+    p => { p.files.push({...p.files[0]}); },
+  ]) {
+    const bad = JSON.parse(raw); change(bad);
+    fs.readFileSync = function (target, ...args) {
+      if (path.resolve(String(target)) === authorityPath) return JSON.stringify(bad);
+      return originalRead.call(this, target, ...args);
+    };
+    try { assert.throws(() => helper.restoreOpenRefresh(file, current)); }
+    finally { fs.readFileSync = originalRead; }
+  }
+});
+
+test("555 cold and warm reads separate the frozen158 set from exact new immutable reads", () => {
+  assert.match(run(String.raw`
+original_run=a.subprocess.run
+calls=[]
+old=json.loads(a.R3_MANUAL_PAYOUT_SOURCE_AUTHORITY_PATH.read_text(encoding='utf-8'))['releaseSuccessor']
+legacy=git_text(old['candidateCommit'],'app/release.json')
+current=git_text(port['candidateCommit'],'app/release.json')
+def counted(cmd,*args,**kwargs):
+    if isinstance(cmd,list) and cmd and cmd[0]=='git':
+        calls.append((tuple(cmd[1:]),kwargs.get('text',False)))
+    return original_run(cmd,*args,**kwargs)
+a.subprocess.run=counted
+try:
+    a._GIT_READ_CACHE.clear();a._GIT_READ_CACHE_BYTES=0
+    legacy_result=a.restore_auth_dev_prepare_base('app/release.json',legacy)
+    legacy_calls=list(calls);legacy_set=set(calls)
+    assert len(legacy_calls)==158 and len({args for args,text in legacy_calls})==156
+    assert len(legacy_set)==158 and len(a._GIT_READ_CACHE)==158
+    additions={
+        (('rev-list','--parents','-n','1',port['featureCommit']),True),
+        (('rev-list','--parents','-n','1',port['candidateCommit']),True),
+        (('diff-tree','--no-commit-id','--name-only','-r',port['featureCommit']),True),
+        (('diff-tree','--no-commit-id','--name-only','-r',port['candidateCommit']),True),
+    }
+    for row in port['files']:
+        for revision in (port['baseCommit'],port['candidateCommit']):
+            additions.add((('show',revision+':'+row['path']),False))
+    for revision in (port['baseCommit'],port['candidateCommit']):
+        additions.add((('show',revision+':app/release.json'),True))
+    for file in ('app/tennis-note-member-app/service-worker.js','app/tennis-note-coach-app/service-worker.js'):
+        additions.add((('show',port['candidateCommit']+':'+file),True))
+    assert len(additions)==40 and not additions.intersection(legacy_set)
+    a._GIT_READ_CACHE.clear();a._GIT_READ_CACHE_BYTES=0;calls.clear()
+    cold=a.restore_auth_dev_prepare_base('app/release.json',current)
+    assert cold==legacy_result
+    assert set(calls)==legacy_set|additions
+    assert len(calls)==len(legacy_calls)+len(additions)==198
+    assert len(a._GIT_READ_CACHE)==198
+    assert len(a._GIT_READ_CACHE)<=a._GIT_READ_CACHE_MAX_ENTRIES==512
+    assert a._GIT_READ_CACHE_BYTES<=a._GIT_READ_CACHE_MAX_BYTES==16*1024*1024
+    calls.clear()
+    assert a.restore_auth_dev_prepare_base('app/release.json',current)==cold
+    assert calls==[], '555 warm immutable reads repeated'
+    bad=copy.deepcopy(port);bad['target']='public-main'
+    class ChangedFixture:
+        def read_text(self,encoding='utf-8'): return json.dumps(bad)
+    original_path=a.R3_OPEN_REFRESH_AUTHORITY_PATH
+    a.R3_OPEN_REFRESH_AUTHORITY_PATH=ChangedFixture()
+    try: must_fail(lambda:a.restore_auth_dev_prepare_base('app/release.json',current))
+    finally: a.R3_OPEN_REFRESH_AUTHORITY_PATH=original_path
+    must_fail(lambda:a.restore_auth_dev_prepare_base('app/release.json',current+' '))
+finally:
+    a.subprocess.run=original_run
+print('FROZEN158_PLUS_EXACT40_COLD198_WARM0_PASS')
+`), /FROZEN158_PLUS_EXACT40_COLD198_WARM0_PASS/);
+});
+
+test("555 JS owned-row omission and outside-path substitution fail before passthrough", () => {
+  const helper = require("./helpers/r3-history-port.cjs");
+  const authorityPath = path.join(root, "tests/fixtures/r3-coach-open-refresh-source-parity.json");
+  const raw = fs.readFileSync(authorityPath, "utf8");
+  const port = JSON.parse(raw), file = "app/admin/index.html";
+  const source = execFileSync("git", ["show", port.candidateCommit + ":" + file],
+    {cwd: root, encoding: "utf8"}).replace(/\r\n/g, "\n");
+  const originalRead = fs.readFileSync;
+  for (const change of [
+    p => { p.files = p.files.filter(row => row.path !== file); },
+    p => { p.files.find(row => row.path === file).path = "app/shared/unapproved-outside-path.js"; },
+  ]) {
+    const bad = JSON.parse(raw); change(bad);
+    fs.readFileSync = function (target, ...args) {
+      if (path.resolve(String(target)) === authorityPath) return JSON.stringify(bad);
+      return originalRead.call(this, target, ...args);
+    };
+    try { assert.throws(() => helper.restoreOpenRefresh(file, source)); }
+    finally { fs.readFileSync = originalRead; }
+  }
 });
