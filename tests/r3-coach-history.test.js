@@ -7,6 +7,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {root,manifest,sha,restore}=require("./helpers/r3-history-port.cjs");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8").replace(/\r\n/g,"\n");
+const readLegacy=file=>require("./helpers/r3-admin-history-port.cjs").restoreManualPayoutSource(file,read(file));
 const scope={branchId:"synthetic-branch",coachRoleId:"synthetic-role",settlementMonth:"2099-01-01"};
 function payload(version="r3_monthly_settlement_v1",remoteState="PENDING") {
   return {scope:{...scope},state:remoteState,snapshot:{snapshotId:"synthetic-snapshot",revision:1,status:"calculated",calculationVersion:version,sourceFingerprint:"a".repeat(64),
@@ -17,16 +18,16 @@ function payload(version="r3_monthly_settlement_v1",remoteState="PENDING") {
 function context(){
   const c=vm.createContext({window:{},state:{liveProfileId:"synthetic-profile",coach:{branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
     renderCoachSettlementHistory(){},formatCoachWon:String});
-  vm.runInContext(read("app/tennis-note-coach-app/domain/settlement.js"),c);
+  vm.runInContext(readLegacy("app/tennis-note-coach-app/domain/settlement.js"),c);
   vm.runInContext("coachSettlementMonth=()=> '2099-01'",c);
-  vm.runInContext(read("app/tennis-note-coach-app/data/sync.js"),c);
+  vm.runInContext(readLegacy("app/tennis-note-coach-app/data/sync.js"),c);
   return c;
 }
 test("history source extraction: canonical validators/read RPC and exact inverse layer",()=>{
   assert.equal(manifest.mode,"coach-confirmed-history-read-only");
   for(const e of manifest.files){const s=read(e.path),v=JSON.parse(read("app/release.json")).version;assert.equal(sha(restore(e.path,s).replaceAll(v,manifest.publicVersion)),e.baseSha256,e.path);assert.throws(()=>restore(e.path,s+"// drift"))}
   for(const e of manifest.functions){
-    const m=read(e.target).match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"));
+    const m=readLegacy(e.target).match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"));
     assert(m,e.name);assert.equal(sha(m[0]),e.projectedSha256,e.name);
     assert.equal(sha(e.privateSource),e.privateSha256,e.name);
     let source=e.privateSource;
