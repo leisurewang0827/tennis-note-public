@@ -9,6 +9,9 @@ const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 function restoreManualPayoutAdminIndex(file, source, currentVersion) {
   if (file !== "app/admin/index.html") return source;
+  source = require("./r3-history-port.cjs").restoreOpenRefresh(file, source, {inputVersion: currentVersion});
+  // raw555는 위 exact inverse를 통과해야만 기존554 계약으로 들어간다.
+  if (currentVersion === "1.0.555") currentVersion = "1.0.554";
   const authority = JSON.parse(read("tests/fixtures/r3-manual-payout-port-source-authority.json")).releaseSuccessor;
   assert.equal(authority.baseCommit, "636bdb571dab9d67e18725cd101f0fbe452d69d7");
   assert.equal(authority.featureCommit, "758feca68b3dcc7df89652c0dda03176e1c2dc16");
@@ -29,7 +32,7 @@ function restoreBase(file, source) {
   const r3 = require("./r3-effective-port.cjs");
   const currentVersion = JSON.parse(read("app/release.json")).version;
   source = restoreManualPayoutAdminIndex(file, source, currentVersion);
-  const r3SourceVersion = file === "app/admin/index.html" && currentVersion === "1.0.554" ? "1.0.552" : currentVersion;
+  const r3SourceVersion = file === "app/admin/index.html" && ["1.0.554", "1.0.555"].includes(currentVersion) ? "1.0.552" : currentVersion;
   if (r3.manifest.files.some(item => item.path === file)) {
     source = r3.restore(file, r3.canonicalRelease(file, source, r3SourceVersion));
     source = source.replaceAll(r3.manifest.publicVersion, currentVersion);

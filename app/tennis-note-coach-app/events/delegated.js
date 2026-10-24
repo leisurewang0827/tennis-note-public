@@ -124,7 +124,6 @@ function bindDelegatedEvents() {
     const openSettlementButton = event.target.closest("[data-open-coach-settlement]");
     if (openSettlementButton) {
       openCoachSettlement();
-      if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
       return;
     }
 
