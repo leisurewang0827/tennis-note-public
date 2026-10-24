@@ -1091,8 +1091,128 @@ def _load_r3_manual_payout_release_authority() -> dict[str, object]:
     return port
 
 
+R3_OPEN_REFRESH_AUTHORITY_PATH = ROOT / "tests/fixtures/r3-coach-open-refresh-source-parity.json"
+R3_OPEN_REFRESH_BASE_SHA = "99cc0a05d5dc5a9c605184dcd1364936e1d18ffa"
+R3_OPEN_REFRESH_FEATURE_SHA = "c5a32aea9b5d0f3270106da9e68f60190da8e6f8"
+R3_OPEN_REFRESH_CANDIDATE_SHA = "ca7ec623ecf75e7507302dcb64476694da5903a3"
+R3_OPEN_REFRESH_PRODUCTS = frozenset({
+    "app/tennis-note-coach-app/ui/screens.js",
+    "app/tennis-note-coach-app/events/account.js",
+    "app/tennis-note-coach-app/events/delegated.js",
+})
+R3_OPEN_REFRESH_RELEASE = R3_POLICY_551_RELEASE_PATHS
+R3_OPEN_REFRESH_PATHS = R3_OPEN_REFRESH_PRODUCTS | R3_OPEN_REFRESH_RELEASE
+
+
+def _load_r3_coach_open_refresh_authority(authority: dict | None = None) -> dict:
+    """Bind only the reviewed product/official-release stack; old authorities stay frozen."""
+    port = authority if authority is not None else json.loads(
+        R3_OPEN_REFRESH_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    if not isinstance(port, dict) or (
+        port.get("contract") != "r3-coach-open-refresh-source-parity/1"
+        or port.get("baseCommit") != R3_OPEN_REFRESH_BASE_SHA
+        or port.get("target") != "public-dev" or port.get("targetBranch") != "dev"
+        or port.get("baseVersion") != "1.0.554" or port.get("targetVersion") != "1.0.555"
+        or port.get("baseReleaseId") != "2026.10.24.02" or port.get("targetReleaseId") != "2026.10.24.03"
+        or port.get("memberCacheBefore") != 590 or port.get("memberCacheAfter") != 591
+        or port.get("coachCacheBefore") != 563 or port.get("coachCacheAfter") != 564
+    ):
+        raise RuntimeError("R3 open refresh authority context mismatch")
+    if port.get("bindingStatus") != "BOUND_TO_EXACT_FEATURE_RELEASE":
+        raise RuntimeError("R3 open refresh candidate commit binding pending")
+    feature, candidate = port.get("featureCommit"), port.get("candidateCommit")
+    private = port.get("privateSource", {})
+    if (feature != R3_OPEN_REFRESH_FEATURE_SHA or candidate != R3_OPEN_REFRESH_CANDIDATE_SHA
+        or private.get("featureCommit") != "e224c6f36dc370c50ba29867d1ebca6e3939394b"
+        or private.get("baseCommit") != "50d1c99497476aca1ed55d21419f89868f0e9872"
+        or private.get("path") != "90-Dashboard/tennis-note-coach-app/app.js"
+        or private.get("gitBlob") != "f26f248d66a6c7c172053ff381b0cdf9823fea08"
+        or private.get("canonicalLfSha256") != "9ab940640f53b5c0a4c2b8dd1dc79e7a99dcef90c413074f22e9cb4c376b19c6"
+        or private.get("basicFunctionSha256") != "f525532488903d1c90d4c9c46461548357904b2b7e6d064d0948f65d6d4db855"):
+        raise RuntimeError("R3 open refresh source binding mismatch")
+    for revision, expected in ((feature, R3_OPEN_REFRESH_BASE_SHA), (candidate, feature)):
+        lineage = str(run_git("rev-list", "--parents", "-n", "1", revision)).split()
+        if lineage != [revision, expected]:
+            raise RuntimeError("R3 open refresh exact two-commit lineage mismatch")
+    feature_paths = R3_OPEN_REFRESH_PRODUCTS | {"tests/r3-coach-settlement-open-refresh.test.js"}
+    for revision, expected in ((feature, feature_paths), (candidate, R3_OPEN_REFRESH_RELEASE)):
+        if set(str(run_git("diff-tree", "--no-commit-id", "--name-only", "-r", revision)).splitlines()) != expected:
+            raise RuntimeError("R3 open refresh commit path set mismatch")
+    files = port.get("files")
+    if (not isinstance(files, list) or len(files) != len(R3_OPEN_REFRESH_PATHS)
+        or any(not isinstance(row, dict) for row in files)
+        or {row.get("path") for row in files} != R3_OPEN_REFRESH_PATHS):
+        raise RuntimeError("R3 open refresh exact source paths mismatch")
+    for row in files:
+        path = row["path"]
+        if set(row) != {"path", "beforeGitBlob", "afterGitBlob", "beforeSha256", "afterSha256", "hunks"}:
+            raise RuntimeError("R3 open refresh source row shape mismatch")
+        contents = {}
+        for label, revision in (("before", R3_OPEN_REFRESH_BASE_SHA), ("after", candidate)):
+            raw = run_git("show", f"{revision}:{path}", text=False)
+            blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+            canonical = raw.decode("utf-8").replace("\r\n", "\n")
+            if blob != row[label + "GitBlob"] or sha256(canonical.encode()) != row[label + "Sha256"]:
+                raise RuntimeError(f"R3 open refresh Git blob/hash mismatch: {path}")
+            contents[label] = canonical
+        hunks = row.get("hunks")
+        if not isinstance(hunks, list) or not hunks:
+            raise RuntimeError("R3 open refresh inverse hunks missing")
+        restored = contents["after"]
+        for hunk in reversed(hunks):
+            if (not isinstance(hunk, dict) or set(hunk) != {"before", "after"}
+                or not isinstance(hunk["after"], str) or not isinstance(hunk["before"], str)
+                or not hunk["after"] or restored.count(hunk["after"]) != 1):
+                raise RuntimeError(f"R3 open refresh inverse hunk mismatch: {path}")
+            restored = restored.replace(hunk["after"], hunk["before"], 1)
+        if restored != contents["before"]:
+            raise RuntimeError(f"R3 open refresh inverse baseline mismatch: {path}")
+    for revision, version, release_id in (
+        (R3_OPEN_REFRESH_BASE_SHA, "1.0.554", "2026.10.24.02"),
+        (candidate, "1.0.555", "2026.10.24.03"),
+    ):
+        release = json.loads(run_git("show", f"{revision}:app/release.json"))
+        if release.get("version") != version or release.get("releaseId") != release_id:
+            raise RuntimeError("R3 open refresh version/release mismatch")
+    for relative, expected in (
+        ("app/tennis-note-member-app/service-worker.js", "tennis-note-member-pwa-v591"),
+        ("app/tennis-note-coach-app/service-worker.js", "tennis-note-coach-mode-v564"),
+    ):
+        source = str(run_git("show", f"{candidate}:{relative}"))
+        if re.search(r'const CACHE_NAME = "([^"]+)";', source).group(1) != expected:
+            raise RuntimeError("R3 open refresh cache mismatch")
+    return port
+
+
+def restore_r3_coach_open_refresh_base(
+    path: str, text: str, authority: dict | None = None, *, strict: bool = True,
+) -> str:
+    """Exact 555 -> 554 outer inverse; historical inputs retain their own frozen route."""
+    normalized = Path(path).as_posix()
+    if normalized not in R3_OPEN_REFRESH_PATHS:
+        return text
+    port = _load_r3_coach_open_refresh_authority(authority)
+    row = next(item for item in port["files"] if item["path"] == normalized)
+    canonical = text.replace("\r\n", "\n")
+    digest = sha256(canonical.encode())
+    if digest == row["beforeSha256"]:
+        return canonical
+    if digest != row["afterSha256"]:
+        if not strict:
+            return text
+        raise RuntimeError(f"R3 open refresh candidate hash drift: {normalized}")
+    for hunk in reversed(row["hunks"]):
+        if canonical.count(hunk["after"]) != 1:
+            raise RuntimeError(f"R3 open refresh inverse hunk drift: {normalized}")
+        canonical = canonical.replace(hunk["after"], hunk["before"], 1)
+    if sha256(canonical.encode()) != row["beforeSha256"]:
+        raise RuntimeError(f"R3 open refresh inverse baseline drift: {normalized}")
+    return canonical
+
+
 def restore_r3_manual_payout_successor_base(path: str, text: str, *, strict: bool = True) -> str:
     """Remove only the pinned 1.0.554 payout feature/release stack before older inverses."""
+    text = restore_r3_coach_open_refresh_base(path, text, strict=strict)
     normalized = Path(path).as_posix()
     if normalized not in R3_MANUAL_PAYOUT_SOURCE_PATHS:
         return text
