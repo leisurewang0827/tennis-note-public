@@ -95,6 +95,38 @@ R3_POLICY_552_CONTENT_PATHS = frozenset({
     *R3_POLICY_552_RELEASE_PATHS,
 })
 R3_POLICY_552_EXPECTED_PATHS = R3_POLICY_552_FEATURE_PATHS | R3_POLICY_552_RELEASE_PATHS
+R3_MANUAL_PAYOUT_SOURCE_AUTHORITY_PATH = ROOT / "tests" / "fixtures" / "r3-manual-payout-port-source-authority.json"
+R3_MANUAL_PAYOUT_BASE_SHA = "636bdb571dab9d67e18725cd101f0fbe452d69d7"
+R3_MANUAL_PAYOUT_FEATURE_SHA = "758feca68b3dcc7df89652c0dda03176e1c2dc16"
+R3_MANUAL_PAYOUT_CANDIDATE_SHA = "1b1a73ce73ea2998ed91b54d52aa312d6a2d47f6"
+R3_MANUAL_PAYOUT_FEATURE_PATHS = frozenset({
+    "app/admin/actions/billing.js",
+    "app/admin/data/billing.js",
+    "app/admin/events/billing.js",
+    "app/admin/index.html",
+    "app/admin/views/billing.js",
+    "app/tennis-note-coach-app/data/sync.js",
+    "app/tennis-note-coach-app/views/settlement.js",
+    "tests/fixtures/r3-manual-payout-port-source-authority.json",
+    "tests/r3-manual-payout-port.test.js",
+})
+R3_MANUAL_PAYOUT_RELEASE_PATHS = frozenset({
+    "app/admin/index.html",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/domain/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/ui/screens.js",
+})
+R3_MANUAL_PAYOUT_EXPECTED_PATHS = R3_MANUAL_PAYOUT_FEATURE_PATHS | R3_MANUAL_PAYOUT_RELEASE_PATHS
+R3_MANUAL_PAYOUT_SOURCE_PATHS = frozenset(path for path in R3_MANUAL_PAYOUT_EXPECTED_PATHS if path.startswith("app/"))
 R3_SUCCESSOR_EXPECTED_PATHS = frozenset({
     "app/admin/actions/coach.js",
     "app/admin/domain/coaches.js",
@@ -1006,6 +1038,88 @@ def restore_r3_coach_settlement_input_successor_base(path: str, text: str) -> st
     return _restore_r3_policy_552_content(path, text, _load_r3_policy_552_authority())
 
 
+def _load_r3_manual_payout_release_authority() -> dict[str, object]:
+    """Validate the exact two-commit public payout candidate before historical inverses."""
+    source = json.loads(R3_MANUAL_PAYOUT_SOURCE_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    port = source.get("releaseSuccessor") if isinstance(source, dict) else None
+    if not isinstance(port, dict):
+        raise RuntimeError("R3 manual payout release successor authority missing")
+    if (port.get("contract") != "r3-manual-payout-public-dev-release-successor/1"
+            or port.get("baseCommit") != R3_MANUAL_PAYOUT_BASE_SHA
+            or port.get("featureCommit") != R3_MANUAL_PAYOUT_FEATURE_SHA
+            or port.get("candidateCommit") != R3_MANUAL_PAYOUT_CANDIDATE_SHA
+            or port.get("target") != "public-dev" or port.get("targetBranch") != "dev"
+            or port.get("baseVersion") != "1.0.552" or port.get("baseReleaseId") != "2026.10.20.03"
+            or port.get("targetVersion") != "1.0.554" or port.get("targetReleaseId") != "2026.10.24.02"
+            or port.get("memberCacheFloor") != 589 or port.get("coachCacheFloor") != 562
+            or port.get("candidateMemberCache") != 590 or port.get("candidateCoachCache") != 563):
+        raise RuntimeError("R3 manual payout release successor context mismatch")
+    feature_paths = port.get("featurePaths")
+    release_paths = port.get("releasePaths")
+    if (not isinstance(feature_paths, list) or len(feature_paths) != len(set(feature_paths))
+            or set(feature_paths) != R3_MANUAL_PAYOUT_FEATURE_PATHS
+            or not isinstance(release_paths, list) or len(release_paths) != len(set(release_paths))
+            or set(release_paths) != R3_MANUAL_PAYOUT_RELEASE_PATHS):
+        raise RuntimeError("R3 manual payout release successor exact path set mismatch")
+
+    def parent(revision: str, expected: str | None = None) -> str:
+        row = str(run_git("rev-list", "--parents", "-n", "1", revision)).split()
+        if len(row) != 2 or row[0] != revision:
+            raise RuntimeError("R3 manual payout release stack contains a merge or root commit")
+        if expected is not None and row[1] != expected:
+            raise RuntimeError("R3 manual payout release stack parent mismatch")
+        return row[1]
+
+    parent(R3_MANUAL_PAYOUT_FEATURE_SHA, R3_MANUAL_PAYOUT_BASE_SHA)
+    parent(R3_MANUAL_PAYOUT_CANDIDATE_SHA, R3_MANUAL_PAYOUT_FEATURE_SHA)
+
+    def paths(*args: str) -> set[str]:
+        return set(str(run_git(*args)).splitlines())
+
+    if paths("diff-tree", "--no-commit-id", "--name-only", "-r", R3_MANUAL_PAYOUT_FEATURE_SHA) != R3_MANUAL_PAYOUT_FEATURE_PATHS:
+        raise RuntimeError("R3 manual payout feature commit path set mismatch")
+    if paths("diff-tree", "--no-commit-id", "--name-only", "-r", R3_MANUAL_PAYOUT_CANDIDATE_SHA) != R3_MANUAL_PAYOUT_RELEASE_PATHS:
+        raise RuntimeError("R3 manual payout release commit path set mismatch")
+    if paths("diff", "--name-only", R3_MANUAL_PAYOUT_BASE_SHA, R3_MANUAL_PAYOUT_CANDIDATE_SHA) != R3_MANUAL_PAYOUT_EXPECTED_PATHS:
+        raise RuntimeError("R3 manual payout candidate cumulative path set mismatch")
+    base_release = json.loads(run_git("show", f"{R3_MANUAL_PAYOUT_BASE_SHA}:app/release.json"))
+    candidate_release = json.loads(run_git("show", f"{R3_MANUAL_PAYOUT_CANDIDATE_SHA}:app/release.json"))
+    if (base_release.get("version") != port["baseVersion"] or base_release.get("releaseId") != port["baseReleaseId"]
+            or candidate_release.get("version") != port["targetVersion"]
+            or candidate_release.get("releaseId") != port["targetReleaseId"]):
+        raise RuntimeError("R3 manual payout release metadata stack mismatch")
+    return port
+
+
+def restore_r3_manual_payout_successor_base(path: str, text: str, *, strict: bool = True) -> str:
+    """Remove only the pinned 1.0.554 payout feature/release stack before older inverses."""
+    normalized = Path(path).as_posix()
+    if normalized not in R3_MANUAL_PAYOUT_SOURCE_PATHS:
+        return text
+    _load_r3_manual_payout_release_authority()
+    current = text.replace("\r\n", "\n").encode("utf-8")
+    stage_blobs: dict[bytes, bytes] = {}
+    for revision in (R3_MANUAL_PAYOUT_BASE_SHA, R3_MANUAL_PAYOUT_FEATURE_SHA, R3_MANUAL_PAYOUT_CANDIDATE_SHA):
+        try:
+            blob = run_git("show", f"{revision}:{normalized}", text=False)
+        except subprocess.CalledProcessError:
+            if revision != R3_MANUAL_PAYOUT_BASE_SHA:
+                raise RuntimeError(f"R3 manual payout stage blob missing: {normalized}")
+            continue
+        canonical_blob = blob.replace(b"\r\n", b"\n")
+        digest = hashlib.sha256(canonical_blob).digest()
+        prior = stage_blobs.get(digest)
+        if prior is not None and prior != canonical_blob:
+            raise RuntimeError(f"R3 manual payout stage hash collision: {normalized}")
+        stage_blobs[digest] = canonical_blob
+    if hashlib.sha256(current).digest() not in stage_blobs:
+        if not strict:
+            return text
+        raise RuntimeError(f"R3 manual payout source stage drift: {normalized}")
+    base = run_git("show", f"{R3_MANUAL_PAYOUT_BASE_SHA}:{normalized}", text=False).replace(b"\r\n", b"\n")
+    return base.decode("utf-8")
+
+
 def restore_r3_basic_settlement_successor_base(
     path: str,
     text: str,
@@ -1262,6 +1376,10 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def restore_auth_dev_prepare_base(path: str, text: str) -> str:
+    normalized = Path(path).as_posix()
+    current_source = ROOT / normalized
+    is_current_source = current_source.is_file() and current_source.read_text(encoding="utf-8").replace("\r\n", "\n") == text.replace("\r\n", "\n")
+    text = restore_r3_manual_payout_successor_base(path, text, strict=is_current_source)
     pending_552 = _validate_r3_policy_552_content_authority(
         json.loads(R3_POLICY_552_AUTHORITY_PATH.read_text(encoding="utf-8"))
     )

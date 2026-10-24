@@ -2,18 +2,36 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/renewal-hold-source-parity.json"), "utf8"));
 const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
+function restoreManualPayoutAdminIndex(file, source, currentVersion) {
+  if (file !== "app/admin/index.html") return source;
+  const authority = JSON.parse(read("tests/fixtures/r3-manual-payout-port-source-authority.json")).releaseSuccessor;
+  assert.equal(authority.baseCommit, "636bdb571dab9d67e18725cd101f0fbe452d69d7");
+  assert.equal(authority.featureCommit, "758feca68b3dcc7df89652c0dda03176e1c2dc16");
+  assert.equal(authority.candidateCommit, "1b1a73ce73ea2998ed91b54d52aa312d6a2d47f6");
+  if (currentVersion === authority.baseVersion) return source;
+  assert.equal(currentVersion, authority.targetVersion, "unrecognized manual payout release stage");
+  const commitFile = (revision) => execFileSync("git", ["show", `${revision}:${file}`], { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
+  const atBase = commitFile(authority.baseCommit);
+  const atFeature = commitFile(authority.featureCommit);
+  const normalized = source.replaceAll(currentVersion, authority.baseVersion);
+  assert.ok([sha(atBase), sha(atFeature)].includes(sha(normalized)), "manual payout admin index stage drift");
+  return atBase;
+}
 // 승인된 후보 전체 hash와 각 hunk의 유일성을 확인한 뒤 기존 golden 검사를 그대로 사용한다.
 function restoreBase(file, source) {
   source = require("./verified-profile-phone-port.cjs").restorePhone(file, source);
   // R3 후속 후보는 먼저 exact 해시/offset으로 역변환한다. 기존 HOLD 근거는 그대로 검사한다.
   const r3 = require("./r3-effective-port.cjs");
   const currentVersion = JSON.parse(read("app/release.json")).version;
+  source = restoreManualPayoutAdminIndex(file, source, currentVersion);
+  const r3SourceVersion = file === "app/admin/index.html" && currentVersion === "1.0.554" ? "1.0.552" : currentVersion;
   if (r3.manifest.files.some(item => item.path === file)) {
-    source = r3.restore(file, r3.canonicalRelease(file, source, currentVersion));
+    source = r3.restore(file, r3.canonicalRelease(file, source, r3SourceVersion));
     source = source.replaceAll(r3.manifest.publicVersion, currentVersion);
   } else {
     // R3 내부 chain이 이미 소비한 최신 증분을 두 번 역변환하지 않는다.
@@ -68,4 +86,4 @@ function definition(source, name) {
   assert(end > match.index);
   return source.slice(match.index, end + 2);
 }
-module.exports = {root, manifest, sha, read, restoreBase, appSource, definition};
+module.exports = {root, manifest, sha, read, restoreBase, appSource, definition, restoreManualPayoutAdminIndex};

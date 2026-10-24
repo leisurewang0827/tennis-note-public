@@ -57,6 +57,11 @@
   },
   "releaseSuccessor": {
     "contract": "r3-manual-payout-public-dev-release-successor/1",
+    "baseCommit": "636bdb571dab9d67e18725cd101f0fbe452d69d7",
+    "featureCommit": "758feca68b3dcc7df89652c0dda03176e1c2dc16",
+    "candidateCommit": "1b1a73ce73ea2998ed91b54d52aa312d6a2d47f6",
+    "target": "public-dev",
+    "targetBranch": "dev",
     "baseVersion": "1.0.552",
     "baseReleaseId": "2026.10.20.03",
     "targetVersion": "1.0.554",
@@ -64,7 +69,33 @@
     "memberCacheFloor": 589,
     "coachCacheFloor": 562,
     "candidateMemberCache": 590,
-    "candidateCoachCache": 563
+    "candidateCoachCache": 563,
+    "featurePaths": [
+      "app/admin/actions/billing.js",
+      "app/admin/data/billing.js",
+      "app/admin/events/billing.js",
+      "app/admin/index.html",
+      "app/admin/views/billing.js",
+      "app/tennis-note-coach-app/data/sync.js",
+      "app/tennis-note-coach-app/views/settlement.js",
+      "tests/fixtures/r3-manual-payout-port-source-authority.json",
+      "tests/r3-manual-payout-port.test.js"
+    ],
+    "releasePaths": [
+      "app/admin/index.html",
+      "app/release.json",
+      "app/shared/tennisnote-release.js",
+      "app/tennis-note-coach-app/app.js",
+      "app/tennis-note-coach-app/domain/coaches.js",
+      "app/tennis-note-coach-app/forms/common.js",
+      "app/tennis-note-coach-app/index.html",
+      "app/tennis-note-coach-app/service-worker.js",
+      "app/tennis-note-member-app/app.js",
+      "app/tennis-note-member-app/forms/common.js",
+      "app/tennis-note-member-app/index.html",
+      "app/tennis-note-member-app/service-worker.js",
+      "app/tennis-note-member-app/ui/screens.js"
+    ]
   },
   "privateFunctionMap": {
     "state": ["readMonthlySettlementPayoutState", "readCoachSettlementPayoutState"],
