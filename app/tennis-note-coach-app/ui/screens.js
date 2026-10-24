@@ -139,6 +139,7 @@ function openCoachSettlement() {
   if (document.body.dataset.activeView !== "membersView") setView("membersView", { pushHistory: true });
   renderCoachSettlement();
   openCoachModal("coachSettlementModal");
+  void syncCoachSettlementFromServer();
   void syncCoachSettlementHistoryFromServer();
 }
 
