@@ -253,6 +253,7 @@ with tempfile.TemporaryDirectory(prefix='tn-r3-551-pending-') as directory:
     a.R3_POLICY_551_AUTHORITY_PATH=pending_path
     try:
         current=pathlib.Path('app/release.json').read_text(encoding='utf-8')
+        current=a.restore_r3_manual_payout_successor_base('app/release.json',current)
         try: a.restore_r3_basic_settlement_successor_base('app/release.json',current)
         except RuntimeError as error: assert str(error)=='R3 551 candidate commit binding pending'
         else: raise AssertionError('deploy gate accepted cloned pending authority')
@@ -422,9 +423,9 @@ try:
     outer_entries=len(a._GIT_READ_CACHE); outer_bytes=a._GIT_READ_CACHE_BYTES
     outer_two=a.restore_auth_dev_prepare_base('app/release.json',body)
     outer_second=len(calls)-outer_first
-    assert outer_one==outer_two and outer_first==148 and outer_unique==148
+    assert outer_one==outer_two and outer_first==158 and outer_unique==156
     assert outer_second==0, ('outer-entry immutable reads repeated', outer_second)
-    assert outer_entries==148 and outer_bytes<=a._GIT_READ_CACHE_MAX_BYTES
+    assert outer_entries==158 and outer_bytes<=a._GIT_READ_CACHE_MAX_BYTES
     assert outer_entries<=a._GIT_READ_CACHE_MAX_ENTRIES
 finally:
     a.subprocess.run=original_run

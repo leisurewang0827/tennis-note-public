@@ -82,8 +82,14 @@ def verify_existing_projects(get) -> dict[str, str]:
 
 def validate_frozen_release_metadata(raw_release_text: str, frozen_release: dict) -> dict[str, str]:
     raw_release = json.loads(raw_release_text)
+    payout_candidate = json.loads(raw_release_text)
+    is_payout_candidate = (payout_candidate.get("version") == "1.0.554"
+                           and payout_candidate.get("releaseId") == "2026.10.24.02")
+    payout_base = release_alignment.restore_r3_manual_payout_successor_base(
+        "app/release.json", raw_release_text, strict=is_payout_candidate
+    )
     comparison_text = release_alignment.restore_r3_basic_settlement_successor_base(
-        "app/release.json", raw_release_text
+        "app/release.json", payout_base
     )
     comparison_release = json.loads(comparison_text)
     require(comparison_release["version"] == frozen_release["version"]
@@ -104,10 +110,24 @@ def validate_source() -> dict:
     return validate_frozen_release_metadata(raw_release_text, freeze["release"])
 
 
+def verify_development_checkout_history(head: str) -> None:
+    """Fail closed before Cloudflare reads if the checked-out commit's parent is unavailable."""
+    full_sha = re.compile(r"[a-f0-9]{40}")
+    require(bool(full_sha.fullmatch(head)), "development_scope_unconfirmed")
+    ancestry = str(release_alignment.run_git("rev-list", "--parents", "-n", "1", head)).split()
+    require(len(ancestry) == 2 and ancestry[0] == head and bool(full_sha.fullmatch(ancestry[1])),
+            "development_scope_unconfirmed")
+    parent = ancestry[1]
+    parent_ancestry = str(release_alignment.run_git("rev-list", "--parents", "-n", "1", parent)).split()
+    require(bool(parent_ancestry) and parent_ancestry[0] == parent,
+            "development_scope_unconfirmed")
+
+
 def main() -> int:
     try:
         head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         account, fingerprint = validate_context(dict(os.environ), head)
+        verify_development_checkout_history(head)
         release = validate_source()
         token = os.environ["CLOUDFLARE_API_TOKEN"]
 

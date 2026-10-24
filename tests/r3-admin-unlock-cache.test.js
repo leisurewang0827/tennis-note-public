@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const parity = require("./helpers/r3-admin-history-port.cjs");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const read = file => fs.readFileSync(path.join(root, file), "utf8");
+const read = file => parity.restoreManualPayoutSource(file, fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n"));
 const extract = (file, name) => {
   const result = read(file).match(new RegExp("^(?:async )?function " + name + "\\([^]*?^}", "m"));
   assert(result, name + " must exist in actual modular source");

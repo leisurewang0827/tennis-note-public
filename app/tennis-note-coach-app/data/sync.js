@@ -796,6 +796,8 @@ const coachSettlementHistory = {
   coachSettlementReconciliationUiState: "EMPTY",
   coachSettlementReconciliationLoading: false,
   coachSettlementReconciliationMessage: "",
+  coachSettlementPayoutState: null,
+  coachSettlementPayoutMessage: "",
 };
 let coachSettlementHistoryPending = null;
 
@@ -805,11 +807,38 @@ function resetCoachSettlementHistory() {
   coachSettlementHistory.coachSettlementReconciliationUiState = "EMPTY";
   coachSettlementHistory.coachSettlementReconciliationLoading = false;
   coachSettlementHistory.coachSettlementReconciliationMessage = "";
+  coachSettlementHistory.coachSettlementPayoutState = null;
+  coachSettlementHistory.coachSettlementPayoutMessage = "";
   coachSettlementHistoryPending = null;
 }
 
 async function readCoachSettlementHistory(scope = coachSettlementReconciliationScope()) {
   return window.TennisNoteDataClient.rpc("tn_coach_monthly_settlement_reconciliation_state", {
+    target_branch_id: scope.branchId,
+    target_coach_role_id: scope.coachRoleId,
+    target_month: scope.settlementMonth,
+  });
+}
+
+function coachSettlementPayoutPayloadIsExact(value, reconciliation, scope) {
+  const expected = reconciliation?.snapshot || {};
+  const snapshot = value?.snapshot || {};
+  const payout = value?.payout;
+  if (!coachSettlementReconciliationPayloadIsExact(value, scope) || !payout || typeof payout !== "object"
+    || String(snapshot.snapshotId || "") !== String(expected.snapshotId || "")
+    || Number(snapshot.revision || 0) !== Number(expected.revision || 0)
+    || String(snapshot.sourceFingerprint || "") !== String(expected.sourceFingerprint || "")
+    || !["NOT_RECORDED", "RECORDED", "REVERSED"].includes(String(payout.state || "").toUpperCase())
+    || typeof payout.recordingEnabled !== "boolean" || !Array.isArray(payout.events)) return false;
+  return payout.events.every((event) => Boolean(event?.eventId && event?.snapshotId
+    && Number.isInteger(Number(event.snapshotRevision)) && Number(event.snapshotRevision) > 0
+    && /^[0-9a-f]{64}$/i.test(String(event.sourceFingerprint || ""))
+    && Number.isFinite(Number(event.amount)) && Number(event.amount) >= 0
+    && ["payout_recorded", "payout_record_reversed"].includes(String(event.eventType || ""))));
+}
+
+async function readCoachSettlementPayoutState(scope) {
+  return window.TennisNoteDataClient.rpc("tn_monthly_settlement_payout_state", {
     target_branch_id: scope.branchId,
     target_coach_role_id: scope.coachRoleId,
     target_month: scope.settlementMonth,
@@ -841,6 +870,8 @@ async function syncCoachSettlementHistoryFromServer() {
   coachSettlementHistory.coachSettlementReconciliationLoading = true;
   coachSettlementHistory.coachSettlementReconciliationUiState = "LOADING";
   coachSettlementHistory.coachSettlementReconciliationMessage = "";
+  coachSettlementHistory.coachSettlementPayoutState = null;
+  coachSettlementHistory.coachSettlementPayoutMessage = "";
   renderCoachSettlementHistory();
   const promise = (async () => {
     try {
@@ -850,6 +881,17 @@ async function syncCoachSettlementHistoryFromServer() {
       if (!coachSettlementReconciliationPayloadIsExact(result, scope)) throw Error("settlement_reconciliation_scope_mismatch");
       coachSettlementHistory.coachSettlementReconciliation = result;
       coachSettlementHistory.coachSettlementReconciliationUiState = String(result.state).toUpperCase();
+      try {
+        const payoutRaw = await readCoachSettlementPayoutState(scope);
+        const payout = Array.isArray(payoutRaw) ? payoutRaw[0] || null : payoutRaw;
+        if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;
+        if (!coachSettlementPayoutPayloadIsExact(payout, result, scope)) throw Error("settlement_payout_scope_mismatch");
+        coachSettlementHistory.coachSettlementPayoutState = payout;
+      } catch (_) {
+        if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;
+        coachSettlementHistory.coachSettlementPayoutState = null;
+        coachSettlementHistory.coachSettlementPayoutMessage = "수동 기록 이력을 확인하지 못했습니다. 실제 송금 상태로 간주하지 않습니다.";
+      }
       return true;
     } catch (error) {
       if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;

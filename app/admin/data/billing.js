@@ -537,6 +537,38 @@ async function refreshEffectiveSettlementPreview(signature) {
 // 확정 이력은 메모리에만 보관합니다. 미리보기와 저장 상태를 공유하지 않습니다.
 const adminSettlementHistory = { coachRoleId: "", key: "", request: 0, loading: false, value: null, message: "코치를 선택한 뒤 확정 이력을 조회해 주세요.", sessionToken: "", profileId: "" };
 
+const adminMonthlySettlementWrite = {
+  requestId: 0, status: "EMPTY", loading: false, submitting: false, message: "계산 결과를 먼저 확인해 주세요.",
+  preview: null, scopeState: null, signature: "", snapshotOperationKey: "", confirmationOperationKey: "",
+  payoutState: null, payoutReadValid: false, payoutLoading: false, payoutSubmitting: false,
+  payoutRequestId: 0, payoutOperationSignature: "", payoutOperationKey: "",
+  payoutReverseOperationSignature: "", payoutReverseOperationKey: "", payoutMessage: "", payoutUncertain: false,
+};
+
+function resetAdminMonthlySettlementWrite() {
+  adminMonthlySettlementWrite.requestId += 1;
+  adminMonthlySettlementWrite.status = "EMPTY";
+  adminMonthlySettlementWrite.loading = false;
+  adminMonthlySettlementWrite.submitting = false;
+  adminMonthlySettlementWrite.message = "계산 결과를 먼저 확인해 주세요.";
+  adminMonthlySettlementWrite.preview = null;
+  adminMonthlySettlementWrite.scopeState = null;
+  adminMonthlySettlementWrite.signature = "";
+  adminMonthlySettlementWrite.snapshotOperationKey = "";
+  adminMonthlySettlementWrite.confirmationOperationKey = "";
+  adminMonthlySettlementWrite.payoutState = null;
+  adminMonthlySettlementWrite.payoutReadValid = false;
+  adminMonthlySettlementWrite.payoutLoading = false;
+  adminMonthlySettlementWrite.payoutSubmitting = false;
+  adminMonthlySettlementWrite.payoutRequestId += 1;
+  adminMonthlySettlementWrite.payoutOperationSignature = "";
+  adminMonthlySettlementWrite.payoutOperationKey = "";
+  adminMonthlySettlementWrite.payoutReverseOperationSignature = "";
+  adminMonthlySettlementWrite.payoutReverseOperationKey = "";
+  adminMonthlySettlementWrite.payoutMessage = "";
+  adminMonthlySettlementWrite.payoutUncertain = false;
+}
+
 function resetAdminSettlementHistory() {
   adminSettlementHistory.request += 1;
   adminSettlementHistory.loading = false;
@@ -545,6 +577,7 @@ function resetAdminSettlementHistory() {
   adminSettlementHistory.sessionToken = "";
   adminSettlementHistory.profileId = "";
   adminSettlementHistory.message = "코치를 선택한 뒤 확정 이력을 조회해 주세요.";
+  resetAdminMonthlySettlementWrite();
 }
 
 function adminSettlementHistoryAccessReady() {
@@ -583,7 +616,7 @@ async function refreshAdminSettlementHistory() {
     if (!current()) return false;
     if (!adminSettlementHistoryPayloadIsExact(value, scope)) throw Error("history_scope_invalid");
     adminSettlementHistory.value = value.state === "CONFIRMED" ? value : null;
-    adminSettlementHistory.message = value.state === "CONFIRMED" ? "확정 당시 계산본입니다. 현재 예상 정산과 구분되며 이 화면에서 확정·지급하지 않습니다." : value.state === "CALCULATED" ? "계산본은 있으나 아직 확정되지 않았습니다." : "선택한 월의 확정 이력이 없습니다.";
+    adminSettlementHistory.message = value.state === "CONFIRMED" ? "확정 당시 계산본입니다. 이 화면에서 계산본 확정과 수동 지급 기록은 가능하지만 실제 송금은 하지 않습니다." : value.state === "CALCULATED" ? "계산본은 있으나 아직 확정되지 않았습니다." : "선택한 월의 확정 이력이 없습니다.";
     return true;
   } catch (error) {
     if (current()) { adminSettlementHistory.value = null; adminSettlementHistory.message = "확정 이력을 불러오지 못했습니다. 권한·네트워크와 대상 범위를 확인한 뒤 다시 조회해 주세요."; }
