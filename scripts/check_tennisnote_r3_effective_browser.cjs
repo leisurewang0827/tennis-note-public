@@ -341,7 +341,9 @@ async function runFixture(page,surface){
     }
     const scopeCalls=window.__r3Rpc.filter(row=>row.name==="tn_coach_settlement_scope_v2");
     check(scopeCalls.length>0&&scopeCalls.every(row=>row.args.target_branch_id==="synthetic-branch"&&row.args.target_coach_role_id==="synthetic-role"),"actual entry spy exact scope RPC");
-    check(!window.__r3Rpc.some(row=>/confirm|respond|payout|payment|refund|save|create|update/.test(row.name)),"write RPC zero");
+    const allowedReadRpcs=new Set(["tn_coach_settlement_scope_v2","tn_coach_monthly_settlement_reconciliation_state","tn_admin_monthly_settlement_scope_state","tn_monthly_settlement_payout_state"]);
+    check(window.__r3Rpc.every(row=>allowedReadRpcs.has(row.name)),"only exact read RPCs");
+    check(!window.__r3Rpc.some(row=>["tn_admin_create_monthly_settlement_snapshot","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_coach_respond_monthly_settlement_reconciliation"].includes(row.name)),"write RPC zero");
     return {checks,previewCalls:scopeCalls.length,hostedWrites:0};
   },surface);
 }
