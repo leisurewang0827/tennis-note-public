@@ -13,6 +13,13 @@ function bindBillingEvents() {
     renderAdminSettlementHistory();
   });
   $("#adminSettlementHistoryRead")?.addEventListener("click", () => void refreshAdminSettlementHistory());
+  $("#adminR3SettlementPreview")?.addEventListener("click", () => void previewAdminMonthlySettlement());
+  $("#adminR3SettlementConfirm")?.addEventListener("click", () => void confirmAdminMonthlySettlementSnapshot());
+  $("#adminR3PayoutRecord")?.addEventListener("click", () => void recordAdminMonthlySettlementPayout());
+  $("#adminR3PayoutReverse")?.addEventListener("click", () => void reverseAdminMonthlySettlementPayout());
+  $("#adminR3PayoutDate")?.addEventListener("change", () => renderAdminSettlementHistory());
+  $("#adminR3PayoutMethod")?.addEventListener("change", () => renderAdminSettlementHistory());
+  $("#adminR3PayoutReverseReason")?.addEventListener("change", () => renderAdminSettlementHistory());
   $("#openOnsitePaymentButton")?.addEventListener("click", openOnsitePaymentModal);
   $$("[data-close-onsite-payment]").forEach((button) => button.addEventListener("click", closeOnsitePaymentModal));
   $("#onsitePaymentModal")?.addEventListener("click", (event) => {
