@@ -707,7 +707,7 @@ function renderAdminSettlementHistory() {
   details.replaceChildren();
   const value = adminSettlementHistory.value;
   details.hidden = !value;
-  if (!value) return;
+  if (!value) { renderAdminR3SettlementWriter(); return; }
   const snapshot = value.snapshot;
   const totals = snapshot.totals;
   const rows = [
@@ -722,4 +722,85 @@ function renderAdminSettlementHistory() {
   for (const [label, content] of rows) {
     const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
   }
+  renderAdminR3SettlementWriter();
+}
+
+function renderAdminR3SettlementWriter() {
+  const current = adminMonthlySettlementWrite;
+  const scope = adminSettlementHistoryScope();
+  const ready = adminSettlementHistoryAccessReady() && Boolean(window.TennisNoteDataClient?.getSession?.()?.access_token)
+    && Boolean(adminImportAuthState.profile?.id)
+    && adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length === 1;
+  const preview = $("#adminR3SettlementPreview");
+  if (preview) preview.disabled = !ready || current.loading || current.submitting || current.payoutSubmitting || !scope.settlementMonth.endsWith("-01");
+  const confirm = $("#adminR3SettlementConfirm");
+  if (confirm) {
+    confirm.hidden = current.status !== "READY";
+    confirm.disabled = !ready || current.status !== "READY" || current.loading || current.submitting || current.payoutUncertain;
+    confirm.textContent = current.submitting ? "확정 중" : "확정 계산본 저장";
+  }
+  const message = $("#adminR3SettlementWriterMessage");
+  if (message) message.textContent = !ready ? "관리자 로그인·잠금·지점·코치 범위를 확인해 주세요." : current.message;
+  const summary = $("#adminR3SettlementPreviewDetails");
+  if (summary) {
+    summary.replaceChildren();
+    const aggregate = current.status === "CONFIRMED" ? adminR3SettlementSnapshot(current.scopeState) : current.preview;
+    summary.hidden = !aggregate;
+    if (aggregate) {
+      const totals = aggregate.totals || {};
+      const rows = [["계산 월", String(aggregate.scope?.settlementMonth || scope.settlementMonth).slice(0, 7)],
+        ["계산 원천", `${Number(totals.paymentCount || 0)}건 · 회원권 ${Number(totals.ticketCount || 0)}개 · 수업 ${Number(totals.lessonCount || 0)}개`],
+        [current.status === "CONFIRMED" ? "확정 계산액" : "예상 계산액", `${money.format(Number(totals.totalSettlementAmount || 0))}원`],
+        ["진행 수업", `${Number(totals.settledSessions || 0)}회 · ${Number(totals.settledMinutes || 0)}분`],
+        ["계산 원천 지문", String(aggregate.sourceFingerprint || "").slice(0, 8) || "확인 필요"]];
+      for (const [label, value] of rows) { const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = value; summary.append(dt, dd); }
+    }
+  }
+  const payoutDetails = $("#adminR3PayoutDetails");
+  const payout = current.payoutState?.payout || null; const active = payout?.activeRecord || null;
+  if (payoutDetails) payoutDetails.hidden = current.status !== "CONFIRMED" || !current.scopeState?.confirmation;
+  const payoutMessage = $("#adminR3PayoutMessage");
+  if (payoutMessage) payoutMessage.textContent = current.payoutUncertain ? "결과가 불확실합니다. 날짜·방식 변경과 재시도는 최신 서버 확인 전까지 잠겨 있습니다."
+    : current.payoutLoading ? "수동 기록 상태를 확인하고 있습니다."
+    : current.payoutMessage || (active ? "전액 수동 지급 기록이 있습니다. 실제 송금 여부는 별도로 확인해야 합니다."
+      : payout?.recordingEnabled === true ? "전액 수동 기록만 지원합니다. 실제 송금·환불은 실행하지 않습니다."
+        : "수동 기록 기능이 잠겨 있습니다. 실제 송금은 실행하지 않습니다.");
+  const readback = $("#adminR3PayoutReadback");
+  if (readback) {
+    readback.replaceChildren();
+    const events = Array.isArray(payout?.events) ? payout.events : [];
+    if (active) {
+      const dt = document.createElement("dt"); const dd = document.createElement("dd");
+      dt.textContent = "현재 미정정 기록";
+      dd.textContent = `${money.format(Number(active.amount || 0))}원 · ${String(active.paidOn || "날짜 확인 필요")} · ${Number(active.snapshotRevision || 0)}차 계산본${active.sourceMatchesCurrent === false ? " · 이전 계산본" : ""}`;
+      readback.append(dt, dd);
+    }
+    if (events.length) {
+      const dt = document.createElement("dt"); const dd = document.createElement("dd"); const list = document.createElement("ul");
+      dt.textContent = "월별 보존 이력";
+      for (const event of events) {
+        const item = document.createElement("li");
+        const isReversal = event.eventType === "payout_record_reversed";
+        const method = ({ bank_transfer: "계좌이체 기록", cash: "현금 기록", other_manual: "기타 수동" })[event.paymentMethod] || "방식 확인 필요";
+        const reason = ({ duplicate_record: "중복 기록", wrong_date: "날짜 오류", wrong_method: "방식 오류", other_recording_error: "기타 기록 오류" })[event.reason] || "";
+        const status = isReversal ? `정정 기록${reason ? ` · ${reason}` : ""}` : event.reversed ? "정정 완료" : "미정정 기록";
+        item.textContent = `${status} · ${money.format(Number(event.amount || 0))}원 · ${String(event.paidOn || "날짜 해당 없음")} · ${method} · ${Number(event.snapshotRevision || 0)}차 계산본${event.sourceMatchesCurrent === false ? " · 현재 계산본과 다름" : ""}`;
+        list.append(item);
+      }
+      dd.append(list); readback.append(dt, dd);
+    }
+  }
+  const date = $("#adminR3PayoutDate"); if (date && !date.value) date.value = adminLocalDateKey(new Date());
+  const snapshot = adminR3SettlementSnapshot(current.scopeState);
+  const exactPayoutScope = adminR3PayoutBaseMatches(current.payoutState, scope, snapshot);
+  const confirmedAck = current.status === "CONFIRMED" && current.scopeState?.confirmation?.status === "confirmed"
+    && current.scopeState?.reconciliation?.status === "acknowledged" && Number(snapshot?.totals?.totalSettlementAmount || 0) > 0;
+  const locked = current.payoutLoading || current.payoutSubmitting || current.payoutUncertain || !current.payoutReadValid
+    || payout?.recordingEnabled !== true || !ready;
+  const record = $("#adminR3PayoutRecord"); if (record) record.disabled = locked || !exactPayoutScope || !confirmedAck || Boolean(active);
+  const method = $("#adminR3PayoutMethod"); if (method) method.disabled = locked || !exactPayoutScope || !confirmedAck;
+  if (date) date.disabled = locked || !exactPayoutScope || !confirmedAck;
+  const reason = $("#adminR3PayoutReverseReason"); if (reason) reason.disabled = locked || !exactPayoutScope || !active;
+  const reverse = $("#adminR3PayoutReverse");
+  if (reverse) reverse.disabled = locked || !exactPayoutScope || !active || !["duplicate_record", "wrong_date", "wrong_method", "other_recording_error"].includes(String(reason?.value || ""));
 }

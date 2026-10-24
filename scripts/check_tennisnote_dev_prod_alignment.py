@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SELF_PROFILE_CONTRACT = json.loads((ROOT / "tests/fixtures/self-profile-a-only.json").read_text(encoding="utf-8"))
 R3_PROMOTION_CONTRACT = json.loads((ROOT / "tests/fixtures/r3-production-promotion.json").read_text(encoding="utf-8"))
+R3_MANUAL_PAYOUT_LAYER = json.loads((ROOT / "tests/fixtures/r3-manual-payout-release-layer.json").read_text(encoding="utf-8"))
 R3_DEV_WORKFLOW_CONTRACT_PATH = ROOT / "tests/fixtures/r3-dev-deployment-workflow.json"
 R3_DEV_WORKFLOW_GUARD_PATH = ROOT / "tests/fixtures/r3-dev-deployment-workflow-guard.json"
 R3_PROMOTION_BASE = "686cc97d9676da2d16ca3cdfbd862dc9cd19434e"
@@ -24,6 +25,23 @@ R3_NEW_PATHS = {"app/shared/tennisnote-settlement-adjustment.js"}
 
 def before_r3_candidate(path: str, data: bytes) -> bytes:
     """R3 공개 후보는 공용 exact SHA 계약으로 기준 tree에 복원한다."""
+    payout_row = next((item for item in R3_MANUAL_PAYOUT_LAYER["productFiles"] if item["path"] == path), None)
+    if payout_row:
+        try:
+            current = data.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"manual payout layered candidate is not UTF-8 text: {path}") from exc
+        if sha256(current) != payout_row["candidateSha256"]:
+            raise RuntimeError(f"manual payout exact candidate mismatch: {path}")
+        base_ref = f"{R3_MANUAL_PAYOUT_LAYER['base']}:{path}"
+        blob = run_git("rev-parse", base_ref).strip()
+        if blob != payout_row["baseGitBlobSha1"]:
+            raise RuntimeError(f"manual payout exact base blob mismatch: {path}")
+        data = run_git("show", base_ref, text=False)
+        assert isinstance(data, bytes)
+        data = data.replace(b"\r\n", b"\n")
+        if sha256(data) != payout_row["baseSha256"]:
+            raise RuntimeError(f"manual payout exact base content mismatch: {path}")
     row = next((item for item in R3_PROMOTION_CONTRACT["files"] if item["path"] == path), None)
     if not row:
         return data

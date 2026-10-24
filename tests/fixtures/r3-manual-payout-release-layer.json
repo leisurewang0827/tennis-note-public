@@ -1,0 +1,38 @@
+{
+  "contract": "r3-manual-payout-public-release-layer/1",
+  "base": "5c918372019af2832cb69f31dd62378a8bf51ec3",
+  "privateSourceCommit": "a31a9e1be3d5acfa8dd859de79a0730ea2d4b5e6",
+  "release": {
+    "version": "1.0.554",
+    "releaseId": "2026.10.24.01",
+    "memberCache": 590,
+    "coachCache": 563
+  },
+  "previousRelease": {
+    "version": "1.0.553",
+    "releaseId": "2026.10.21.01",
+    "memberCache": 589,
+    "coachCache": 562
+  },
+  "productFiles": [
+    {"path":"app/admin/actions/billing.js","baseSha256":"59f88f633a290e7f4c9713567bf046e31d35114b69b762f03839d75c71036b6f","baseGitBlobSha1":"8aba6e7089df2830bcfa307fe9d2b76504cfd626","candidateSha256":"a6f99ecad3fc2e364f7a909466c3fb9b402490df3f0e9d5c31bf112e6169271c"},
+    {"path":"app/admin/data/billing.js","baseSha256":"69e08d7d5c3ea1510906af051646d7d09383e827404beb42360883257b192d4a","baseGitBlobSha1":"40555873b4d681bc395d95c08ba7f4a21fb7a9df","candidateSha256":"65222285576f80d4684ba55ed5d08695e9e2365b011b0a26e9a75061a7fe641a"},
+    {"path":"app/admin/events/billing.js","baseSha256":"d4edcd0e1947ec53ed7f2c3e99c12510a0f58f6ea11bf7ae224f5f90070cc182","baseGitBlobSha1":"64fab8be754f65f4482b18214cdc6bdae002d42d","candidateSha256":"53731bd42e033b3d54ae76392fdec0a7b80d93659ac6e8c80633d5bcb49e0e79"},
+    {"path":"app/admin/index.html","baseSha256":"485854898a0cfd64380dfa5ef5ef76425af083a236c84cb0d7679226400bca33","baseGitBlobSha1":"bfbe49bcdabbd79a63ad69518127f3d873484726","candidateSha256":"7aa7adff9fd26fb5209f9238e8d8631da71cc20ed32855a92e471a2460e02897"},
+    {"path":"app/admin/views/billing.js","baseSha256":"626d2cce244287a5b61a50fd9369b24854e13f102cce9f12924ffb97a0adea09","baseGitBlobSha1":"ad1f0b275b324f4d044d6a90f918faf7c87d6dd8","candidateSha256":"8d2048905cd75c41e3c54a894d63484de6219dc53d4ccbefa5832117311be668"},
+    {"path":"app/release.json","baseSha256":"b540c9f206244da45ddc73ce91656c44e267c7fee9cddd92a069d0c1124aafc7","baseGitBlobSha1":"5ed40dce19cc7e588659d35d211de7603bff7949","candidateSha256":"285baa55f9009286d1a4a0a68f31d898fbe93cb3f4705714849e25c799697372"},
+    {"path":"app/shared/tennisnote-release.js","baseSha256":"f94e2be22f89b260fab96e837ecf1c41f564c9b955d00de0db61fb5375dd89a5","baseGitBlobSha1":"9854af38a56b2c32f6ac2e1205606143b80eb579","candidateSha256":"ff37773ec82a8c1916f098962d91bcb234bf771081648babe101aedcbfcc44ae"},
+    {"path":"app/tennis-note-coach-app/app.js","baseSha256":"0a602032c5258a8ec000570af67834762579f9066238ae93a4269e43d7747a6c","baseGitBlobSha1":"bf84a732d638624d0b8dd4c1d0889c8dc92986e0","candidateSha256":"245e9b38a17a12bfababc33d871334058146a5adbb8715edaaec00789174f902"},
+    {"path":"app/tennis-note-coach-app/data/sync.js","baseSha256":"1ed7acec051d51caf9f65b4150b52b8cfebdffb103120782bbe47a88c98a932d","baseGitBlobSha1":"0ff96aa96773a32d68a898fc3cf245e7be3c87f6","candidateSha256":"2b7d6f3be7695a91bff8257d9b189a9a2acc7e23a3970f70565b5320ccfce691"},
+    {"path":"app/tennis-note-coach-app/domain/coaches.js","baseSha256":"ebb0aa56ddde07bed7f674e7d0a40732944267016da46a1c95485723bb3fbdb8","baseGitBlobSha1":"50985a0ac7592b06218fcc298678351e25c3b19e","candidateSha256":"ba5d76438b607e30c5d438f53961d5553906b9ffe7faec14fff17e50683f8214"},
+    {"path":"app/tennis-note-coach-app/forms/common.js","baseSha256":"70f17d581efc947c0f98fb69b1dd4900bd341c7568480f3e24082b4acf530ad1","baseGitBlobSha1":"4c27d7fb9cbf8793f6d0944e66c8dc0314ded7d3","candidateSha256":"92862fd5697ba8792cff59be34c8f1447e2cd28e287bdbc582df47b998947387"},
+    {"path":"app/tennis-note-coach-app/index.html","baseSha256":"393601d04fc539f9b922cb08b5e45dbc680950a3a13e2aaa2c99a30664538056","baseGitBlobSha1":"4b641db9a06422fe020fe7104c954fe7dd1db7c4","candidateSha256":"96f67391caeafb07ea6bf64fb7d82794f794d8ddea8df4ebe34381d35b5bec79"},
+    {"path":"app/tennis-note-coach-app/service-worker.js","baseSha256":"cb36e7b99a703effd8557bf85d2dacd74df8a7039ca42cfcefe81b9c1ad2ee9f","baseGitBlobSha1":"bdb6f9eb5cf0a5c13f3d1011fecdce374c5d3e5e","candidateSha256":"c63a4093d1cbe6454d17f3ff43258d277f57ee17dd7061e2e03ae9dc032850f2"},
+    {"path":"app/tennis-note-coach-app/views/settlement.js","baseSha256":"ecf56944bff63a13c66c7d09b50dab53c608d9c25e6decaef67c713e99bd4220","baseGitBlobSha1":"c45516e23c7dfc5ae24377b91ff4e69326f3ead8","candidateSha256":"6ae859784a6bdb0d225038cf323fdb060aada99e595d2ee35c00dca578d109ea"},
+    {"path":"app/tennis-note-member-app/app.js","baseSha256":"e72d7d45debf95121bce642a4d7f5133d912e55015c8300df01a2d9e4d8b37ce","baseGitBlobSha1":"07f50493d8cdcf706dcf5c272ae4dd3dd1fd89c1","candidateSha256":"7d1eaca14c7209735da4a0e672732683194888b06e64843dbd62e6f0d8d77b95"},
+    {"path":"app/tennis-note-member-app/forms/common.js","baseSha256":"6eb3fb72281e6b2cb30654ab8319b7a734e309b32499ec69b7d308a70b0817ff","baseGitBlobSha1":"21b03b64b55dfab3e27f5d4ef863bf6631a8a782","candidateSha256":"4ac9d8bec59aab94494d770a6ee0f554217a20e9e0e46042e63f54bc6714948e"},
+    {"path":"app/tennis-note-member-app/index.html","baseSha256":"347ee91c715b8c792ab06c371ea071b9ca801f60adb10d76c7d959ef7dc88ddd","baseGitBlobSha1":"4ee21b08d11b41b736c3e39b2656816f1efdcfeb","candidateSha256":"accbebece77458435308a516af8b879a504355f9956f25ee5797fc7dfc3e870c"},
+    {"path":"app/tennis-note-member-app/service-worker.js","baseSha256":"a5287021ab33f31f47051af03f673d5c055bb8e25057929d0576f19668dcafb2","baseGitBlobSha1":"2a710599e540210054699d5e8f5ebd7ead7497b5","candidateSha256":"6801de13ee296c8fa48c7529098bdbf2ba758b1b492cfc677ae15329c0edf95c"},
+    {"path":"app/tennis-note-member-app/ui/screens.js","baseSha256":"63884b5a9f3b6af4685149e720fcc76f782325aeb57c907f61e5ae8c4553b0e2","baseGitBlobSha1":"8fe6c483de51d124ab27aca0ede225bf43f1a1b3","candidateSha256":"e11dca2a87f7b40bc87d7cb293bbeb858d541ceee249cb6ed55174b4fda59736"}
+  ]
+}

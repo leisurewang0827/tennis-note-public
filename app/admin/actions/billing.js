@@ -651,3 +651,353 @@ async function revokeBankNotificationDevice(deviceId = "") {
     return false;
   }
 }
+
+// R3 monthly snapshot writer. This consumes the existing settlement screen and
+// server RPC contracts; it never performs a bank transfer or refund.
+function adminR3SettlementScopeMatches(value, scope) {
+  const received = value?.scope || {};
+  return String(received.branchId || "") === scope.branchId
+    && String(received.coachRoleId || "") === scope.coachRoleId
+    && String(received.settlementMonth || "").slice(0, 10) === scope.settlementMonth;
+}
+function adminR3SettlementSnapshot(value = {}) {
+  return value?.snapshot && typeof value.snapshot === "object" ? value.snapshot : value?.snapshotId ? value : null;
+}
+function adminR3SettlementHasSources(value = {}) {
+  const totals = value?.totals || {};
+  return [totals.paymentCount, totals.ticketCount, totals.lessonCount, totals.sessionCount, value?.lines?.length]
+    .some((item) => Number(item || 0) > 0);
+}
+function adminR3SettlementSnapshotMatches(snapshot, preview, scope) {
+  return Boolean(snapshot && preview && adminR3SettlementScopeMatches({ scope: snapshot.scope || preview.scope }, scope)
+    && String(snapshot.sourceFingerprint || "") === String(preview.sourceFingerprint || "")
+    && Number(snapshot.revision || 0) > 0);
+}
+function adminR3SettlementCurrent(requestId, signature, client, token, profileId) {
+  return requestId === adminMonthlySettlementWrite.requestId
+    && signature === adminSettlementHistoryScopeKey()
+    && client === window.TennisNoteDataClient
+    && token === (client?.getSession?.()?.access_token || "")
+    && profileId === String(adminImportAuthState.profile?.id || "")
+    && operationsRole() === "admin" && adminApprovalReady();
+}
+function adminR3SettlementEnsureOperationKeys(scope, preview) {
+  const signature = `${adminSettlementHistoryScopeKey(scope)}:${preview?.sourceFingerprint || ""}`;
+  const current = adminMonthlySettlementWrite;
+  if (current.signature !== signature) {
+    current.signature = signature;
+    current.snapshotOperationKey = createAdminOperationKey("settlement-snapshot");
+    current.confirmationOperationKey = createAdminOperationKey("settlement-confirm");
+  }
+  return { snapshot: current.snapshotOperationKey, confirmation: current.confirmationOperationKey };
+}
+function adminR3SettlementConfirmedMatches(value, expected, scope) {
+  const snapshot = adminR3SettlementSnapshot(value);
+  return String(value?.state || "").toUpperCase() === "CONFIRMED"
+    && adminR3SettlementScopeMatches(value, scope)
+    && String(snapshot?.snapshotId || "") === String(expected?.snapshotId || "")
+    && Number(snapshot?.revision || 0) === Number(expected?.revision || 0)
+    && String(snapshot?.sourceFingerprint || "") === String(expected?.sourceFingerprint || "")
+    && String(value?.confirmation?.status || "").toLowerCase() === "confirmed";
+}
+
+async function previewAdminMonthlySettlement() {
+  const current = adminMonthlySettlementWrite;
+  const scope = adminSettlementHistoryScope();
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(adminImportAuthState.profile?.id || "");
+  const validMonth = /^\d{4}-(0[1-9]|1[0-2])-01$/.test(scope.settlementMonth);
+  const exactCoach = adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length === 1;
+  if (!validMonth || !scope.branchId || !scope.coachRoleId || !exactCoach || !adminSettlementHistoryAccessReady()
+    || !client?.rpc || !token || !profileId) {
+    current.status = "ERROR"; current.message = "관리자 잠금·지점·월·정확한 코치를 확인해 주세요.";
+    renderAdminSettlementHistory(); return false;
+  }
+  if (current.loading || current.submitting) return false;
+  const signature = adminSettlementHistoryScopeKey(scope);
+  const requestId = ++current.requestId;
+  const contextIsCurrent = () => adminR3SettlementCurrent(requestId, signature, client, token, profileId);
+  current.status = "LOADING"; current.loading = true; current.preview = null; current.scopeState = null;
+  current.message = "서버 계산 결과와 기존 확정 상태를 확인하고 있습니다.";
+  current.payoutState = null; current.payoutReadValid = false;
+  renderAdminSettlementHistory();
+  try {
+    const previewRaw = await client.rpc("tn_admin_preview_monthly_settlement_snapshot", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+    });
+    const preview = Array.isArray(previewRaw) ? previewRaw[0] || null : previewRaw;
+    if (!contextIsCurrent()) return false;
+    const stateRaw = await client.rpc("tn_admin_monthly_settlement_scope_state", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+      expected_source_fingerprint: preview?.sourceFingerprint || "",
+    });
+    const scopeState = Array.isArray(stateRaw) ? stateRaw[0] || null : stateRaw;
+    if (!contextIsCurrent()) return false;
+    if (!adminR3SettlementScopeMatches(preview, scope) || !adminR3SettlementScopeMatches(scopeState, scope)) throw new Error("settlement_scope_mismatch");
+    current.preview = preview; current.scopeState = scopeState;
+    const snapshot = adminR3SettlementSnapshot(scopeState);
+    if (String(scopeState?.state || "").toUpperCase() === "CONFIRMED" && snapshot && scopeState?.confirmation) {
+      if (String(snapshot.sourceFingerprint || "") !== String(preview.sourceFingerprint || "")) {
+        current.status = "STALE"; current.message = "확정 뒤 원천이 달라졌습니다. 기존 확정은 보존되며 새 확정은 차단됩니다.";
+      } else {
+        current.status = "CONFIRMED"; current.message = "현재 원천과 일치하는 확정 계산본입니다.";
+        adminSettlementHistory.value = scopeState;
+        await refreshAdminMonthlySettlementPayoutState();
+      }
+    } else if (!adminR3SettlementHasSources(preview)) {
+      current.status = "EMPTY"; current.message = "선택한 월에 확인할 정산 원천이 없습니다.";
+    } else if (snapshot && !adminR3SettlementSnapshotMatches(snapshot, preview, scope)) {
+      current.status = "STALE"; current.message = "기존 계산본과 현재 원천이 다릅니다. 최신 상태를 확인해 주세요.";
+    } else {
+      current.status = "READY";
+      current.message = snapshot ? "기존 계산본과 현재 원천이 일치합니다. 확인 후 확정할 수 있습니다." : "서버 계산 결과입니다. 확정하면 계산 원천과 합계를 보존합니다.";
+      adminR3SettlementEnsureOperationKeys(scope, preview);
+    }
+    return true;
+  } catch (_) {
+    if (!contextIsCurrent()) return false;
+    current.status = "ERROR"; current.message = "정산 계산 결과를 확인하지 못했습니다. 입력은 바뀌지 않았습니다.";
+    return false;
+  } finally {
+    if (requestId === current.requestId) {
+      current.loading = false;
+      if (!contextIsCurrent()) { current.status = "ERROR"; current.message = "로그인 또는 조회 범위가 바뀌었습니다. 다시 확인해 주세요."; }
+      renderAdminSettlementHistory();
+    }
+  }
+}
+
+async function confirmAdminMonthlySettlementSnapshot() {
+  const current = adminMonthlySettlementWrite;
+  if (current.submitting || current.loading || current.status !== "READY") return false;
+  const scope = adminSettlementHistoryScope(); const preview = current.preview;
+  const client = window.TennisNoteDataClient; const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(adminImportAuthState.profile?.id || "");
+  if (!client?.rpc || !token || !profileId || !adminSettlementHistoryAccessReady()
+    || !preview || !adminR3SettlementScopeMatches(preview, scope) || !adminR3SettlementHasSources(preview)) return false;
+  const keys = adminR3SettlementEnsureOperationKeys(scope, preview);
+  const signature = adminSettlementHistoryScopeKey(scope); const requestId = ++current.requestId;
+  const isCurrent = () => adminR3SettlementCurrent(requestId, signature, client, token, profileId);
+  current.submitting = true; current.message = "월 정산 계산본을 확정하는 중입니다. 실제 송금은 하지 않습니다.";
+  renderAdminSettlementHistory();
+  let expectedSnapshot = null;
+  try {
+    const saved = adminR3SettlementSnapshot(current.scopeState);
+    expectedSnapshot = adminR3SettlementSnapshotMatches(saved, preview, scope) ? saved : await client.rpc("tn_admin_create_monthly_settlement_snapshot", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+      target_operation_key: keys.snapshot, expected_source_fingerprint: preview.sourceFingerprint,
+    });
+    if (!isCurrent() || !adminR3SettlementSnapshotMatches(expectedSnapshot, preview, scope)) throw new Error("snapshot_readback_mismatch");
+    const response = await client.rpc("tn_admin_confirm_monthly_settlement_snapshot", {
+      target_snapshot_id: expectedSnapshot.snapshotId, target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId,
+      target_month: scope.settlementMonth, expected_snapshot_revision: Number(expectedSnapshot.revision),
+      expected_source_fingerprint: expectedSnapshot.sourceFingerprint, target_operation_key: keys.confirmation,
+    });
+    if (!isCurrent() || !adminR3SettlementConfirmedMatches(response, expectedSnapshot, scope)) throw new Error("confirmation_response_mismatch");
+    const readRaw = await client.rpc("tn_admin_monthly_settlement_scope_state", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+      expected_source_fingerprint: expectedSnapshot.sourceFingerprint,
+    });
+    const readback = Array.isArray(readRaw) ? readRaw[0] || null : readRaw;
+    if (!isCurrent() || !adminR3SettlementConfirmedMatches(readback, expectedSnapshot, scope)) throw new Error("confirmation_readback_mismatch");
+    current.scopeState = readback; current.status = "CONFIRMED"; current.message = "월 정산 확정 계산본을 서버에서 확인했습니다. 실제 송금은 아닙니다.";
+    adminSettlementHistory.value = readback;
+    await refreshAdminMonthlySettlementPayoutState();
+    return true;
+  } catch (_) {
+    if (!isCurrent()) return false;
+    try {
+      const raw = await client.rpc("tn_admin_monthly_settlement_scope_state", {
+        target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+        expected_source_fingerprint: expectedSnapshot?.sourceFingerprint || preview.sourceFingerprint,
+      });
+      const recovered = Array.isArray(raw) ? raw[0] || null : raw;
+      if (isCurrent() && expectedSnapshot && adminR3SettlementConfirmedMatches(recovered, expectedSnapshot, scope)) {
+        current.scopeState = recovered; current.status = "CONFIRMED"; current.message = "응답 후 서버 확정을 재조회했습니다. 실제 송금은 아닙니다.";
+        adminSettlementHistory.value = recovered; await refreshAdminMonthlySettlementPayoutState(); return true;
+      }
+    } catch (_) { /* no write retry; leave the action visibly unresolved */ }
+    current.status = "ERROR"; current.message = "확정 결과를 재조회하지 못했습니다. 쓰기 재시도 없이 최신 상태를 다시 확인해 주세요.";
+    return false;
+  } finally {
+    if (requestId === current.requestId) { current.submitting = false; renderAdminSettlementHistory(); }
+  }
+}
+
+function adminR3PayoutBaseMatches(value, scope, expectedSnapshot) {
+  const snapshot = adminR3SettlementSnapshot(value);
+  return adminR3SettlementScopeMatches(value, scope)
+    && String(snapshot?.snapshotId || "") === String(expectedSnapshot?.snapshotId || "")
+    && Number(snapshot?.revision || 0) === Number(expectedSnapshot?.revision || 0)
+    && String(snapshot?.sourceFingerprint || "") === String(expectedSnapshot?.sourceFingerprint || "");
+}
+function adminR3PayoutEvent(value, opHash, type, targetEventId = "", expectedSource = null) {
+  return (value?.payout?.events || []).find((event) => event.operationKeyHash === opHash && event.eventType === type
+    && (!targetEventId || event.reversalOfEventId === targetEventId)
+    && (!expectedSource || (String(event.snapshotId || "") === String(expectedSource.snapshotId || "")
+      && Number(event.snapshotRevision || 0) === Number(expectedSource.snapshotRevision || 0)
+      && String(event.sourceFingerprint || "") === String(expectedSource.sourceFingerprint || "")
+      && Number(event.amount || 0) === Number(expectedSource.amount || 0)))) || null;
+}
+function adminR3PayoutEventMatchesSnapshot(event, snapshot) {
+  return Boolean(event && snapshot
+    && String(event.snapshotId || "") === String(snapshot.snapshotId || "")
+    && Number(event.snapshotRevision || 0) === Number(snapshot.revision || 0)
+    && String(event.sourceFingerprint || "") === String(snapshot.sourceFingerprint || ""));
+}
+async function adminR3PayoutOperationHash(key) {
+  if (!window.crypto?.subtle || !window.TextEncoder) throw new Error("payout_readback_hash_unavailable");
+  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(key || "")));
+  return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+async function refreshAdminMonthlySettlementPayoutState() {
+  const current = adminMonthlySettlementWrite; const scope = adminSettlementHistoryScope();
+  const expected = adminR3SettlementSnapshot(current.scopeState); const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || ""; const signature = adminSettlementHistoryScopeKey(scope);
+  const profileId = String(adminImportAuthState.profile?.id || "");
+  const exactCoachCount = () => adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length;
+  if (!expected || current.status !== "CONFIRMED" || current.payoutLoading || !client?.rpc || !token || !profileId
+    || operationsRole() !== "admin" || !adminSettlementHistoryAccessReady() || !adminApprovalReady() || exactCoachCount() !== 1) return false;
+  const requestId = ++current.payoutRequestId; current.payoutLoading = true; current.payoutMessage = "수동 기록 상태를 확인하고 있습니다.";
+  renderAdminSettlementHistory();
+  const expectedSnapshotId = String(expected.snapshotId || "");
+  const expectedRevision = Number(expected.revision || 0);
+  const expectedFingerprint = String(expected.sourceFingerprint || "");
+  const isCurrent = () => requestId === current.payoutRequestId && signature === adminSettlementHistoryScopeKey()
+    && client === window.TennisNoteDataClient && token === (client?.getSession?.()?.access_token || "")
+    && profileId === String(adminImportAuthState.profile?.id || "") && operationsRole() === "admin"
+    && adminSettlementHistoryAccessReady() && adminApprovalReady() && exactCoachCount() === 1
+    && current.status === "CONFIRMED"
+    && String(adminR3SettlementSnapshot(current.scopeState)?.snapshotId || "") === expectedSnapshotId
+    && Number(adminR3SettlementSnapshot(current.scopeState)?.revision || 0) === expectedRevision
+    && String(adminR3SettlementSnapshot(current.scopeState)?.sourceFingerprint || "") === expectedFingerprint;
+  try {
+    const raw = await client.rpc("tn_monthly_settlement_payout_state", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+    });
+    const result = Array.isArray(raw) ? raw[0] || null : raw;
+    if (!isCurrent() || !adminR3PayoutBaseMatches(result, scope, expected)) throw new Error("payout_scope_mismatch");
+    current.payoutState = result; current.payoutReadValid = true; current.payoutUncertain = false; current.payoutMessage = "";
+    return true;
+  } catch (_) {
+    if (isCurrent()) { current.payoutReadValid = false; current.payoutMessage = "수동 기록 상태를 확인하지 못했습니다. 기록 상태는 이전 값으로 보존했습니다."; }
+    return false;
+  } finally { if (requestId === current.payoutRequestId) { current.payoutLoading = false; renderAdminSettlementHistory(); } }
+}
+function adminR3EnsurePayoutOperation(kind, signature) {
+  const current = adminMonthlySettlementWrite; const reverse = kind === "reverse";
+  const sigField = reverse ? "payoutReverseOperationSignature" : "payoutOperationSignature";
+  const keyField = reverse ? "payoutReverseOperationKey" : "payoutOperationKey";
+  const exact = `${kind}:${signature}`;
+  if (current[sigField] !== exact || !current[keyField]) {
+    current[sigField] = exact; current[keyField] = createAdminOperationKey(reverse ? "settlement-payout-reverse" : "settlement-payout-record");
+  }
+  return current[keyField];
+}
+async function recordAdminMonthlySettlementPayout() {
+  const current = adminMonthlySettlementWrite;
+  if (current.payoutSubmitting || current.payoutLoading || current.payoutUncertain) return false;
+  const scope = adminSettlementHistoryScope(); const snapshot = adminR3SettlementSnapshot(current.scopeState);
+  const payout = current.payoutState?.payout; const date = String($("#adminR3PayoutDate")?.value || "");
+  const method = String($("#adminR3PayoutMethod")?.value || ""); const amount = Number(snapshot?.totals?.totalSettlementAmount || 0);
+  if (!current.payoutReadValid || current.status !== "CONFIRMED" || !adminR3PayoutBaseMatches(current.payoutState, scope, snapshot)
+    || current.scopeState?.confirmation?.status !== "confirmed" || current.scopeState?.reconciliation?.status !== "acknowledged"
+    || payout?.recordingEnabled !== true || payout?.activeRecord || !amount || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+    || !["bank_transfer", "cash", "other_manual"].includes(method) || operationsRole() !== "admin" || !adminApprovalReady()) return false;
+  const opKey = adminR3EnsurePayoutOperation("record", [adminSettlementHistoryScopeKey(scope), snapshot.snapshotId, snapshot.revision, snapshot.sourceFingerprint, date, method, amount].join(":"));
+  const client = window.TennisNoteDataClient; const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(adminImportAuthState.profile?.id || ""); const signature = adminSettlementHistoryScopeKey(scope);
+  const requestId = ++current.payoutRequestId;
+  const isCurrent = () => requestId === current.payoutRequestId && signature === adminSettlementHistoryScopeKey()
+    && client === window.TennisNoteDataClient && token === (client?.getSession?.()?.access_token || "")
+    && profileId === String(adminImportAuthState.profile?.id || "") && operationsRole() === "admin" && adminApprovalReady();
+  if (!isCurrent()) return false;
+  current.payoutSubmitting = true; current.payoutUncertain = false; current.payoutMessage = "지급 기록 확인 정보를 준비하고 있습니다.";
+  renderAdminSettlementHistory();
+  let hash = ""; let writeAttempted = false;
+  try {
+    hash = await adminR3PayoutOperationHash(opKey);
+    if (!isCurrent()) return false;
+    current.payoutMessage = "지급 기록을 저장합니다. 실제 송금은 하지 않습니다."; renderAdminSettlementHistory();
+    writeAttempted = true;
+    const responseRaw = await client.rpc("tn_admin_record_monthly_settlement_payout", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+      target_snapshot_id: snapshot.snapshotId, expected_snapshot_revision: snapshot.revision,
+      expected_source_fingerprint: snapshot.sourceFingerprint, target_paid_on: date, target_payment_method: method, target_operation_key: opKey,
+    });
+    if (!isCurrent()) return false;
+    const response = Array.isArray(responseRaw) ? responseRaw[0] || null : responseRaw;
+    const raw = await client.rpc("tn_monthly_settlement_payout_state", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+    });
+    const readback = Array.isArray(raw) ? raw[0] || null : raw; const event = adminR3PayoutEvent(readback, hash, "payout_recorded");
+    if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot) || !event || !adminR3PayoutEventMatchesSnapshot(event, snapshot) || event.reversed
+      || String(response?.payoutEventId || "") !== String(event.eventId || "")
+      || String(readback?.payout?.activeRecord?.eventId || "") !== String(event.eventId || "")
+      || Number(event.amount || 0) !== amount || String(event.paidOn || "") !== date || String(event.paymentMethod || "") !== method) throw new Error("payout_record_readback_mismatch");
+    current.payoutState = readback; current.payoutReadValid = true; current.payoutUncertain = false;
+    current.payoutMessage = "전액 수동 기록을 확인했습니다. 실제 송금 완료를 의미하지 않습니다."; return true;
+  } catch (_) {
+    if (!isCurrent()) return false;
+    if (!writeAttempted) { current.payoutMessage = "요청 확인 정보를 준비하지 못해 기록을 보내지 않았습니다."; return false; }
+    current.payoutUncertain = true;
+    try {
+      const raw = await client.rpc("tn_monthly_settlement_payout_state", { target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth });
+      const readback = Array.isArray(raw) ? raw[0] || null : raw; if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot)) throw new Error("payout_uncertain_scope_mismatch");
+      current.payoutState = readback; current.payoutReadValid = true; const event = adminR3PayoutEvent(readback, hash, "payout_recorded");
+      if (event && adminR3PayoutEventMatchesSnapshot(event, snapshot) && !event.reversed && String(readback?.payout?.activeRecord?.eventId || "") === String(event.eventId || "")
+        && Number(event.amount || 0) === amount && String(event.paidOn || "") === date && String(event.paymentMethod || "") === method) {
+        current.payoutUncertain = false; current.payoutMessage = "응답 후 서버 기록을 확인했습니다. 실제 송금은 아닙니다."; return true;
+      }
+      current.payoutUncertain = false; current.payoutMessage = "최신 기록을 확인했습니다. 새 기록 전에 상태를 검토해 주세요.";
+    } catch (_) { if (!isCurrent()) return false; current.payoutReadValid = false; current.payoutUncertain = true; current.payoutMessage = "저장 결과를 확인하지 못했습니다. 새 기록은 다시 확인할 때까지 잠겨 있습니다."; }
+    return false;
+  } finally { if (requestId === current.payoutRequestId) { current.payoutSubmitting = false; renderAdminSettlementHistory(); } }
+}
+async function reverseAdminMonthlySettlementPayout() {
+  const current = adminMonthlySettlementWrite; if (current.payoutSubmitting || current.payoutLoading || current.payoutUncertain) return false;
+  const scope = adminSettlementHistoryScope(); const active = current.payoutState?.payout?.activeRecord;
+  const snapshot = adminR3SettlementSnapshot(current.scopeState); const reason = String($("#adminR3PayoutReverseReason")?.value || "");
+  if (!current.payoutReadValid || !active || !["duplicate_record", "wrong_date", "wrong_method", "other_recording_error"].includes(reason)
+    || current.status !== "CONFIRMED" || !snapshot || !adminR3PayoutBaseMatches(current.payoutState, scope, snapshot)
+    || current.payoutState?.payout?.recordingEnabled !== true || operationsRole() !== "admin" || !adminApprovalReady()) return false;
+  const opKey = adminR3EnsurePayoutOperation("reverse", [adminSettlementHistoryScopeKey(scope), active.snapshotId, active.snapshotRevision, active.sourceFingerprint, active.eventId, reason].join(":"));
+  const client = window.TennisNoteDataClient; const token = client?.getSession?.()?.access_token || "";
+  const profileId = String(adminImportAuthState.profile?.id || ""); const signature = adminSettlementHistoryScopeKey(scope); const requestId = ++current.payoutRequestId;
+  const isCurrent = () => requestId === current.payoutRequestId && signature === adminSettlementHistoryScopeKey() && client === window.TennisNoteDataClient
+    && token === (client?.getSession?.()?.access_token || "") && profileId === String(adminImportAuthState.profile?.id || "")
+    && operationsRole() === "admin" && adminApprovalReady();
+  current.payoutSubmitting = true; current.payoutUncertain = false; current.payoutMessage = "정정 요청 확인 정보를 준비하고 있습니다.";
+  renderAdminSettlementHistory(); let hash = ""; let writeAttempted = false;
+  try {
+    hash = await adminR3PayoutOperationHash(opKey); if (!isCurrent()) return false;
+    current.payoutMessage = "지급 기록을 정정하고 있습니다. 금융 거래는 실행하지 않습니다."; renderAdminSettlementHistory(); writeAttempted = true;
+    const responseRaw = await client.rpc("tn_admin_reverse_monthly_settlement_payout", {
+      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
+      target_snapshot_id: active.snapshotId, expected_snapshot_revision: Number(active.snapshotRevision),
+      expected_source_fingerprint: active.sourceFingerprint, target_payout_event_id: active.eventId, target_reason: reason, target_operation_key: opKey,
+    });
+    if (!isCurrent()) return false;
+    const response = Array.isArray(responseRaw) ? responseRaw[0] || null : responseRaw;
+    const raw = await client.rpc("tn_monthly_settlement_payout_state", { target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth });
+    const readback = Array.isArray(raw) ? raw[0] || null : raw;
+    const event = adminR3PayoutEvent(readback, hash, "payout_record_reversed", active.eventId, active);
+    if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot) || !event || String(response?.payoutEventId || "") !== String(event.eventId || "")) throw new Error("payout_reversal_readback_mismatch");
+    current.payoutState = readback; current.payoutReadValid = true; current.payoutUncertain = false; current.payoutMessage = "기록 정정을 확인했습니다. 환불·송금은 실행하지 않았습니다.";
+    current.payoutOperationSignature = ""; current.payoutOperationKey = ""; return true;
+  } catch (_) {
+    if (!isCurrent()) return false;
+    if (!writeAttempted) { current.payoutMessage = "정정 확인 정보를 준비하지 못해 요청을 보내지 않았습니다."; return false; }
+    current.payoutUncertain = true;
+    try {
+      const raw = await client.rpc("tn_monthly_settlement_payout_state", { target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth });
+      const readback = Array.isArray(raw) ? raw[0] || null : raw; const event = adminR3PayoutEvent(readback, hash, "payout_record_reversed", active.eventId, active);
+      if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot)) throw new Error("payout_reversal_uncertain_scope_mismatch");
+      current.payoutState = readback; current.payoutReadValid = true;
+      if (event) { current.payoutUncertain = false; current.payoutMessage = "응답 후 정정 기록을 확인했습니다. 실제 금융 거래는 아닙니다."; current.payoutOperationSignature = ""; current.payoutOperationKey = ""; return true; }
+      current.payoutUncertain = false; current.payoutMessage = "최신 기록을 확인했습니다. 정정 결과를 검토해 주세요.";
+    } catch (_) { if (!isCurrent()) return false; current.payoutReadValid = false; current.payoutUncertain = true; current.payoutMessage = "정정 결과를 확인하지 못했습니다. 다시 확인할 때까지 정정은 잠겨 있습니다."; }
+    return false;
+  } finally { if (requestId === current.payoutRequestId) { current.payoutSubmitting = false; renderAdminSettlementHistory(); } }
+}

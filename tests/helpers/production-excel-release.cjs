@@ -6,8 +6,13 @@ const normalize = s => s.replace(/\r\n/g, "\n");
 const hash = text => crypto.createHash("sha256").update(normalize(text)).digest("hex");
 const aOnly = require("./self-profile-a-only.cjs");
 const r3Promotion = require("./r3-production-promotion.cjs");
+const r3ManualPayoutLayer = require("./r3-layered-historical-source.cjs");
 const devWorkflowGuard = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-dev-deployment-workflow-guard.json"), "utf8"));
-const raw = p => aOnly.restoreCandidate(p, normalize(fs.readFileSync(p, "utf8")));
+const raw = p => aOnly.restoreCandidate(
+  p,
+  r3ManualPayoutLayer.restoreBeforeManualPayoutLayer(p, normalize(fs.readFileSync(p, "utf8"))),
+  root,
+);
 const show = (sha, p) => normalize(cp.execFileSync("git", ["show", `${sha}:${p}`], {encoding:"utf8", maxBuffer:8e6}));
 const contract = JSON.parse(raw("tests/fixtures/production-excel-release.json"));
 assert.equal(contract.functionalCheckpoint, "f5dbdbdecc659b98cc0b9c0b629cee28f28ea713");

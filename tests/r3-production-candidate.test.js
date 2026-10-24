@@ -4,9 +4,10 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import promotion from "./helpers/r3-production-promotion.cjs";
+import payoutLayer from "./helpers/r3-layered-historical-source.cjs";
 
 const { BASE: base, files, normalize, sha256, changedAppPaths } = promotion;
-const read = path => normalize(fs.readFileSync(path, "utf8"));
+const read = path => payoutLayer.restoreBeforeManualPayoutLayer(path, normalize(fs.readFileSync(path, "utf8")));
 const show = (revision, path) => normalize(execFileSync("git", ["show", `${revision}:${path}`], { encoding: "utf8", maxBuffer: 8e6 }));
 const extract = (source, name) => {
   const start = source.indexOf(`function ${name}(`);
@@ -43,7 +44,12 @@ const canonicalFunctions = [
 
 test("R3 production candidate is exact to production base and release 1.0.553", () => {
   execFileSync("git", ["merge-base", "--is-ancestor", base, "HEAD"]);
-  assert.deepEqual(changedAppPaths(base), files.map(([path]) => path).sort());
+  const layeredPaths = new Set(payoutLayer.contract.productFiles.map(row => row.path));
+  const historicalAppPaths = changedAppPaths(base).filter(path => {
+    if (!layeredPaths.has(path)) return true;
+    return sha256(read(path)) !== sha256(show(base, path));
+  });
+  assert.deepEqual(historicalAppPaths, files.map(([path]) => path).sort());
   for (const [path, baseSha256, candidateSha256] of files) {
     assert.equal(sha256(read(path)), candidateSha256, `${path}: candidate SHA-256`);
     if (baseSha256) assert.equal(sha256(show(base, path)), baseSha256, `${path}: base SHA-256`);

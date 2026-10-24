@@ -6,6 +6,7 @@ const contract = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/self
 const hash = text => crypto.createHash("sha256").update(text).digest("hex");
 const normalize = text => text.replace(/\r\n/g, "\n");
 const r3Promotion = require("./r3-production-promotion.cjs");
+const r3ManualPayoutLayer = require("./r3-layered-historical-source.cjs");
 function undoRelease(file, text) {
   text = normalize(text);
   const row = contract.release.files.find(item => item.path === file);
@@ -18,8 +19,9 @@ function undoRelease(file, text) {
   assert.equal(hash(text), row.beforeHash, `A-only release baseline drift: ${file}`);
   return text;
 }
-function restoreCandidate(file, text) {
-  text = undoRelease(file, r3Promotion.restoreBeforeR3(file, text));
+function restoreCandidate(file, text, cwd = process.cwd()) {
+  text = r3ManualPayoutLayer.restoreBeforeManualPayoutLayer(file, text);
+  text = undoRelease(file, r3Promotion.restoreBeforeR3(file, text, cwd));
   const row = contract.files.find(item => item.path === file);
   if (!row) return text;
   assert.equal(hash(text), row.afterHash, `A-only product candidate drift: ${file}`);
@@ -33,7 +35,9 @@ function restoreCandidate(file, text) {
 function changedBeforeCandidate(base, paths) {
   const { execFileSync } = require("node:child_process");
   return paths.filter(file => {
-    const current = restoreCandidate(file, fs.readFileSync(path.join(root, file), "utf8"));
+    const working = fs.readFileSync(path.join(root, file), "utf8");
+    const priorPayoutLayer = r3ManualPayoutLayer.restoreBeforeManualPayoutLayer(file, working);
+    const current = restoreCandidate(file, priorPayoutLayer, root);
     const existsAtBase = (() => {
       try { execFileSync("git", ["cat-file", "-e", `${base}:${file}`], { cwd: root, stdio: "ignore" }); return true; }
       catch { return false; }

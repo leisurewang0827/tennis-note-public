@@ -5,17 +5,19 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import promotion from "./helpers/r3-production-promotion.cjs";
+import payoutLayer from "./helpers/r3-layered-historical-source.cjs";
 
 test("R3 inverse restores only exact pinned files and rejects drift", () => {
   for (const [file, baseSha, candidateSha] of promotion.files) {
-    const candidate = fs.readFileSync(file, "utf8");
+    const candidate = payoutLayer.restoreBeforeManualPayoutLayer(file, fs.readFileSync(file, "utf8"));
     assert.equal(promotion.sha256(candidate), candidateSha, file);
     const restored = promotion.restoreBeforeR3(file, candidate);
     if (baseSha) assert.equal(promotion.sha256(restored), baseSha, file);
     else assert.equal(restored, "", file);
   }
   const [file] = promotion.files[0];
-  assert.throws(() => promotion.restoreBeforeR3(file, `${fs.readFileSync(file, "utf8")} `), /exact candidate mismatch/);
+  const layeredCandidate = payoutLayer.restoreBeforeManualPayoutLayer(file, fs.readFileSync(file, "utf8"));
+  assert.throws(() => promotion.restoreBeforeR3(file, `${layeredCandidate} `), /exact candidate mismatch/);
   assert.equal(promotion.restoreBeforeR3("tests/not-in-r3.txt", "untouched\r\n"), "untouched\n");
 });
 

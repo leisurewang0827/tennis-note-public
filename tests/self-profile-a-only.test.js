@@ -6,8 +6,9 @@ import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import guard from "./helpers/self-profile-a-only.cjs";
 import r3Promotion from "./helpers/r3-production-promotion.cjs";
+import r3ManualPayoutLayer from "./helpers/r3-layered-historical-source.cjs";
 const { contract, hash, normalize, undoRelease, restoreCandidate } = guard;
-const raw = file => normalize(fs.readFileSync(file, "utf8"));
+const raw = file => r3ManualPayoutLayer.restoreBeforeManualPayoutLayer(file, normalize(fs.readFileSync(file, "utf8")));
 const show = file => normalize(execFileSync("git", ["show", `${contract.base}:${file}`], { encoding: "utf8", maxBuffer: 12e6 }));
 const undoCurrentRelease = file => undoRelease(file, r3Promotion.restoreBeforeR3(file, raw(file)));
 test("본인 프로필 A-only: 정확한 13경로·43hunk·원PROD 전체 역변환·구문", () => {
