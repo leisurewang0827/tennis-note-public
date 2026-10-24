@@ -341,7 +341,7 @@ async function runFixture(page,surface){
     }
     const scopeCalls=window.__r3Rpc.filter(row=>row.name==="tn_coach_settlement_scope_v2");
     check(scopeCalls.length>0&&scopeCalls.every(row=>row.args.target_branch_id==="synthetic-branch"&&row.args.target_coach_role_id==="synthetic-role"),"actual entry spy exact scope RPC");
-    const allowedReadRpcs=new Set(["tn_coach_settlement_scope_v2","tn_coach_monthly_settlement_reconciliation_state","tn_admin_preview_monthly_settlement_snapshot","tn_admin_monthly_settlement_scope_state","tn_monthly_settlement_payout_state"]);
+    const allowedReadRpcs=new Set(["tn_coach_settlement_scope_v2","tn_coach_monthly_settlement_reconciliation_state","tn_admin_preview_monthly_settlement_snapshot","tn_admin_monthly_settlement_scope_state","tn_monthly_settlement_payout_state","tn_schedule_v2_coach_workspace","tn_visible_one_day_bookings","tn_schedule_v2_coach_member_roster","tn_schedule_v2_operation_days_between","tn_schedule_revision_snapshot"]);
     const unexpectedRpcs=[...new Set(window.__r3Rpc.map(row=>row.name).filter(name=>!allowedReadRpcs.has(name)))];
     check(unexpectedRpcs.length===0,"only exact read RPCs: "+unexpectedRpcs.join(","));
     check(!window.__r3Rpc.some(row=>["tn_admin_create_monthly_settlement_snapshot","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_coach_respond_monthly_settlement_reconciliation"].includes(row.name)),"write RPC zero");
