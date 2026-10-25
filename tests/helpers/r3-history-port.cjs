@@ -7,6 +7,11 @@ const manifest=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/r3-coac
 const sha=text=>crypto.createHash("sha256").update(text).digest("hex");
 let validatedRefreshAuthorityHash="";
 function restoreOpenRefresh(file,text,{inputVersion=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version,preserveVersion=false}={}){
+  const retained=require("./r3-retained-response-port.cjs").restore(file,text);
+  if(retained.applied){
+    const baseline=restoreOpenRefresh(file,retained.text,{inputVersion:retained.baseVersion,preserveVersion});
+    return preserveVersion?baseline.replaceAll(retained.baseVersion,inputVersion):baseline;
+  }
   const raw=fs.readFileSync(path.join(root,"tests/fixtures/r3-coach-open-refresh-source-parity.json"),"utf8");
   const authority=JSON.parse(raw);
   // 같은 canonical Python 검증기를 재사용한다. fixture가 변하면 검증도 다시 한다.
@@ -50,6 +55,9 @@ function restoreOpenRefresh(file,text,{inputVersion=JSON.parse(fs.readFileSync(p
   return preserveVersion?restored.replaceAll(authority.baseVersion,inputVersion):restored;
 }
 function restore(file,text,inputVersion=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version){
+  const outputVersion=inputVersion;
+  const retained=require("./r3-retained-response-port.cjs").restore(file,text);
+  if(retained.applied){text=retained.text;inputVersion=retained.baseVersion;}
   text=restoreOpenRefresh(file,text,{inputVersion,preserveVersion:true});
   text=require("./r3-admin-history-port.cjs").restore(file,text,inputVersion);
   const entry=manifest.files.find(e=>e.path===file);
@@ -62,6 +70,6 @@ function restore(file,text,inputVersion=JSON.parse(fs.readFileSync(path.join(roo
     text=chars.slice(0,hunk.start).join("")+hunk.before+chars.slice(hunk.end).join("");
   }
   if(sha(text)!==entry.baseSha256)throw Error("R3 history baseline drift: "+file);
-  return text.replaceAll(manifest.publicVersion,inputVersion);
+  return text.replaceAll(manifest.publicVersion,outputVersion);
 }
 module.exports={root,manifest,sha,restore,restoreOpenRefresh};

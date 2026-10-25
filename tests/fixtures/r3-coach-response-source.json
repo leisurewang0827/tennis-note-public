@@ -1,0 +1,108 @@
+{
+  "contract": "r3-ack-public-portable-source/1",
+  "privateParent": "e224c6f36dc370c50ba29867d1ebca6e3939394b",
+  "publicParent": "705b7312ab14bbfcd8c68b1ef78c041be643d5d2",
+  "sourceWitness": [
+    {
+      "path": "app/tennis-note-coach-app/domain/settlement.js",
+      "localSourceCommit": "a20e965b2051507db9acb9535ee517bb6a4409b9",
+      "beforeBlob": "70575441a98b05b57f7453af59176bd9f433f14e",
+      "beforeCanonicalSha256": "e4edf9e539a92bf7db2c3308b9c76f56eb81dde884901d8973bfb5d65a6006fd",
+      "afterCanonicalSha256": "d4b93cb2464cc7aa04f288ed127ed44a9fb2224e689f41ef9ab7c01970423076",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "localSourceCommit": "a20e965b2051507db9acb9535ee517bb6a4409b9",
+      "beforeBlob": "22584bf4340c30dc0c0118c1c476e1c96837bad9",
+      "beforeCanonicalSha256": "bbe85e3e8446c99f7b0217cb1dd9e6930020d347354d93d0bc53d6e8451068a0",
+      "afterCanonicalSha256": "6053e48ac953c299801c937ce0a646997f499ba6bc6849ea31f76310cd8393a6",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    },
+    {
+      "path": "app/tennis-note-coach-app/events/account.js",
+      "localSourceCommit": "a20e965b2051507db9acb9535ee517bb6a4409b9",
+      "beforeBlob": "2b8aabb0286d86324851c9b3638c2b9bc2a7f3a7",
+      "beforeCanonicalSha256": "f7ef2b575dadd53c69ecd8615597ae4a342efbdeedc8e86995e2033c1c27baa1",
+      "afterCanonicalSha256": "e7660238dff9f4180027a0af3f23cab79117dcde8ab7f4ba7ffe536db958dc7a",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/sync.js",
+      "localSourceCommit": "a20e965b2051507db9acb9535ee517bb6a4409b9",
+      "beforeBlob": "29ceb93cd9e65d2a8f0af9c27c143b40e94249af",
+      "beforeCanonicalSha256": "da463cdda7aac1923d0178f2734cbcc9e51c6d82cdc0e960a3b535d4bf0b0939",
+      "afterCanonicalSha256": "bc4577b77cb167b5751986338cf65528c082d360621f34291eb04cfc2435a9bf",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "localSourceCommit": "a20e965b2051507db9acb9535ee517bb6a4409b9",
+      "beforeBlob": "79c371de6e8d864daa4fa49822f0f11eee08814f",
+      "beforeCanonicalSha256": "12f5a840b55456513141807f0cff7ced70a7f6ee16ec33297019fa3f3adc8706",
+      "afterCanonicalSha256": "597bf2fdaf6fcf1f33bd6e6aa3a1f974b472e5df4ced175192c30323822a4734",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    },
+    {
+      "path": "app/tennis-note-coach-app/styles.css",
+      "beforeBlob": "d86eacf493acfa9fd6a2c90a2f717c83f66e25e2",
+      "beforeCanonicalSha256": "0e2d8663b0ddee797f58210a5197cd90000125627015d9c66e5b8bbae41a8232",
+      "afterCanonicalSha256": "ddfae6da2594fc891c16cf835d6cc4b18aa0959db75fdfd7a95f6115ad67040e",
+      "exact705Status": "BLOB_MATCH_MAIN_PROVIDED_705"
+    }
+  ],
+  "functions": {
+    "coachSettlementReconciliationContinuation": {
+      "file": "data/sync.js",
+      "sha256": "67fc3ee2c32ad752de2ffabb3be5d1351269a9b80ea42a734d757d705e449781"
+    },
+    "resetCoachSettlementReconciliation": {
+      "file": "data/sync.js",
+      "sha256": "927209ab795b49b85a689010709fbdfbd0d0f418d592fdd7557964716e447bdb"
+    },
+    "coachSettlementReconciliationResponseMatches": {
+      "file": "data/sync.js",
+      "sha256": "db0be92d65f17c2584582affe975b1c448f468477b181e3d34652de76a9a493b"
+    },
+    "coachSettlementReconciliationOperationKey": {
+      "file": "data/sync.js",
+      "sha256": "7302eb77084dad7dd8f4054a9401ced019a01010f9d7871dc3fc9532fd09e071"
+    },
+    "finishCoachSettlementReconciliation": {
+      "file": "data/sync.js",
+      "sha256": "0e65a7a19aad0af84eb327ab9838b506689c06e92682a3bdd185e56cdfa7b9ce"
+    },
+    "submitCoachSettlementReconciliation": {
+      "file": "data/sync.js",
+      "sha256": "08334d708e010a8c1ef750e69c17d081aa9bab3d9cd096ef407bf71b00da8ce8"
+    },
+    "coachSettlementReconciliationScopeMatches": {
+      "file": "domain/settlement.js",
+      "sha256": "57640b4bcf76a0d479eea876b72b87c9c66646a4cfed71f0394fa49477b82846"
+    },
+    "normalizeCoachSettlementReconciliationReason": {
+      "file": "domain/settlement.js",
+      "sha256": "9d58799460a0e34c4a86744dd893d245d45a64669bad7d0b22eccab8da036fc0"
+    },
+    "coachSettlementReconciliationReasonError": {
+      "file": "domain/settlement.js",
+      "sha256": "55df7327cf50bdcd5d90636f293cf642bf3bd0e43ab7438b1d7324f31a2d50bf"
+    },
+    "coachSettlementReconciliationPayloadIsExact": {
+      "file": "domain/settlement.js",
+      "sha256": "a1e3dce3644f3109e07703cc2399ce4e52a51f43f85054296e3e2070e24f174a"
+    },
+    "coachSettlementReconciliationErrorContract": {
+      "file": "domain/settlement.js",
+      "sha256": "fd46499f65439e293a17fbdf22ede3b3da602b0a4fb02effe871a0ad8f932264"
+    },
+    "renderCoachSettlementResponseControls": {
+      "file": "views/settlement.js",
+      "sha256": "9526cbdb11464324c61aa28bee2c3c8c5bdc42920eb2978181af7b2a2c405a13"
+    }
+  },
+  "submitBinding": "  $(\"#coachSettlementReconciliationForm\")?.addEventListener(\"submit\", (event) => {\n    event.preventDefault();\n    void submitCoachSettlementReconciliation();\n  });",
+  "form": "<form id=\"coachSettlementReconciliationForm\" class=\"coach-settlement-reconciliation-form\" hidden novalidate>\n              <fieldset>\n                <legend>확정 정산 응답</legend>\n                <label>\n                  <input type=\"radio\" name=\"coachSettlementReconciliationChoice\" value=\"acknowledged\" />\n                  <span><strong>확인했습니다</strong><small>표시된 월·횟수·정산액을 확인했습니다.</small></span>\n                </label>\n                <label>\n                  <input type=\"radio\" name=\"coachSettlementReconciliationChoice\" value=\"disputed\" />\n                  <span><strong>이의가 있습니다</strong><small>관리자가 확인할 짧은 사유를 남깁니다.</small></span>\n                </label>\n              </fieldset>\n              <label id=\"coachSettlementReconciliationReasonField\" class=\"coach-settlement-reconciliation-reason\" hidden>\n                <span>이의 사유 <small>2~240자</small></span>\n                <textarea id=\"coachSettlementReconciliationReason\" rows=\"3\" minlength=\"2\" maxlength=\"240\" placeholder=\"확인이 필요한 항목만 간단히 적어 주세요.\"></textarea>\n                <small>이름·전화번호 등 개인정보는 적지 마세요.</small>\n              </label>\n              <p id=\"coachSettlementReconciliationValidation\" class=\"coach-settlement-reconciliation-validation\" role=\"alert\" hidden></p>\n              <button id=\"coachSettlementReconciliationSubmit\" class=\"primary-button\" type=\"submit\" disabled>응답 저장</button>\n            </form>",
+  "cssFragment": "/* Canonical private response controls: no new screen/navigation. */\n.coach-settlement-reconciliation-form {\n  overflow-wrap: anywhere;\n}\n\n.coach-settlement-reconciliation-form small {\n  color: var(--muted);\n  font-size: 12px;\n  font-weight: 700;\n  line-height: 1.5;\n}\n\n.coach-settlement-reconciliation-form {\n  display: grid;\n  gap: 12px;\n}\n\n.coach-settlement-reconciliation-form fieldset {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n  margin: 0;\n  border: 0;\n  padding: 0;\n}\n\n.coach-settlement-reconciliation-form legend {\n  position: absolute;\n  width: 1px;\n  height: 1px;\n  overflow: hidden;\n  clip: rect(0 0 0 0);\n  white-space: nowrap;\n}\n\n.coach-settlement-reconciliation-form fieldset label {\n  display: grid;\n  grid-template-columns: auto minmax(0, 1fr);\n  align-items: start;\n  gap: 9px;\n  min-height: 44px;\n  border: 1px solid var(--line);\n  border-radius: 10px;\n  padding: 10px;\n  background: var(--paper);\n  cursor: pointer;\n}\n\n.coach-settlement-reconciliation-form fieldset label:has(input:checked) {\n  border-color: var(--green);\n  background: var(--soft-green);\n}\n\n.coach-settlement-reconciliation-form input[type=\"radio\"] {\n  width: 20px;\n  height: 20px;\n  margin: 1px 0 0;\n  accent-color: var(--green);\n}\n\n.coach-settlement-reconciliation-form fieldset span,\n.coach-settlement-reconciliation-reason {\n  display: grid;\n  gap: 3px;\n}\n\n.coach-settlement-reconciliation-reason textarea {\n  width: 100%;\n  min-height: 84px;\n  resize: vertical;\n  border: 1px solid var(--line);\n  border-radius: 9px;\n  padding: 10px 11px;\n  color: var(--ink);\n  background: var(--paper);\n  font: inherit;\n  font-size: 16px;\n  line-height: 1.5;\n}\n\n.coach-settlement-reconciliation-validation {\n  margin: 0;\n  color: var(--red);\n  font-size: 13px;\n  font-weight: 800;\n}\n\n.coach-settlement-reconciliation-submit,\n#coachSettlementReconciliationSubmit,\n.coach-settlement-reconciliation-retry {\n  min-height: 44px;\n}\n\n#coachSettlementReconciliationSubmit {\n  width: 100%;\n}\n\n#coachSettlementReconciliationSubmit:disabled {\n  border-color: var(--line);\n  color: var(--muted);\n  background: var(--wash);\n  box-shadow: none;\n  cursor: not-allowed;\n}\n\n.coach-settlement-reconciliation-retry {\n  justify-self: end;\n}\n\n@media (max-width: 1024px) {\n.coach-settlement-reconciliation-form fieldset {\n    grid-template-columns: 1fr;\n  }\n}\n",
+  "registration": "existing classic script paths; tests/**/*.test.js; no new runtime script"
+}

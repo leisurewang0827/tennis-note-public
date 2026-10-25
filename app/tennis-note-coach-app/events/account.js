@@ -22,6 +22,26 @@ function bindAccountEvents() {
   });
   $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
   $("#coachSettlementReconciliationRetry")?.addEventListener("click", () => void syncCoachSettlementHistoryFromServer());
+  $("#coachSettlementReconciliationForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void submitCoachSettlementReconciliation();
+  });
+
+  const responseForm = $("#coachSettlementReconciliationForm");
+  responseForm?.addEventListener("change", (event) => {
+    const choice = event.target.closest('input[name="coachSettlementReconciliationChoice"]');
+    if (!choice || coachSettlementHistory.coachSettlementReconciliationSubmitting) return;
+    coachSettlementHistory.coachSettlementReconciliationChoice = choice.value;
+    coachSettlementHistory.coachSettlementReconciliationValidation = "";
+    renderCoachSettlementHistory();
+    if (choice.value === "disputed") window.requestAnimationFrame(() => $("#coachSettlementReconciliationReason")?.focus({ preventScroll: true }));
+  });
+  responseForm?.addEventListener("input", (event) => {
+    if (event.target.id !== "coachSettlementReconciliationReason" || coachSettlementHistory.coachSettlementReconciliationSubmitting) return;
+    coachSettlementHistory.coachSettlementReconciliationReason = event.target.value;
+    coachSettlementHistory.coachSettlementReconciliationValidation = "";
+    renderCoachSettlementHistory();
+  });
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
   $("#coachPushPrimerModal")?.addEventListener("click", (event) => {

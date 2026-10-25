@@ -9,6 +9,8 @@ const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 function restoreManualPayoutAdminIndex(file, source, currentVersion) {
   if (file !== "app/admin/index.html") return source;
+  const retained = require("./r3-retained-response-port.cjs").restore(file, source);
+  if (retained.applied) { source = retained.text; currentVersion = retained.baseVersion; }
   source = require("./r3-history-port.cjs").restoreOpenRefresh(file, source, {inputVersion: currentVersion});
   // raw555는 위 exact inverse를 통과해야만 기존554 계약으로 들어간다.
   if (currentVersion === "1.0.555") currentVersion = "1.0.554";

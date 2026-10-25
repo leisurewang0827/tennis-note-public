@@ -242,7 +242,7 @@ function coachSettlementReconciliationDefaultMessage(uiState) {
   return ({
     EMPTY: "선택한 월의 관리자 확정 내역이 없습니다. 예상 정산과는 별도입니다.",
     LOADING: "관리자가 확정한 월 정산을 확인하고 있습니다.",
-    PENDING: "관리자가 확정한 계산본입니다. 이 화면은 이력 조회만 제공하며 응답·확정·지급은 하지 않습니다.",
+    PENDING: "관리자 확정 계산본입니다. 월·횟수·정산액을 확인한 뒤 한 번만 응답해 주세요.",
     ACKNOWLEDGED: "관리자 확정 정산을 확인했다고 응답했습니다.",
     DISPUTED: "이의 사유를 관리자에게 전달했습니다.",
     STALE: "관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.",

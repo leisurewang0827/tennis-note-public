@@ -90,7 +90,9 @@ function renderCoachSettlementHistory() {
   const confirmation = payload.confirmation || null;
   const reconciliation = payload.reconciliation || null;
   const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
-  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading || coachSettlementHistory.coachSettlementReconciliationSubmitting;
+  const monthInput = $("#coachSettlementMonth");
+  if (monthInput) monthInput.disabled = busy;
   section.dataset.state = uiState;
   section.setAttribute("aria-busy", String(busy));
   const badge = $("#coachSettlementReconciliationStateBadge");
@@ -138,9 +140,52 @@ function renderCoachSettlementHistory() {
     }
   }
 
+  renderCoachSettlementResponseControls();
   const retry = $("#coachSettlementReconciliationRetry");
   if (retry) {
     retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(uiState);
     retry.disabled = busy;
+  }
+}
+
+function renderCoachSettlementResponseControls() {
+  const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || "EMPTY").toUpperCase();
+  const payload = coachSettlementHistory.coachSettlementReconciliation || {};
+  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading || coachSettlementHistory.coachSettlementReconciliationSubmitting;
+  const form = $("#coachSettlementReconciliationForm");
+  const canRespond = uiState === "PENDING"
+    && payloadIsExact
+    && !payload.reconciliation
+    && Boolean(coachSettlementReconciliationContinuation());
+  if (form) {
+    form.hidden = !canRespond;
+    form.querySelectorAll('input[name="coachSettlementReconciliationChoice"]').forEach((input) => {
+      input.checked = input.value === coachSettlementHistory.coachSettlementReconciliationChoice;
+      input.disabled = busy;
+    });
+  }
+  const reasonField = $("#coachSettlementReconciliationReasonField");
+  if (reasonField) reasonField.hidden = !canRespond || coachSettlementHistory.coachSettlementReconciliationChoice !== "disputed";
+  const reasonInput = $("#coachSettlementReconciliationReason");
+  if (reasonInput) {
+    if (reasonInput.value !== coachSettlementHistory.coachSettlementReconciliationReason) reasonInput.value = coachSettlementHistory.coachSettlementReconciliationReason;
+    reasonInput.disabled = busy;
+  }
+  const validation = $("#coachSettlementReconciliationValidation");
+  if (validation) {
+    validation.hidden = !coachSettlementHistory.coachSettlementReconciliationValidation;
+    validation.textContent = coachSettlementHistory.coachSettlementReconciliationValidation;
+  }
+  const submit = $("#coachSettlementReconciliationSubmit");
+  if (submit) {
+    const reasonError = coachSettlementHistory.coachSettlementReconciliationChoice === "disputed"
+      ? coachSettlementReconciliationReasonError(coachSettlementHistory.coachSettlementReconciliationReason)
+      : "";
+    submit.textContent = coachSettlementHistory.coachSettlementReconciliationSubmitting ? "응답 저장 중" : "응답 저장";
+    submit.disabled = !canRespond
+      || busy
+      || !["acknowledged", "disputed"].includes(coachSettlementHistory.coachSettlementReconciliationChoice)
+      || Boolean(reasonError);
   }
 }
