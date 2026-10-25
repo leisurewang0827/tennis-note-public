@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import promotion from "./helpers/r3-production-promotion.cjs";
 
 const { BASE: base, files, normalize, sha256, changedAppPaths } = promotion;
-const read = path => normalize(fs.readFileSync(path, "utf8"));
+const read = path => promotion.restoreSuccessor(path, normalize(fs.readFileSync(path, "utf8")));
 const show = (revision, path) => normalize(execFileSync("git", ["show", `${revision}:${path}`], { encoding: "utf8", maxBuffer: 8e6 }));
 const extract = (source, name) => {
   const start = source.indexOf(`function ${name}(`);

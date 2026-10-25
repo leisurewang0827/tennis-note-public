@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
+const { restoreSuccessor } = require("./r3-basic-refresh-production.cjs");
 
 const contract = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/r3-production-promotion.json"), "utf8"));
 const BASE = contract.base;
@@ -17,6 +18,7 @@ function changedAppPaths(base = BASE, cwd = process.cwd()) {
 }
 
 function restoreBeforeR3(file, text, cwd = process.cwd()) {
+  text = restoreSuccessor(file, text);
   const row = files.find(item => item[0] === file);
   if (!row) return normalize(text);
   const normalized = normalize(text);
@@ -28,4 +30,4 @@ function restoreBeforeR3(file, text, cwd = process.cwd()) {
 }
 
 const removedR3Paths = files.filter(([, baseSha256]) => baseSha256 === null).map(([file]) => file);
-module.exports = { BASE, files, removedR3Paths, normalize, sha256, changedAppPaths, restoreBeforeR3 };
+module.exports = { BASE, files, removedR3Paths, normalize, sha256, changedAppPaths, restoreBeforeR3, restoreSuccessor };

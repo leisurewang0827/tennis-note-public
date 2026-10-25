@@ -9,7 +9,7 @@ import promotion from "./helpers/r3-production-promotion.cjs";
 test("R3 inverse restores only exact pinned files and rejects drift", () => {
   for (const [file, baseSha, candidateSha] of promotion.files) {
     const candidate = fs.readFileSync(file, "utf8");
-    assert.equal(promotion.sha256(candidate), candidateSha, file);
+    assert.equal(promotion.sha256(promotion.restoreSuccessor(file, candidate)), candidateSha, file);
     const restored = promotion.restoreBeforeR3(file, candidate);
     if (baseSha) assert.equal(promotion.sha256(restored), baseSha, file);
     else assert.equal(restored, "", file);
