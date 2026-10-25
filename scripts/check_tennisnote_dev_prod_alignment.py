@@ -9,6 +9,10 @@ import json
 import re
 import subprocess
 import sys
+import io
+import tarfile
+import importlib.util
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -21,9 +25,132 @@ R3_PROMOTION_BASE = "686cc97d9676da2d16ca3cdfbd862dc9cd19434e"
 R3_PROMOTION_FILE_COUNT = 35
 R3_NEW_PATHS = {"app/shared/tennisnote-settlement-adjustment.js"}
 
+# 새 BASIC 수정과 공식 릴리스만 검증하여 이전553 검사 앞으로 역변환한다.
+BASIC_REFRESH_PATH = ROOT / "tests/fixtures/r3-basic-refresh-production.json"
+BASIC_REFRESH_PRODUCTS = {
+    "app/tennis-note-coach-app/ui/screens.js": (
+        '  openCoachModal("coachSettlementModal");\n  void syncCoachSettlementHistoryFromServer();',
+        '  openCoachModal("coachSettlementModal");\n  void syncCoachSettlementFromServer();\n  void syncCoachSettlementHistoryFromServer();',
+    ),
+    "app/tennis-note-coach-app/events/account.js": (
+        '    if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();\n', "",
+    ),
+    "app/tennis-note-coach-app/events/delegated.js": (
+        '      if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();\n', "",
+    ),
+}
+BASIC_REFRESH_RELEASE_PATHS = {
+    "app/release.json", "app/shared/tennisnote-release.js", "app/admin/index.html",
+    "app/tennis-note-member-app/index.html", "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/app.js", "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/ui/screens.js", "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js", "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/domain/coaches.js", "app/tennis-note-coach-app/forms/common.js",
+}
+_basic_refresh_cache = None
+
+
+def basic_refresh_plan(contract=None):
+    """JSON의 새 해시만 신뢰하지 않고224 원본+exact3+변경 없는 공식 도구로 재계산."""
+    c = contract if contract is not None else json.loads(BASIC_REFRESH_PATH.read_text(encoding="utf-8"))
+    def require(condition, reason):
+        if not condition:
+            raise RuntimeError("BASIC refresh " + reason)
+    digest = lambda text: hashlib.sha256(text.encode("utf-8")).hexdigest()
+    require(set(c) == {"contract", "base", "privateAuthority", "release", "files"}, "schema")
+    require(c["contract"] == "r3-basic-refresh-production/1" and c["base"] == "22456ce67bfcb475ef9f65e8bff826dc61e8eaca", "base")
+    source = c["privateAuthority"]
+    require(set(source) == {"main", "equivalentCommit", "tree", "path", "blob", "functionName", "functionSource", "functionSha256", "publicHistoryPreserved"}, "source schema")
+    expected_source = {
+        "main": "896872fd9999c99e77f932a93060febde4d0d062",
+        "equivalentCommit": "e224c6f36dc370c50ba29867d1ebca6e3939394b",
+        "tree": "fe071c03bcecb27953a3049d8506d1bae201566d",
+        "path": "90-Dashboard/tennis-note-coach-app/app.js", "blob": "f26f248d66a6c7c172053ff381b0cdf9823fea08",
+        "functionName": "openCoachSettlement", "functionSha256": "0f422857ca7f62be879541095878ba430e410db1a4c8d4873ee883a0b07b0e8c",
+        "publicHistoryPreserved": "  void syncCoachSettlementHistoryFromServer();\n",
+    }
+    require(all(source.get(k) == v for k, v in expected_source.items()) and digest(source["functionSource"]) == source["functionSha256"], "private source")
+    release = c["release"]
+    require(set(release) == {"version", "releaseId", "deployedAt", "memberCache", "coachCache", "runtime", "fingerprint", "originPolicy", "officialReplacementCount"}, "release schema")
+    expected_release = {
+        "version": "1.0.556", "releaseId": "2026.10.25.01", "memberCache": "tennis-note-member-pwa-v590",
+        "coachCache": "tennis-note-coach-mode-v563", "runtime": "production",
+        "fingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+        "originPolicy": "production-origin-monotonic-independent-of-dev", "officialReplacementCount": 374,
+    }
+    require(all(release.get(k) == v for k, v in expected_release.items()) and re.fullmatch(r"2026-10-25T\d{2}:\d{2}:\d{2}\+09:00", release["deployedAt"]), "release/cache/scope")
+    paths = [row["path"] for row in c["files"]]
+    expected_paths = set(BASIC_REFRESH_PRODUCTS) | BASIC_REFRESH_RELEASE_PATHS
+    require(len(paths) == len(set(paths)) and set(paths) == expected_paths, "exact path set")
+    require(all(set(row) == {"path", "baseBlob", "baseSha256", "candidateSha256"} for row in c["files"]), "row schema")
+    archive = subprocess.check_output(["git", "archive", c["base"], "app"], cwd=ROOT)
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        originals = {m.name: tar.extractfile(m).read().decode("utf-8").replace("\r\n", "\n")
+                     for m in tar.getmembers() if m.isfile() and Path(m.name).suffix in {".js", ".json", ".html"}}
+    planned = dict(originals)
+    for name, (before, after) in BASIC_REFRESH_PRODUCTS.items():
+        require(planned[name].count(before) == 1, "product hunk")
+        planned[name] = planned[name].replace(before, after)
+    screen = planned["app/tennis-note-coach-app/ui/screens.js"]
+    start = screen.index("function openCoachSettlement(")
+    end = screen.index("\n}", start) + 2
+    require(screen[start:end].replace(source["publicHistoryPreserved"], "") == source["functionSource"], "function projection")
+    bump_path = ROOT / "scripts/bump_release.py"
+    require(bump_path.read_bytes().replace(b"\r\n", b"\n") == subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).replace(b"\r\n", b"\n"), "official tool drift")
+    spec = importlib.util.spec_from_file_location("basic_refresh_official_bump", bump_path)
+    bump = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bump)
+    def original(p, *args, **kwargs):
+        name = p.relative_to(ROOT).as_posix()
+        if name == "app/shared/config.local.js":
+            return ""  # 배포 시 설정 원문은 읽지 않는다.
+        require(name in planned, "unknown app path")
+        return planned[name]
+    merged, counts = {}, {}
+    def read(p):
+        return merged[p] if p in merged else original(p)
+    def absorb(items):
+        for p, text, count in items:
+            merged[p] = text
+            counts[p] = counts.get(p, 0) + count
+    with patch.object(Path, "read_text", original):
+        absorb([bump.plan_release_json("1.0.553", release["version"], release["releaseId"], release["deployedAt"])])
+        absorb([bump.plan_release_js("1.0.553", release["version"], release["releaseId"], release["deployedAt"])])
+        absorb(bump.plan_version_queries("1.0.553", release["version"], read))
+        absorb(bump.plan_app_literals("1.0.553", release["version"], read))
+        caches = bump.plan_cache_names(read)
+        require([row[4] for row in caches] == [release["memberCache"], release["coachCache"]], "official caches")
+        absorb([(p, text, count) for p, text, count, _, _ in caches])
+    generated = {p.relative_to(ROOT).as_posix(): text for p, text in merged.items() if counts[p]}
+    require(set(generated) == BASIC_REFRESH_RELEASE_PATHS and sum(counts.values()) == 374, "official release plan")
+    planned.update(generated)
+    require(json.loads(originals["app/release.json"])["nativePlatforms"] == json.loads(planned["app/release.json"])["nativePlatforms"], "native metadata")
+    result = {}
+    for row in c["files"]:
+        name = row["path"]
+        before, after = originals[name], planned[name]
+        blob = hashlib.sha1(b"blob " + str(len(before.encode())).encode() + b"\0" + before.encode()).hexdigest()
+        require(blob == row["baseBlob"] and digest(before) == row["baseSha256"] and digest(after) == row["candidateSha256"], "mechanical blob/hash: " + name)
+        result[name] = {"before": before, "after": after}
+    return result
+
+
+def before_basic_refresh_candidate(path: str, data: bytes) -> bytes:
+    global _basic_refresh_cache
+    if _basic_refresh_cache is None:
+        _basic_refresh_cache = basic_refresh_plan()
+    row = _basic_refresh_cache.get(path)
+    if row is None:
+        return data
+    candidate = data.decode("utf-8").replace("\r\n", "\n")
+    if candidate != row["after"]:
+        raise RuntimeError("BASIC refresh exact candidate mismatch: " + path)
+    return row["before"].encode("utf-8")
+
 
 def before_r3_candidate(path: str, data: bytes) -> bytes:
     """R3 공개 후보는 공용 exact SHA 계약으로 기준 tree에 복원한다."""
+    data = before_basic_refresh_candidate(path, data)
     row = next((item for item in R3_PROMOTION_CONTRACT["files"] if item["path"] == path), None)
     if not row:
         return data

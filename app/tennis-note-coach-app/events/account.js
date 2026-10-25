@@ -9,7 +9,6 @@ function bindAccountEvents() {
   $("#coachProfileButton")?.addEventListener("click", () => navigateCoachView("coachProfileView"));
   $("#coachSettlementSummaryButton")?.addEventListener("click", () => {
     openCoachSettlement();
-    if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
   });
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
