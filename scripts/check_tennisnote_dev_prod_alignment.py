@@ -1187,12 +1187,12 @@ def _load_r3_coach_open_refresh_authority(authority: dict | None = None) -> dict
 def restore_r3_retained_response_base(path: str, text: str) -> str:
     """Exact current response/release inverse; never repin any historical authority."""
     raw = (ROOT / "tests/fixtures/r3-retained-response-source-authority.json").read_text(encoding="utf-8").replace("\r\n", "\n")
-    if sha256(raw.encode()) != "7489534e7f81009ce09e4cd10d429b570d2508ba9d0d853f740174644198ffb7":
+    if sha256(raw.encode()) != "459e0eaa024a5cc1464c8d2377517a1c6fe2e7747a0994442ec8651544ca8177":
         raise RuntimeError("R3 retained response authority drift")
     port = json.loads(raw)
     if (port.get("publicBase") != "705b7312ab14bbfcd8c68b1ef78c041be643d5d2"
-            or port.get("privateMain") != "660c520bacf5e77711ec392c7bae053e62e7416f"
-            or port.get("privateTree") != "a1998a7ee4608e83e01dc446fc03acd52357a016"
+            or port.get("privateMain") != "be8c227b16603f3cf7de1ba4a4940bae425af07b"
+            or port.get("privateTree") != "14b8cfb53fd9dd7c9b7d168ed0abd8f71bdecd9d"
             or len(port.get("files", [])) != 20):
         raise RuntimeError("R3 retained response source binding drift")
     normalized = Path(path).as_posix()

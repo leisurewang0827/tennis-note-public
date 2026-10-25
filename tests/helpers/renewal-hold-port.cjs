@@ -7,21 +7,34 @@ const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/renewal-hold-source-parity.json"), "utf8"));
 const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
+function manualPayoutAdminIndexBaseline() {
+  const authority = JSON.parse(read("tests/fixtures/r3-manual-payout-port-source-authority.json")).releaseSuccessor;
+  assert.equal(authority.baseCommit, "636bdb571dab9d67e18725cd101f0fbe452d69d7");
+  assert.equal(authority.featureCommit, "758feca68b3dcc7df89652c0dda03176e1c2dc16");
+  assert.equal(authority.candidateCommit, "1b1a73ce73ea2998ed91b54d52aa312d6a2d47f6");
+  assert.equal(authority.baseVersion, "1.0.552");
+  const source = execFileSync("git", ["show", authority.baseCommit + ":app/admin/index.html"],
+    { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
+  assert.equal(sha(source), "73871ce9b81e434ad55d849a3b5400633c98e422f945b75f9982c96b377e6937", "manual payout baseline hash drift");
+  const oid = crypto.createHash("sha1").update("blob " + Buffer.byteLength(source, "utf8") + "\0").update(source).digest("hex");
+  assert.equal(oid, "4ea47b9d0837ba046ea4776c2e6a806918efba5f", "manual payout baseline object drift");
+  return { authority, source };
+}
 function restoreManualPayoutAdminIndex(file, source, currentVersion) {
   if (file !== "app/admin/index.html") return source;
+  const baseline = manualPayoutAdminIndexBaseline();
+  // 호출자의 최신 버전과 무관하게, 실제 고정 Git 바이트인 과거 baseline만 재사용한다.
+  if (source === baseline.source) return baseline.source;
   const retained = require("./r3-retained-response-port.cjs").restore(file, source);
   if (retained.applied) { source = retained.text; currentVersion = retained.baseVersion; }
   source = require("./r3-history-port.cjs").restoreOpenRefresh(file, source, {inputVersion: currentVersion});
   // raw555는 위 exact inverse를 통과해야만 기존554 계약으로 들어간다.
   if (currentVersion === "1.0.555") currentVersion = "1.0.554";
-  const authority = JSON.parse(read("tests/fixtures/r3-manual-payout-port-source-authority.json")).releaseSuccessor;
-  assert.equal(authority.baseCommit, "636bdb571dab9d67e18725cd101f0fbe452d69d7");
-  assert.equal(authority.featureCommit, "758feca68b3dcc7df89652c0dda03176e1c2dc16");
-  assert.equal(authority.candidateCommit, "1b1a73ce73ea2998ed91b54d52aa312d6a2d47f6");
+  const authority = baseline.authority;
   if (currentVersion === authority.baseVersion) return source;
   assert.equal(currentVersion, authority.targetVersion, "unrecognized manual payout release stage");
   const commitFile = (revision) => execFileSync("git", ["show", `${revision}:${file}`], { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
-  const atBase = commitFile(authority.baseCommit);
+  const atBase = baseline.source;
   const atFeature = commitFile(authority.featureCommit);
   const normalized = source.replaceAll(currentVersion, authority.baseVersion);
   assert.ok([sha(atBase), sha(atFeature)].includes(sha(normalized)), "manual payout admin index stage drift");
@@ -34,7 +47,12 @@ function restoreBase(file, source) {
   const r3 = require("./r3-effective-port.cjs");
   const currentVersion = JSON.parse(read("app/release.json")).version;
   source = restoreManualPayoutAdminIndex(file, source, currentVersion);
-  const r3SourceVersion = file === "app/admin/index.html" && ["1.0.554", "1.0.555"].includes(currentVersion) ? "1.0.552" : currentVersion;
+  let r3SourceVersion = currentVersion;
+  if (file === "app/admin/index.html") {
+    const baseline = manualPayoutAdminIndexBaseline();
+    assert.equal(source, baseline.source, "manual payout returned baseline drift");
+    r3SourceVersion = baseline.authority.baseVersion;
+  }
   if (r3.manifest.files.some(item => item.path === file)) {
     source = r3.restore(file, r3.canonicalRelease(file, source, r3SourceVersion));
     source = source.replaceAll(r3.manifest.publicVersion, currentVersion);

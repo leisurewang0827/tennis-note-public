@@ -54,7 +54,9 @@ test("current inverse: exact 18 existing blobs, all one-byte negatives, historic
     restored++;
   }
   assert.equal(restored,18);
-  assert.equal(port.privateMain,"660c520bacf5e77711ec392c7bae053e62e7416f");
+  assert.equal(port.privateMain,"be8c227b16603f3cf7de1ba4a4940bae425af07b");
+  assert.equal(port.privateTree,"14b8cfb53fd9dd7c9b7d168ed0abd8f71bdecd9d");
+  assert.equal(port.migration250Sha256,"62740dd269e708d672f739c01fc22eb83e43ebaa80446a3d0a9da89f443c700e");
   assert.equal(port.candidateCommit,null,"local source evidence must not invent a commit");
 });
 test("Python alignment uses the same exact inverse, rejects drift, and leaves historical bytes intact",()=>{
@@ -78,6 +80,46 @@ test("Python alignment uses the same exact inverse, rejects drift, and leaves hi
     "print('EXACT_INVERSE_18_PASS')"
   ].join("\n");
   assert.match(execFileSync(process.platform==="win32"?"python":"python3",["-B","-c",code],{cwd:root,encoding:"utf8"}),/EXACT_INVERSE_18_PASS/);
+});
+
+test("current authority binding: merged private source exact; stale SHA/tree/migration fail closed",()=>{
+  const file="tests/fixtures/r3-retained-response-source-authority.json",raw=read(file),port=inverse.authority();
+  const prior=JSON.parse(execFileSync("git",["show","8358da0fa68ec4963b3e9004fe9f8bb958269d93:"+file],{cwd:root,encoding:"utf8"}));
+  const rebound={...port,privateMain:prior.privateMain,privateTree:prior.privateTree,migration250Sha256:prior.migration250Sha256};
+  assert.deepEqual(rebound,prior,"only current private identity changes; every historical/product hunk and golden stays exact");
+  const stale={privateMain:prior.privateMain,privateTree:prior.privateTree,migration250Sha256:prior.migration250Sha256};
+  const target=path.join(root,file),originalRead=fs.readFileSync;
+  for(const [field,value] of Object.entries(stale)){
+    const before=JSON.stringify(field)+": "+JSON.stringify(port[field]);
+    assert.equal(raw.split(before).length,2);
+    const changed=raw.replace(before,JSON.stringify(field)+": "+JSON.stringify(value));
+    fs.readFileSync=function(p,...args){return path.resolve(String(p))===target?changed:originalRead.call(this,p,...args);};
+    try{assert.throws(()=>inverse.authority(),/authority drift/);}
+    finally{fs.readFileSync=originalRead;}
+  }
+  const code=[
+    "import json,sys",
+    "from pathlib import Path",
+    "from unittest.mock import patch",
+    "sys.path.insert(0,'scripts')",
+    "import check_tennisnote_dev_prod_alignment as a",
+    "target=a.ROOT/'tests/fixtures/r3-retained-response-source-authority.json'",
+    "raw=target.read_text(encoding='utf8').replace('\\r\\n','\\n')",
+    "port=json.loads(raw)",
+    "stale="+JSON.stringify(stale),
+    "original=Path.read_text",
+    "for field,value in stale.items():",
+    " before=json.dumps(field)+': '+json.dumps(port[field])",
+    " assert raw.count(before)==1",
+    " changed=raw.replace(before,json.dumps(field)+': '+json.dumps(value),1)",
+    " def read(self,*args,**kwargs): return changed if self==target else original(self,*args,**kwargs)",
+    " with patch.object(Path,'read_text',read):",
+    "  try: a.restore_r3_retained_response_base('app/admin/index.html','synthetic')",
+    "  except RuntimeError as error: assert str(error)=='R3 retained response authority drift'",
+    "  else: raise AssertionError('stale current authority accepted')",
+    "print('CURRENT_PRIVATE_BINDING_NEGATIVES_3_PASS')"
+  ].join("\n");
+  assert.match(execFileSync(process.platform==="win32"?"python":"python3",["-B","-c",code],{cwd:root,encoding:"utf8"}),/CURRENT_PRIVATE_BINDING_NEGATIVES_3_PASS/);
 });
 test("actual current acknowledged response: exact RPC once plus exact server readback",async()=>{
   const f=fixture();assert.equal(await f.c.submitCoachSettlementReconciliation(),true);
@@ -143,4 +185,17 @@ test("wrong revision/scope readback and already-responded conflict never report 
   assert.equal(await g.c.submitCoachSettlementReconciliation(),false);
   assert.equal(g.value("coachSettlementHistory.coachSettlementReconciliationUiState"),"CONFLICT");
   assert.equal(g.calls.length,2);
+});
+
+test("historical admin exact552 stage is object-bound; current and historical drift remain rejected",()=>{
+  const port=require("./helpers/renewal-hold-port.cjs"),file="app/admin/index.html";
+  const version=JSON.parse(read("app/release.json")).version,current=read(file);
+  const baseline=execFileSync("git",["show","636bdb571dab9d67e18725cd101f0fbe452d69d7:"+file],{cwd:root,encoding:"utf8"}).replace(/\r\n/g,"\n");
+  assert.equal(inverse.sha(baseline),"73871ce9b81e434ad55d849a3b5400633c98e422f945b75f9982c96b377e6937");
+  assert.equal(port.restoreManualPayoutAdminIndex(file,current,version),baseline);
+  assert.equal(port.restoreManualPayoutAdminIndex(file,baseline,version),baseline);
+  for(const bad of [current+" ",baseline+" ",baseline.replaceAll("1.0.552","1.0.999")]){
+    assert.throws(()=>port.restoreBase(file,bad),/drift|stage/);
+  }
+  assert.equal(JSON.parse(read("app/release.json")).version,version);
 });

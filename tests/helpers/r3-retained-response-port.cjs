@@ -6,14 +6,14 @@ const { execFileSync } = require("node:child_process");
 const root = path.resolve(__dirname, "../..");
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
 const lf = text => text.replace(/\r\n/g, "\n");
-const authorityHash = "7489534e7f81009ce09e4cd10d429b570d2508ba9d0d853f740174644198ffb7";
+const authorityHash = "459e0eaa024a5cc1464c8d2377517a1c6fe2e7747a0994442ec8651544ca8177";
 function authority() {
   const text = lf(fs.readFileSync(path.join(root, "tests/fixtures/r3-retained-response-source-authority.json"), "utf8"));
   if (sha(text) !== authorityHash) throw Error("R3 retained response authority drift");
   const value = JSON.parse(text);
   if (value.publicBase !== "705b7312ab14bbfcd8c68b1ef78c041be643d5d2"
-      || value.privateMain !== "660c520bacf5e77711ec392c7bae053e62e7416f"
-      || value.privateTree !== "a1998a7ee4608e83e01dc446fc03acd52357a016"
+      || value.privateMain !== "be8c227b16603f3cf7de1ba4a4940bae425af07b"
+      || value.privateTree !== "14b8cfb53fd9dd7c9b7d168ed0abd8f71bdecd9d"
       || value.files.length !== 20) throw Error("R3 retained response source binding drift");
   return value;
 }
