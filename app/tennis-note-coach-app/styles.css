@@ -6201,3 +6201,128 @@ body.modal-open {
 #coachSettlementModal button[data-close-coach-settlement] { min-height: 44px; font-size: 16px; }
 #coachSettlementModal #coachSettlementMonth { min-height: 44px; font-size: 16px; }
 @media (max-width: 430px) { .coach-settlement-history-summary { grid-template-columns: minmax(0, 1fr); } }
+
+/* Canonical private response controls: no new screen/navigation. */
+.coach-settlement-reconciliation-form {
+  overflow-wrap: anywhere;
+}
+
+.coach-settlement-reconciliation-form small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.coach-settlement-reconciliation-form {
+  display: grid;
+  gap: 12px;
+}
+
+.coach-settlement-reconciliation-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.coach-settlement-reconciliation-form legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.coach-settlement-reconciliation-form fieldset label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.coach-settlement-reconciliation-form fieldset label:has(input:checked) {
+  border-color: var(--green);
+  background: var(--soft-green);
+}
+
+.coach-settlement-reconciliation-form input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--green);
+}
+
+.coach-settlement-reconciliation-form fieldset span,
+.coach-settlement-reconciliation-reason {
+  display: grid;
+  gap: 3px;
+}
+
+.coach-settlement-reconciliation-reason textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.coach-settlement-reconciliation-validation {
+  margin: 0;
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.coach-settlement-reconciliation-submit,
+#coachSettlementReconciliationSubmit,
+.coach-settlement-reconciliation-retry {
+  min-height: 44px;
+}
+
+#coachSettlementReconciliationSubmit {
+  width: 100%;
+}
+
+#coachSettlementReconciliationSubmit:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--wash);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.coach-settlement-reconciliation-retry {
+  justify-self: end;
+}
+
+@media (max-width: 1024px) {
+.coach-settlement-reconciliation-form fieldset {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 기존 승인 버튼의 활성 색상·간격만 재사용한다. 비활성 표시는 위 계약을 유지한다. */
+#coachSettlementReconciliationSubmit:not(:disabled) {
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: white;
+  background: var(--green);
+  font-weight: 900;
+}

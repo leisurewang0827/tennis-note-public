@@ -7,6 +7,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-e
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
 function normalize(text) { return text.replace(/\r\n/g, "\n"); }
 function canonicalRelease(file, text, version) {
+  // 새 응답/릴리스 바이트를 먼저 exact 705로 복원한 뒤 옛 release 정규화를 한다.
+  const retained = require("./r3-retained-response-port.cjs").restore(file, text);
+  if (retained.applied) { text = retained.text; version = retained.baseVersion; }
   text = text.replaceAll(version, manifest.publicVersion);
   if (file === "app/tennis-note-coach-app/service-worker.js") {
     const cache = /^const CACHE_NAME = "([^"]+)";/m.exec(text);

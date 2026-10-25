@@ -8,6 +8,11 @@ const unlockManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixture
 const previewFenceManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-preview-identity-fence-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
 function restoreManualPayoutSource(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  const retained = require("./r3-retained-response-port.cjs").restore(file, text, {strict:false});
+  if (retained.applied) {
+    const baseline = restoreManualPayoutSource(file, retained.text, retained.baseVersion);
+    return baseline.replaceAll(retained.baseVersion, inputVersion);
+  }
   const authority = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-manual-payout-port-source-authority.json"), "utf8"));
   const row = authority.publicFiles.find(item => item.path === file);
   if (!row) return text;

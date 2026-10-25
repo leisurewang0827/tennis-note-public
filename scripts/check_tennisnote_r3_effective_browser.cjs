@@ -320,18 +320,52 @@ async function runFixture(page,surface){
       const summary=document.querySelector("#coachSettlementReconciliationSummary");
       check(summary.textContent.includes("37원")&&summary.textContent.includes("기존 v1"),"v1 confirmed amount separate from current preview");
       check(state.coachSettlement.estimatedSettlement===50,"history never overwrites current preview");
-      check(!document.querySelector("#coachSettlementReconciliationForm, #coachSettlementReconciliationSubmit"),"response/confirmation write controls absent");
+      // 현재 승인된 코치 응답 UI는 DOM에 존재한다. 과거 readonly 단계의
+      // blanket 부재 대신 실제 PENDING/권한 경계와 자동 저장 0을 확인한다.
+      const responseForm=document.querySelector("#coachSettlementReconciliationForm");
+      const responseSubmit=document.querySelector("#coachSettlementReconciliationSubmit");
+      const responseBlocked=label=>check(responseForm.hidden&&!responseForm.getClientRects().length&&responseSubmit.disabled,label);
+      check(responseForm&&responseSubmit&&!responseForm.hidden&&responseForm.getClientRects().length,"authorized exact PENDING response controls visible");
+      check(responseSubmit.disabled,"PENDING requires explicit response choice");
+      const rpcBeforeChoice=window.__r3Rpc.length;
+      const acknowledged=responseForm.querySelector('input[value="acknowledged"]');
+      const disputed=responseForm.querySelector('input[value="disputed"]');
+      acknowledged.click();check(!responseSubmit.disabled,"actual response choice enables explicit submit only");
+      disputed.click();check(responseSubmit.disabled,"dispute requires valid reason");
+      const responseReason=document.querySelector("#coachSettlementReconciliationReason");
+      check(!document.querySelector("#coachSettlementReconciliationReasonField").hidden&&parseFloat(getComputedStyle(responseReason).fontSize)>=16&&responseSubmit.getBoundingClientRect().height>=44,"response focus16 and touch44 preserved");
+      responseReason.value="<unsafe>";responseReason.dispatchEvent(new Event("input",{bubbles:true}));
+      check(responseSubmit.disabled,"unsafe dispute reason blocks submit");
+      responseReason.value="적용기간 확인 요청";responseReason.dispatchEvent(new Event("input",{bubbles:true}));
+      check(!responseSubmit.disabled&&window.__r3Rpc.length===rpcBeforeChoice,"valid choice editing never auto-saves");
       const history=window.__r3History;
       window.__r3History=args=>({...history(args),state:"DISPUTED",reconciliation:{reconciliationId:"synthetic-response",status:"DISPUTED",reason:"적용기간 확인 요청 ".repeat(12).trim(),responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z"}});
       check(await syncCoachSettlementHistoryFromServer(),"prior dispute read only");
       check(summary.textContent.includes("적용기간 확인 요청")&&!summary.querySelector("img,script"),"prior reason textContent safe");
+      responseBlocked("already responded controls hidden and submit disabled");
       window.__r3History=args=>({...history(args),scope:{branchId:"other",coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month}});
       check(await syncCoachSettlementHistoryFromServer()===false&&summary.hidden,"scope mismatch hides old history");
+      responseBlocked("bad scope controls hidden and submit disabled");
       window.__r3History=args=>({scope:history(args).scope,state:"EMPTY",snapshot:null,confirmation:null,reconciliation:null});
       check(await syncCoachSettlementHistoryFromServer()&&summary.hidden,"empty history not fabricated zero");
+      responseBlocked("EMPTY controls hidden and submit disabled");
       check(document.querySelector("#coachSettlementReconciliationMessage").textContent.includes("없습니다"),"empty distinct from preview");
       window.__r3History=history;
       check(await syncCoachSettlementHistoryFromServer(),"synthetic recovery only after diagnosed payload mismatch");
+      const responseClient=window.TennisNoteDataClient;
+      const originalSession=responseClient.getSession,originalRole=state.coach.role,originalProfile=state.liveProfileId,originalAuth=state.coach.authUserId,originalBranch=state.coach.branchId;
+      const responseGuards=[
+        [()=>responseClient.getSession=()=>null,()=>responseClient.getSession=originalSession,"logout"],
+        [()=>state.coach.role="member",()=>state.coach.role=originalRole,"wrong role"],
+        [()=>state.liveProfileId="",()=>state.liveProfileId=originalProfile,"missing profile"],
+        [()=>state.coach.authUserId="",()=>state.coach.authUserId=originalAuth,"missing auth"],
+        [()=>state.coach.branchId="other",()=>state.coach.branchId=originalBranch,"foreign branch"]
+      ];
+      for(const [lose,restore,label] of responseGuards){
+        try{lose();renderCoachSettlementHistory();responseBlocked(label+" response controls hidden and submit disabled");}
+        finally{restore();renderCoachSettlementHistory();}
+      }
+      check(!responseForm.hidden,"exact role/session recovery restores PENDING response controls");
       const client=window.TennisNoteDataClient,old=client.rpc;client.rpc=async()=>{throw Error("settlement_hold_refund")};
       check(await syncCoachSettlementFromServer()===false,"HOLD fail closed");
       check(document.querySelector("#coachEstimatedSettlement").textContent==="—","coach HOLD not zero");
@@ -344,7 +378,7 @@ async function runFixture(page,surface){
     const allowedReadRpcs=new Set(["tn_coach_settlement_scope_v2","tn_coach_monthly_settlement_reconciliation_state","tn_admin_preview_monthly_settlement_snapshot","tn_admin_monthly_settlement_scope_state","tn_monthly_settlement_payout_state","tn_schedule_v2_coach_workspace","tn_visible_one_day_bookings","tn_schedule_v2_coach_member_roster","tn_schedule_v2_operation_days_between","tn_schedule_revision_snapshot"]);
     const unexpectedRpcs=[...new Set(window.__r3Rpc.map(row=>row.name).filter(name=>!allowedReadRpcs.has(name)))];
     check(unexpectedRpcs.length===0,"only exact read RPCs: "+unexpectedRpcs.join(","));
-    check(!window.__r3Rpc.some(row=>["tn_admin_create_monthly_settlement_snapshot","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_coach_respond_monthly_settlement_reconciliation"].includes(row.name)),"write RPC zero");
+    check(!window.__r3Rpc.some(row=>["tn_admin_create_monthly_settlement_snapshot","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_coach_respond_monthly_settlement_reconciliation","tn_coach_respond_monthly_settlement_confirmation"].includes(row.name)),"write RPC zero");
     return {checks,previewCalls:scopeCalls.length,hostedWrites:0};
   },surface);
 }

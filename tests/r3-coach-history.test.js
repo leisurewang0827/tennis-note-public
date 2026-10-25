@@ -72,12 +72,14 @@ test("new month wins over old response; read error/invalid do not become zero or
   assert.equal(vm.runInContext("coachSettlementHistory.coachSettlementReconciliation",c),null);
   assert(!vm.runInContext("coachSettlementHistory.coachSettlementReconciliationMessage",c).includes("private-details"));
 });
-test("no credentials means RPC zero; no response form or financial write entry",async()=>{
+test("historical exact 705 baseline: no credentials means RPC zero; read-only controls remain sealed",async()=>{
   const c=context();let calls=0;c.window.TennisNoteDataClient={getSession:()=>null,rpc:()=>{calls++}};
   assert.equal(await c.syncCoachSettlementHistoryFromServer(),false);assert.equal(calls,0);
-  const html=read("app/tennis-note-coach-app/index.html"),view=read("app/tennis-note-coach-app/views/settlement.js");
+  // 현재 응답 기능은 별도 actual-source 검사로 확인한다. 여기서는 exact inverse된 705만 검사한다.
+  const baseline=file=>require("./helpers/r3-retained-response-port.cjs").restore(file,read(file)).text;
+  const html=baseline("app/tennis-note-coach-app/index.html"),view=baseline("app/tennis-note-coach-app/views/settlement.js");
   for(const id of ["coachSettlementReconciliationForm","coachSettlementReconciliationSubmit","coachSettlementReconciliationReason"])assert(!html.includes('id="'+id+'"'));
   assert(!view.includes("innerHTML = `${"));
-  const data=read("app/tennis-note-coach-app/data/sync.js");const part=data.slice(data.indexOf("const coachSettlementHistory ="));
+  const data=baseline("app/tennis-note-coach-app/data/sync.js");const part=data.slice(data.indexOf("const coachSettlementHistory ="));
   for(const name of ["tn_coach_respond_monthly_settlement_confirmation","tn_admin_confirm_monthly_settlement_snapshot","tn_admin_create_monthly_settlement_snapshot","saveSnapshot("])assert(!part.includes(name));
 });

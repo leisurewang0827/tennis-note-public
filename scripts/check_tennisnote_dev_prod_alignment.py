@@ -1184,10 +1184,53 @@ def _load_r3_coach_open_refresh_authority(authority: dict | None = None) -> dict
     return port
 
 
+def restore_r3_retained_response_base(path: str, text: str) -> str:
+    """Exact current response/release inverse; never repin any historical authority."""
+    raw = (ROOT / "tests/fixtures/r3-retained-response-source-authority.json").read_text(encoding="utf-8").replace("\r\n", "\n")
+    if sha256(raw.encode()) != "459e0eaa024a5cc1464c8d2377517a1c6fe2e7747a0994442ec8651544ca8177":
+        raise RuntimeError("R3 retained response authority drift")
+    port = json.loads(raw)
+    if (port.get("publicBase") != "705b7312ab14bbfcd8c68b1ef78c041be643d5d2"
+            or port.get("privateMain") != "be8c227b16603f3cf7de1ba4a4940bae425af07b"
+            or port.get("privateTree") != "14b8cfb53fd9dd7c9b7d168ed0abd8f71bdecd9d"
+            or len(port.get("files", [])) != 20):
+        raise RuntimeError("R3 retained response source binding drift")
+    normalized = Path(path).as_posix()
+    row = next((item for item in port["files"] if item["path"] == normalized), None)
+    if not row or not row["beforeBlob"]:
+        return text
+    canonical = text.replace("\r\n", "\n")
+    digest = sha256(canonical.encode())
+    if digest == row["beforeSha256"]:
+        return canonical
+    if digest not in (row["afterSha256"], row["productSha256"]):
+        markers = ("submitCoachSettlementReconciliation", "coachSettlementReconciliationForm",
+                   "coach-settlement-reconciliation-form", "월·횟수·정산액을 확인한 뒤 한 번만 응답")
+        if port["targetVersion"] in canonical or (row["productSha256"] and any(marker in canonical for marker in markers)):
+            raise RuntimeError(f"R3 retained response source stage drift: {normalized}")
+        return text
+    baseline = run_git("show", f"{port['publicBase']}:{normalized}", text=False).replace(b"\r\n", b"\n")
+    blob = hashlib.sha1(b"blob " + str(len(baseline)).encode() + b"\0" + baseline).hexdigest()
+    if sha256(baseline) != row["beforeSha256"] or blob != row["beforeBlob"]:
+        raise RuntimeError(f"R3 retained response baseline drift: {normalized}")
+    if digest == row["productSha256"]:
+        canonical = canonical.replace(port["baseVersion"], port["targetVersion"])
+    if sha256(canonical.encode()) != row["afterSha256"]:
+        raise RuntimeError(f"R3 retained response release drift: {normalized}")
+    for hunk in reversed(row["hunks"]):
+        if not hunk["after"] or canonical.count(hunk["after"]) != 1:
+            raise RuntimeError(f"R3 retained response inverse hunk drift: {normalized}")
+        canonical = canonical.replace(hunk["after"], hunk["before"], 1)
+    if canonical.encode() != baseline:
+        raise RuntimeError(f"R3 retained response exact inverse drift: {normalized}")
+    return canonical
+
+
 def restore_r3_coach_open_refresh_base(
     path: str, text: str, authority: dict | None = None, *, strict: bool = True,
 ) -> str:
     """Exact 555 -> 554 outer inverse; historical inputs retain their own frozen route."""
+    text = restore_r3_retained_response_base(path, text)
     normalized = Path(path).as_posix()
     if normalized not in R3_OPEN_REFRESH_PATHS:
         return text
@@ -1212,6 +1255,7 @@ def restore_r3_coach_open_refresh_base(
 
 def restore_r3_manual_payout_successor_base(path: str, text: str, *, strict: bool = True) -> str:
     """Remove only the pinned 1.0.554 payout feature/release stack before older inverses."""
+    text = restore_r3_retained_response_base(path, text)
     normalized = Path(path).as_posix()
     if normalized in R3_OPEN_REFRESH_PATHS:
         # Only the new exact after-blob enters the new layer. Older pinned
