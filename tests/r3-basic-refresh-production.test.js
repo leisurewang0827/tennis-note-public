@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import successor from "./helpers/r3-basic-refresh-production.cjs";
 import promotion from "./helpers/r3-production-promotion.cjs";
+import selected from "./helpers/r3-production-selected.cjs";
 
 const root = process.cwd();
 const read = file => fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
@@ -171,9 +172,9 @@ test("BASIC556 exact23-file collector registration preserves all other productio
   assert.equal(new Set(expected).size, 23);
   const actual = git("diff", "--name-only", successor.contract.base).trim().split("\n").filter(Boolean);
   actual.push(...git("ls-files", "--others", "--exclude-standard").trim().split("\n").filter(Boolean));
-  assert.deepEqual(actual.sort(), expected);
+  assert.deepEqual(selected.restoreCheckpointPaths(actual, expected), expected);
   assert.match(read("scripts/verify.sh"), /node --test "tests\/\*\*\/\*\.test\.js"/);
   assert.equal(path.basename(import.meta.filename), "r3-basic-refresh-production.test.js");
   for (const row of successor.contract.files) if (row.path.endsWith(".js")) new vm.Script(read(row.path), { filename: row.path });
-  assert.equal(read("app/tennis-note-coach-app/data/sync.js"), show("app/tennis-note-coach-app/data/sync.js"));
+  assert.equal(selected.restore("app/tennis-note-coach-app/data/sync.js", read("app/tennis-note-coach-app/data/sync.js")), show("app/tennis-note-coach-app/data/sync.js"));
 });

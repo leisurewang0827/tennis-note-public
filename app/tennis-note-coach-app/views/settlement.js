@@ -79,6 +79,8 @@ function renderCoachSettlement() {
   renderVisibleMemberSettlement();
   renderCoachSettlementHistory();
 }
+
+// 기존 내 정산 상세에서 확정 이력과 코치 응답을 함께 표시합니다.
 function renderCoachSettlementHistory() {
   const section = $("#coachSettlementReconciliation");
   if (!section) return;
@@ -88,7 +90,9 @@ function renderCoachSettlementHistory() {
   const confirmation = payload.confirmation || null;
   const reconciliation = payload.reconciliation || null;
   const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
-  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading || coachSettlementHistory.coachSettlementReconciliationSubmitting;
+  const monthInput = $("#coachSettlementMonth");
+  if (monthInput) monthInput.disabled = busy;
   section.dataset.state = uiState;
   section.setAttribute("aria-busy", String(busy));
   const badge = $("#coachSettlementReconciliationStateBadge");
@@ -123,12 +127,65 @@ function renderCoachSettlementHistory() {
       } else if (uiState === "ACKNOWLEDGED") {
         appendSummary("코치 응답", "확인했습니다", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), "coach-settlement-reconciliation-summary-response");
       }
+      const payout = coachSettlementHistory.coachSettlementPayoutState?.payout;
+      if (payout && coachSettlementPayoutPayloadIsExact(coachSettlementHistory.coachSettlementPayoutState, payload, coachSettlementReconciliationScope())) {
+        const active = payout.activeRecord;
+        appendSummary(active ? "수동 지급 기록" : "지급 기록 상태",
+          active ? formatCoachWon(active.amount) : (payout.events?.length ? "기록 정정됨" : "기록 없음"),
+          active ? `${String(active.paidOn || "날짜 확인 필요")} · 실제 송금 여부는 별도 확인` : "은행 송금·환불 상태를 뜻하지 않습니다.",
+          "coach-settlement-reconciliation-summary-response");
+      } else if (coachSettlementHistory.coachSettlementPayoutMessage) {
+        appendSummary("수동 기록", "확인 필요", coachSettlementHistory.coachSettlementPayoutMessage, "coach-settlement-reconciliation-summary-reason");
+      }
     }
   }
 
+  renderCoachSettlementResponseControls();
   const retry = $("#coachSettlementReconciliationRetry");
   if (retry) {
     retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(uiState);
     retry.disabled = busy;
+  }
+}
+
+function renderCoachSettlementResponseControls() {
+  const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || "EMPTY").toUpperCase();
+  const payload = coachSettlementHistory.coachSettlementReconciliation || {};
+  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading || coachSettlementHistory.coachSettlementReconciliationSubmitting;
+  const form = $("#coachSettlementReconciliationForm");
+  const canRespond = uiState === "PENDING"
+    && payloadIsExact
+    && !payload.reconciliation
+    && Boolean(coachSettlementReconciliationContinuation());
+  if (form) {
+    form.hidden = !canRespond;
+    form.querySelectorAll('input[name="coachSettlementReconciliationChoice"]').forEach((input) => {
+      input.checked = input.value === coachSettlementHistory.coachSettlementReconciliationChoice;
+      input.disabled = busy;
+    });
+  }
+  const reasonField = $("#coachSettlementReconciliationReasonField");
+  if (reasonField) reasonField.hidden = !canRespond || coachSettlementHistory.coachSettlementReconciliationChoice !== "disputed";
+  const reasonInput = $("#coachSettlementReconciliationReason");
+  if (reasonInput) {
+    if (reasonInput.value !== coachSettlementHistory.coachSettlementReconciliationReason) reasonInput.value = coachSettlementHistory.coachSettlementReconciliationReason;
+    reasonInput.disabled = busy;
+  }
+  const validation = $("#coachSettlementReconciliationValidation");
+  if (validation) {
+    validation.hidden = !coachSettlementHistory.coachSettlementReconciliationValidation;
+    validation.textContent = coachSettlementHistory.coachSettlementReconciliationValidation;
+  }
+  const submit = $("#coachSettlementReconciliationSubmit");
+  if (submit) {
+    const reasonError = coachSettlementHistory.coachSettlementReconciliationChoice === "disputed"
+      ? coachSettlementReconciliationReasonError(coachSettlementHistory.coachSettlementReconciliationReason)
+      : "";
+    submit.textContent = coachSettlementHistory.coachSettlementReconciliationSubmitting ? "응답 저장 중" : "응답 저장";
+    submit.disabled = !canRespond
+      || busy
+      || !["acknowledged", "disputed"].includes(coachSettlementHistory.coachSettlementReconciliationChoice)
+      || Boolean(reasonError);
   }
 }
