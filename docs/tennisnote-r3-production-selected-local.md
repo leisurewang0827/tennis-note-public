@@ -1,5 +1,14 @@
 # R3 운영 선별 후보 — 로컬 조립 계약
 
+## 최신 상태 스냅샷 — 2026-10-26 보완 커밋 직전
+
+- PR217은 OPEN이며 이 스냅샷의 head는 ba33470300ab0ea2525ebdd97e3f54607e762b78다. 첫 Public CI40283359452는 문서 안내/과거 경로 수집기 등록2건으로 실패했고, 승인된5파일의 로컬 보완·집중6건은 통과했다. 아직 보완 커밋의 새 CI 결과는 아니다. 이후 정확한 head/check 상태는 PR 이력과 최종 HANDOFF로 확인한다.
+- fetch1 후 운영 main8face01719c79d075b513df71cf9793f24088c49 객체가 로컬에 있으며 기존 BASIC556 tree와 같다. 같은 checkout의 운영558 branch는 이 main을 부모로 하므로 최종33경로를 검토한다. 이전 보존 branch/로그인/기존 증거는 유지했다.
+- 실제 운영 READ ONLY 조회1회에서 선행7이력과 canonical 부모0331해시를 확인했다.230은 없고, compatible_clients_verified=false / snapshot writes_enabled=false / manual gate는 미생성(null)이다. null을 관측된 OFF로 부르지 않는다. 서버 관측 TLS1.3이며 direct PostgreSQL verify-full 증거와 구분한다. 조회를 다시 실행하지 않았다.
+- 병합·DBapply·스위치 전환·배포·native/store는0이다. 새 source CI가 통과하기 전 운영 GO가 아니며, 기존 승인 경계가 자동 확대되지 않는다.
+
+아래 초기19/31파일·객체 부재·UNKNOWN·원격0 기록은 각각 최초 로컬 조립/메타데이터 검수 시점의 역사 증거다. 삭제하거나 현재 상태로 덮어쓰지 않았으며, 현재 판정은 이 스냅샷과 후속 실제 PR/HANDOFF가 우선한다.
+
 현재는 로컬 후보이며 운영 GO·게시·실기기 완료가 아니다. 새 정책·메뉴·계산식을 만들지 않는다.
 
 ## 소스 경계
@@ -60,3 +69,12 @@
 - 운영 전 실제 main ancestry/tree, DB 의존/권한, 각 쓰기 스위치의 별도 승인 범위를 한 번에 확인해야 한다. 실제 사용자 정산 확정·지급·금융·Auth 작업은 포함하지 않는다.
 - 복구는 승인된 owner 경로로 새 v2/수동 쓰기를 먼저 중단하고 호환 reader를 유지한다. 검증된 이전 public artifact/BASIC556 tree를 단조 증가한 새 release/cache로 복구한다. 기존 v2 확정 이력이 있으면 읽을 수 있는 reader를 버리지 않는다. additive DB down/drop·과거 이력 삭제·재라벨 금지.
 - DEV의 실제 14,400원 저장/확인/기록·역분개/설정 복원/close/OFF/최종25검사 PASS는 재사용 증거다. 선별 운영 후보의 운영·기기 PASS로 승계하지 않는다.
+
+## 첫 원격 CI 등록 누락 보완
+
+- 첫 후보 ba334703의 Public CI40283359452는 Node509 중503 PASS/2 FAIL/4 SKIP으로 종료됐다. 새 문서의 AGENTS 안내와 과거553 실제 changedAppPaths 수집기 연결을 놓친 구현·검수 누락이다. 제품·DB·Linux 장애로 분류하지 않는다. 실패 run 재실행은 하지 않는다.
+- AGENTS는 고정 BASIC source 본문에 이 문서의 안내 행1개만 추가했다. 실제 전체 bytes 비교와 누락/중복/본문 변경 음성검사로 운영·보안 지침이 그대로임을 증명한다.
+- 과거 수집기는 고정553 raw 경로 합집합과 선별22 실제 변경 경로를 먼저 정확히 확인한다. 모든 과거35파일은 원래 candidate/base SHA와 비교하고, 새 successor 경로는 metadata/selected/BASIC 역변환 후 과거 base와 bytes가 같을 때만 당시 변경 없음으로 판정한다. filename 단순 filter나 과거35/23/golden 변경은 없다. 고정 운영 base의 다른 checkout 우회도 거부하며 별도 합성 Git의 기존 일반 수집 계약은 보존한다.
+- 수정은 AGENTS, 기존 promotion helper, selected helper, selected test, 이 문서의5파일뿐이다. 최종 PR 범위는 기존31+AGENTS+promotion helper=33이다. app22/제품0da/release558/cache/native/runtime은 그대로이며 버전을 다시 올리지 않는다.
+- 집중검사는 기존 실패2와 새 실제 진입점·unknown/누락/중복/byte·AGENTS 본문 음성3건만 통과했다.33경로에 맞춘 기존 metadata 음성1건도 변경 영향으로 확인한다. 나머지503 성공·운영 조회1·DBCI/full Core/Browser/native는 반복하지 않는다.
+- 로컬 증거를 MAIN이 독립 검수한 뒤에만 같은 PR217의 보완commit1/nonforcepush1/새 source Public CI1로 진행한다. 병합·DBapply·스위치·배포·native/store는 계속 제외한다.

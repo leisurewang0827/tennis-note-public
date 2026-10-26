@@ -61,6 +61,7 @@ Tennis Note 공개 저장소입니다. 회원앱·코치앱·관리자 세 개�
 | 큰 파일 쪼개기 | [docs/splitting.md](docs/splitting.md) |
 | `origin/main` 병합 | [docs/merging.md](docs/merging.md) |
 | 버전 올리기 · 배포 | [docs/releasing.md](docs/releasing.md) |
+| R3 운영 선별 후보·메타데이터 층 | [로컬 조립 계약](docs/tennisnote-r3-production-selected-local.md) |
 | 검사가 실패했을 때 | [docs/verification.md](docs/verification.md) |
 | "왜 이 규칙이 있나" | [docs/incidents.md](docs/incidents.md) |
 | 아직 안 된 것 확인 | [docs/unfinished.md](docs/unfinished.md) |

@@ -329,7 +329,7 @@ test("selected release metadata path and contract drift fail closed without modi
     assert.throws(()=>selectedLayers.restoreRelease(p,raw(p)+" "),{message:error});
     if(pin.files.some(x=>x.path===p))assert.throws(()=>selectedLayers.restore(p,read(p)+" "),{message:/^selected R3 exact candidate mismatch: /});
   }
-  const combined=selectedLayers.CHECKPOINT_PATHS;assert.equal(combined.length,31);assert.deepEqual(selectedLayers.restoreCheckpointPaths(combined,[]),[]);
+  const combined=selectedLayers.CHECKPOINT_PATHS;assert.equal(combined.length,33);assert.deepEqual(selectedLayers.restoreCheckpointPaths(combined,[]),[]);
   for(const list of [combined.slice(1),[...combined,combined[0]],[...combined,"unknown.js"]])assert.throws(()=>selectedLayers.restoreCheckpointPaths(list,[]),/checkpoint exact path set/);
   const code=String.raw`
 import importlib.util,json,copy
@@ -343,4 +343,39 @@ for mutate in cases:
 print(len(cases))
 `;
   const py=process.env.TENNISNOTE_PYTHON||(process.platform==="win32"?"python":"python3");assert.equal(execFileSync(py,["-B","-X","utf8","-c",code],{encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim(),"12");
+});
+
+test("selected correction actual historical collector restores exact old35 without filename filtering",()=>{
+  const promotion=require("./helpers/r3-production-promotion.cjs"),basic=require("./helpers/r3-basic-refresh-production.cjs");
+  const tracked=git("diff","--name-only",promotion.BASE,"--","app").trim().split("\n").filter(Boolean);
+  const untracked=git("ls-files","--others","--exclude-standard","--","app").trim().split("\n").filter(Boolean);
+  const current=[...tracked,...untracked],expected=promotion.files.map(x=>x[0]).sort();
+  assert.equal(current.length,36);assert.equal(expected.length,35);
+  assert.deepEqual(promotion.changedAppPaths(),expected);
+  assert.deepEqual(selectedLayers.restoreHistoricalAppPaths(current,basic.restoreSuccessor),expected);
+  const removed=current.filter(p=>!expected.includes(p));assert.equal(removed.length,1);
+  for(const p of removed)assert.equal(basic.restoreSuccessor(p,raw(p)),source(promotion.BASE,p),"inverse-proven historical unchanged source");
+});
+
+test("selected correction historical admission rejects unknown missing duplicate and byte drift",()=>{
+  const promotion=require("./helpers/r3-production-promotion.cjs"),basic=require("./helpers/r3-basic-refresh-production.cjs");
+  const current=git("diff","--name-only",promotion.BASE,"--","app").trim().split("\n").filter(Boolean);
+  for(const paths of [current.slice(1),[...current,current[0]],[...current,"app/unknown.js"]])assert.throws(()=>selectedLayers.restoreHistoricalAppPaths(paths,basic.restoreSuccessor),/historical observed path set mismatch/);
+  for(const p of ["app/admin/actions/billing.js","app/admin/actions/coach.js","app/admin/index.html"]){
+    assert.throws(()=>selectedLayers.restoreHistoricalAppPaths(current,basic.restoreSuccessor,{read:file=>raw(file)+(file===p?" ":"")}),/exact candidate mismatch|historical candidate bytes mismatch/);
+  }
+  assert.throws(()=>promotion.changedAppPaths(promotion.BASE,"tests"),/historical fixed checkout mismatch|not a git repository|bad revision/);
+});
+
+test("selected correction AGENTS is fixed-base plus one pointer only and instructions cannot drift",()=>{
+  const before=source(pin.base,"AGENTS.md"),current=raw("AGENTS.md");
+  assert.equal(selectedLayers.verifyDocRegistration(current),before);
+  assert.equal(current.replace(selectedLayers.DOC_POINTER+"\n",""),before);
+  assert.equal(current.split(selectedLayers.DOC_POINTER).length,2);
+  for(const text of [before,current+" ",current+"\n"+selectedLayers.DOC_POINTER,current.replace("직접 커밋하거나 직접 푸시하지 않습니다.","직접 푸시를 허용합니다.")])assert.throws(()=>selectedLayers.verifyDocRegistration(text),/document registration exact pointer mismatch/);
+  const basic=require("./helpers/r3-basic-refresh-production.cjs"),old=[...basic.contract.files.map(x=>x.path),"tests/fixtures/r3-basic-refresh-production.json","tests/helpers/r3-basic-refresh-production.cjs","tests/r3-basic-refresh-production.test.js","tests/helpers/r3-production-promotion.cjs","scripts/check_tennisnote_dev_prod_alignment.py","tests/r3-production-candidate.test.js","tests/r3-production-promotion.test.js"].sort();
+  const combined=[...new Set([...old,...selectedLayers.CHECKPOINT_PATHS])];
+  assert.equal(old.length,23);assert.equal(selectedLayers.CHECKPOINT_PATHS.length,33);
+  assert.deepEqual(selectedLayers.restoreCheckpointPaths(combined,old),old);
+  for(const paths of [combined.slice(1),[...combined,combined[0]],[...combined,"unknown.js"]])assert.throws(()=>selectedLayers.restoreCheckpointPaths(paths,old),/checkpoint exact path set mismatch/);
 });
