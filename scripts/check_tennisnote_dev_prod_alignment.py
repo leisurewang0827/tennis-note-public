@@ -59,6 +59,95 @@ SELECTED_R3_PRODUCTS = {
     "app/tennis-note-coach-app/styles.css", "app/tennis-note-coach-app/views/settlement.js",
 }
 _selected_r3_cache = None
+SELECTED_RELEASE_PATH = ROOT / "tests/fixtures/r3-production-selected-release.json"
+_selected_release_cache = None
+
+
+def selected_release_plan(contract=None):
+    """고정 BASIC+선별11 위의 공식558 메타데이터만 재계산한다. 이전 fixture는 재핀하지 않는다."""
+    c = contract if contract is not None else json.loads(SELECTED_RELEASE_PATH.read_text(encoding="utf-8"))
+    def require(value, reason):
+        if not value:
+            raise RuntimeError("selected R3 release " + reason)
+    digest = lambda text: hashlib.sha256(text.encode("utf-8")).hexdigest()
+    require(set(c) == {"contract", "base", "productAggregateSha256", "officialToolSha256", "release", "files"}, "schema")
+    require(c["contract"] == "r3-production-selected-release/1" and c["base"] == "8aada4bc43e275c2474c71a535c7e94eca4f26b5", "source")
+    require(c["productAggregateSha256"] == "0da38232af994bdc44eb06237a49380b14b5bf400362d5d973cdb8b843436661", "product source")
+    release = c["release"]
+    require(release == {"version": "1.0.558", "releaseId": "2026.10.26.02", "deployedAt": "2026-10-26T15:06:55+09:00", "memberCache": "tennis-note-member-pwa-v591", "coachCache": "tennis-note-coach-mode-v564", "officialReplacementCount": 374}, "metadata")
+    names = [row["path"] for row in c["files"]]
+    require(len(names) == len(set(names)) and set(names) == BASIC_REFRESH_RELEASE_PATHS, "exact13 paths")
+    require(all(set(row) == {"path", "beforeSha256", "afterSha256"} for row in c["files"]), "row schema")
+    archive = subprocess.check_output(["git", "archive", c["base"], "app"], cwd=ROOT)
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        originals = {m.name: tar.extractfile(m).read().decode("utf-8").replace("\r\n", "\n")
+                     for m in tar.getmembers() if m.isfile() and Path(m.name).suffix in {".js", ".json", ".html"}}
+    selected = selected_r3_plan()
+    for name, row in selected.items():
+        if name in originals:
+            originals[name] = row["after"]
+    bump_path = ROOT / "scripts/bump_release.py"
+    official = subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).decode("utf-8").replace("\r\n", "\n")
+    require(bump_path.read_text(encoding="utf-8").replace("\r\n", "\n") == official and digest(official) == c["officialToolSha256"], "official tool drift")
+    spec = importlib.util.spec_from_file_location("selected_release_official_bump", bump_path)
+    bump = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bump)
+    merged, counts = {}, {}
+    def original(p, *args, **kwargs):
+        name = p.relative_to(ROOT).as_posix()
+        if name == "app/shared/config.local.js":
+            return ""  # 실제 배포 설정 원문은 읽지 않는다.
+        require(name in originals, "unknown app path")
+        return originals[name]
+    def read(p):
+        return merged[p] if p in merged else original(p)
+    def absorb(items):
+        for p, text, count in items:
+            merged[p] = text
+            counts[p] = counts.get(p, 0) + count
+    with patch.object(Path, "read_text", original):
+        absorb([bump.plan_release_json("1.0.556", release["version"], release["releaseId"], release["deployedAt"])])
+        absorb([bump.plan_release_js("1.0.556", release["version"], release["releaseId"], release["deployedAt"])])
+        absorb(bump.plan_version_queries("1.0.556", release["version"], read))
+        absorb(bump.plan_app_literals("1.0.556", release["version"], read))
+        caches = bump.plan_cache_names(read)
+        require([row[4] for row in caches] == [release["memberCache"], release["coachCache"]], "cache")
+        absorb([(p, text, count) for p, text, count, _, _ in caches])
+    generated = {p.relative_to(ROOT).as_posix(): text for p, text in merged.items() if counts[p]}
+    require(set(generated) == BASIC_REFRESH_RELEASE_PATHS and sum(counts.values()) == 374, "official13/374")
+    require(json.loads(originals["app/release.json"])["nativePlatforms"] == json.loads(generated["app/release.json"])["nativePlatforms"], "native metadata")
+    result = {}
+    for row in c["files"]:
+        p = row["path"]
+        before, after = originals[p], generated[p]
+        require(digest(before) == row["beforeSha256"] and digest(after) == row["afterSha256"], "mechanical hash: " + p)
+        result[p] = {"before": before, "after": after}
+    return result
+
+
+def selected_release_assert_paths(paths):
+    expected = SELECTED_R3_PRODUCTS | BASIC_REFRESH_RELEASE_PATHS
+    if len(paths) != len(set(paths)) or set(paths) != expected:
+        raise RuntimeError("selected R3 release exact22 path set mismatch")
+
+
+def before_selected_release_candidate(path: str, data: bytes) -> bytes:
+    global _selected_release_cache
+    if _selected_release_cache is None:
+        _selected_release_cache = selected_release_plan()
+    row = _selected_release_cache.get(path)
+    if row is None:
+        return data
+    text = data.decode("utf-8").replace("\r\n", "\n")
+    if text == row["before"]:
+        return text.encode("utf-8")
+    # 기존 BASIC556 멱등 입력도 제품11층의 고정 bytes와 정확히 비교한다.
+    product = (_selected_r3_cache or selected_r3_plan()).get(path)
+    if product and text == product["before"]:
+        return text.encode("utf-8")
+    if text != row["after"]:
+        raise RuntimeError("selected R3 release exact candidate mismatch: " + path)
+    return row["before"].encode("utf-8")
 
 
 def selected_r3_plan(contract=None):
@@ -150,8 +239,9 @@ def before_selected_r3_candidate(path: str, data: bytes) -> bytes:
         planned = selected_r3_plan()
         paths = subprocess.check_output(["git", "diff", "--name-only", "8aada4bc43e275c2474c71a535c7e94eca4f26b5", "--", "app"], cwd=ROOT).decode("utf-8").splitlines()
         paths += subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "--", "app"], cwd=ROOT).decode("utf-8").splitlines()
-        selected_r3_assert_paths(paths)
+        selected_release_assert_paths(paths)
         _selected_r3_cache = planned
+    data = before_selected_release_candidate(path, data)
     row = _selected_r3_cache.get(path)
     if row is None:
         return data

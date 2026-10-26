@@ -8,7 +8,9 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
-const read = p => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+const selectedLayers = require("./helpers/r3-production-selected.cjs");
+const raw = p => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+const read = p => selectedLayers.restoreRelease(p, raw(p));
 const pin = JSON.parse(read("tests/fixtures/r3-production-selected-source.json"));
 const git = (...args) => execFileSync("git", args, {encoding:"utf8", maxBuffer:8*1024*1024, stdio:["ignore","pipe","pipe"]}).replace(/\r\n/g,"\n");
 const source = (sha,p) => git("show", `${sha}:${p}`);
@@ -16,7 +18,7 @@ const hash = s => createHash("sha256").update(s).digest("hex");
 function observedProductPaths(run=git) {
   const tracked=run("diff","--name-only",pin.base,"--","app").trim().split("\n").filter(Boolean);
   const untracked=run("ls-files","--others","--exclude-standard","--","app").trim().split("\n").filter(Boolean);
-  return [...tracked,...untracked].sort();
+  return selectedLayers.restoreProductPaths([...tracked,...untracked].sort());
 }
 function assertProductPaths(paths) {
   assert.equal(paths.length,new Set(paths).size);assert.deepEqual(paths,pin.files.map(x=>x.path).sort());
@@ -245,7 +247,7 @@ def observed(args,*a,**kw):
     return result
 m.subprocess.check_output=observed
 try:m.before_r3_candidate("app/admin/index.html",Path("app/admin/index.html").read_bytes())
-except RuntimeError as error:assert str(error)=="selected R3 exact path set mismatch"
+except RuntimeError as error:assert str(error)=="selected R3 release exact22 path set mismatch"
 else:raise AssertionError("actual consumer accepted undeclared app path")
 print("PASS")
 `;
@@ -260,6 +262,85 @@ test("selected checkpoint collector preserves old23 and rejects unknown duplicat
 });
 
 test("selected product observation uses pinned base equally in dirty local, clean commit and PR merge",()=>{
-  for(const mode of ["dirty","clean","pr-test-merge"]){const calls=[];const fake=(...args)=>{calls.push(args);if(args[0]==="diff"){assert.equal(args[2],pin.base);return pin.files.map(x=>x.path).join("\n");}if(args[0]==="ls-files")return "";throw Error("unexpected Git observation");};assertProductPaths(observedProductPaths(fake));assert.equal(calls.length,2,mode);}
+  for(const mode of ["dirty","clean","pr-test-merge"]){const calls=[];const fake=(...args)=>{calls.push(args);if(args[0]==="diff"){assert.equal(args[2],pin.base);return [...new Set([...pin.files.map(x=>x.path),...selectedLayers.RELEASE_PATHS])].join("\n");}if(args[0]==="ls-files")return "";throw Error("unexpected Git observation");};assertProductPaths(observedProductPaths(fake));assert.equal(calls.length,2,mode);}
   for(const changed of [[],[...pin.files.map(x=>x.path),"app/synthetic-unknown.js"],[...pin.files.map(x=>x.path),pin.files[0].path]])assert.throws(()=>assertProductPaths([...changed].sort()));
+});
+
+test("selected release official558 reconstructs exact13 and preserves product11 semantics plus native metadata",()=>{
+  const releasePin=JSON.parse(raw("tests/fixtures/r3-production-selected-release.json"));
+  const planned=selectedLayers.releasePlan();assert.equal(Object.keys(planned).length,13);assert.equal(releasePin.release.officialReplacementCount,374);
+  selectedLayers.verifyCurrent();
+  for(const row of releasePin.files){assert.equal(hash(raw(row.path)),row.afterSha256);assert.equal(hash(selectedLayers.restoreRelease(row.path,raw(row.path))),row.beforeSha256);}
+  for(const row of pin.files)assert.equal(hash(selectedLayers.restoreRelease(row.path,raw(row.path))),row.candidateSha256);
+  assert.equal(hash(pin.files.map(x=>x.path+"\0"+hash(read(x.path))+"\n").join("")),pin.productAggregateSha256);
+  const actual=JSON.parse(raw("app/release.json")),before=JSON.parse(source(pin.base,"app/release.json"));
+  assert.deepEqual(actual.nativePlatforms,before.nativePlatforms);assert.equal(actual.minimumNativeShellVersion,before.minimumNativeShellVersion);
+  assert.equal(actual.version,"1.0.558");assert.equal(actual.appSurfaceVersion,"1.0.558");assert.equal(actual.releaseId,"2026.10.26.02");
+  const unpack=text=>{const c=vm.createContext({window:{},document:{readyState:"loading",addEventListener(){}}});vm.runInContext(text,c);return JSON.parse(JSON.stringify(c.window.TENNIS_NOTE_RELEASE));};
+  const oldJs=unpack(source(pin.base,"app/shared/tennisnote-release.js")),newJs=unpack(raw("app/shared/tennisnote-release.js"));
+  for(const key of ["nativeShell","store","prepared","minimumNativeShellVersion"])assert.deepEqual(newJs[key],oldJs[key],key);
+  assert.equal(newJs.version,actual.version);assert.equal(newJs.releaseId,actual.releaseId);assert.equal(newJs.deployedAt,actual.deployedAt);
+  for(const [p,cache]of [["app/tennis-note-member-app/service-worker.js","tennis-note-member-pwa-v591"],["app/tennis-note-coach-app/service-worker.js","tennis-note-coach-mode-v564"]])assert(raw(p).includes(`const CACHE_NAME = "${cache}"`));
+  assert.equal(raw("scripts/bump_release.py"),source(pin.base,"scripts/bump_release.py"));
+  assert.deepEqual(selectedLayers.restoreProductPaths([...new Set([...pin.files.map(x=>x.path),...selectedLayers.RELEASE_PATHS])]),pin.files.map(x=>x.path).sort());
+});
+
+test("selected release actual JS and Python consumers remove metadata then selected11 then BASIC556 without repinning goldens",()=>{
+  const basic=require("./helpers/r3-basic-refresh-production.cjs"),promotion=require("./helpers/r3-production-promotion.cjs");
+  const paths=[...new Set([...pin.files.map(x=>x.path),...selectedLayers.RELEASE_PATHS])].sort();assert.equal(paths.length,22);
+  const expected={};
+  for(const p of paths){
+    assert.equal(selectedLayers.restore(p,raw(p)),source(pin.base,p),p);
+    const basicRow=basic.plan()[p];assert.equal(basic.restoreSuccessor(p,raw(p)),basicRow?basicRow.before:source(pin.base,p));
+    const old=promotion.files.find(x=>x[0]===p);expected[p]=old?old[1]===null?"":source(promotion.BASE,p):source(pin.base,p);
+    assert.equal(promotion.restoreBeforeR3(p,raw(p)),expected[p],p);
+  }
+  const code=String.raw`
+import importlib.util,json,socket
+from pathlib import Path
+def forbidden(*a,**k):raise AssertionError("network/protected forbidden")
+socket.create_connection=forbidden;socket.socket.connect=forbidden
+old_open=Path.open
+def safe_open(self,*a,**k):
+    if self.name in {"check_tennisnote_r3_production_projection.py","check_tennisnote_r3_manual_ledger_http.py"}:forbidden()
+    return old_open(self,*a,**k)
+Path.open=safe_open
+s=importlib.util.spec_from_file_location("alignment","scripts/check_tennisnote_dev_prod_alignment.py");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+paths=sorted(set(m.selected_r3_plan())|set(m.selected_release_plan()));result={}
+for p in paths:
+    data=Path(p).read_bytes();result[p]=m.before_r3_candidate(p,data).decode()
+    for fn in (m.before_selected_release_candidate,m.before_selected_r3_candidate,m.before_basic_refresh_candidate,m.before_r3_candidate):
+        if p not in m.BASIC_REFRESH_RELEASE_PATHS and fn==m.before_selected_release_candidate:continue
+        try:fn(p,data+b" ")
+        except RuntimeError:pass
+        else:raise AssertionError("one-byte accepted "+p)
+print(json.dumps(result))
+`;
+  const py=process.env.TENNISNOTE_PYTHON||(process.platform==="win32"?"python":"python3");assert.deepEqual(JSON.parse(execFileSync(py,["-B","-X","utf8","-c",code],{encoding:"utf8",maxBuffer:8*1024*1024,stdio:["ignore","pipe","pipe"]})),expected);
+  assert.equal(hash(raw("tests/fixtures/r3-production-selected-source.json")),"28aba25a81f271958a33638723594f7a3b13838871b2bff405d81806739dda7d","pre-release frozen product fixture unchanged");
+  for(const p of ["tests/fixtures/r3-basic-refresh-production.json","tests/fixtures/r3-production-promotion.json","tests/fixtures/self-profile-a-only.json","tests/fixtures/production-isolation-source.json","tests/fixtures/production-excel-release.json","scripts/verify.sh", ".github/workflows/tennisnote-public-ci.yml"])assert.equal(raw(p),source(pin.base,p));
+});
+
+test("selected release metadata path and contract drift fail closed without modifying historical expectations",()=>{
+  const paths=[...new Set([...pin.files.map(x=>x.path),...selectedLayers.RELEASE_PATHS])];
+  for(const list of [paths.slice(1),[...paths,paths[0]],[...paths,"app/unknown.js"],pin.files.map(x=>x.path)])assert.throws(()=>selectedLayers.restoreProductPaths(list),/exact22 path set/);
+  for(const p of selectedLayers.RELEASE_PATHS){
+    const error=pin.files.some(x=>x.path===p)?/^selected R3 exact candidate mismatch: /:/^selected R3 release exact candidate mismatch: /;
+    assert.throws(()=>selectedLayers.restoreRelease(p,raw(p)+" "),{message:error});
+    if(pin.files.some(x=>x.path===p))assert.throws(()=>selectedLayers.restore(p,read(p)+" "),{message:/^selected R3 exact candidate mismatch: /});
+  }
+  const combined=selectedLayers.CHECKPOINT_PATHS;assert.equal(combined.length,31);assert.deepEqual(selectedLayers.restoreCheckpointPaths(combined,[]),[]);
+  for(const list of [combined.slice(1),[...combined,combined[0]],[...combined,"unknown.js"]])assert.throws(()=>selectedLayers.restoreCheckpointPaths(list,[]),/checkpoint exact path set/);
+  const code=String.raw`
+import importlib.util,json,copy
+s=importlib.util.spec_from_file_location("a","scripts/check_tennisnote_dev_prod_alignment.py");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+c=json.loads(m.SELECTED_RELEASE_PATH.read_text(encoding="utf-8"));cases=[lambda x:x.update(base="0"*40),lambda x:x.update(productAggregateSha256="0"*64),lambda x:x.update(officialToolSha256="0"*64),lambda x:x["release"].update(version="1.0.557"),lambda x:x["release"].update(releaseId="2026.10.26.01"),lambda x:x["release"].update(memberCache="tennis-note-member-pwa-v590"),lambda x:x["release"].update(officialReplacementCount=373),lambda x:x["files"].pop(),lambda x:x["files"].append(copy.deepcopy(x["files"][0])),lambda x:x["files"][0].update(path="app/unknown.js"),lambda x:x["files"][0].update(afterSha256="0"*64),lambda x:x["release"].update(preparedBuild=999)]
+for mutate in cases:
+    x=copy.deepcopy(c);mutate(x)
+    try:m.selected_release_plan(x)
+    except RuntimeError:pass
+    else:raise AssertionError("metadata drift accepted")
+print(len(cases))
+`;
+  const py=process.env.TENNISNOTE_PYTHON||(process.platform==="win32"?"python":"python3");assert.equal(execFileSync(py,["-B","-X","utf8","-c",code],{encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim(),"12");
 });

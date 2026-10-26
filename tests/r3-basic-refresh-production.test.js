@@ -9,7 +9,7 @@ import promotion from "./helpers/r3-production-promotion.cjs";
 import selected from "./helpers/r3-production-selected.cjs";
 
 const root = process.cwd();
-const read = file => fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+const read = file => selected.restoreRelease(file, fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
 const git = (...args) => execFileSync("git", ["-c", "core.safecrlf=false", ...args], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).replace(/\r\n/g, "\n");
 const show = file => git("show", `${successor.contract.base}:${file}`);
 const python = process.env.TENNISNOTE_PYTHON || (process.platform === "win32" ? "python" : "python3");

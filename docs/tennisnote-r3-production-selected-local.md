@@ -36,6 +36,7 @@
 - JS `r3-basic-refresh-production` 및 Python `before_basic_refresh_candidate → before_r3_candidate` 실제 소비자에 먼저 연결한다. 기존 BASIC/553 기대값과 역사 fixture는 바꾸지 않는다.
 - 기존23 collector는 새 owned 경로의 정확 합집합을 검사한 뒤 원래23으로 되돌린다. 누락·중복·unknown·one-byte drift는 실패한다.
 - commit 여부에 따라 scope가 0으로 변하지 않도록 `git diff <고정base> -- app`와 untracked 명세를 함께 사용한다.
+- 후속 공식558 메타데이터13층은 별도 `r3-production-selected-release.json` 계약으로 재구성한다. 실제 JS/Python 소비자는 metadata13 → selected11 → BASIC556 → 기존553 순서로 정확히 역변환한다. 제품 전용 fixture와 역사 기대값은 그대로다. 현재 app 변경22경로와 전체 checkpoint31경로를 정확히 검사하며 누락·중복·unknown은 실패한다.
 - 이번 단위에서는 전체 verify/Core/Browser/DB177/native를 반복하지 않는다. 새 조합 집중검사만 실행한다. 보호 checker2는 읽기·해시·import·실행·복사·수정하지 않는다.
 
 ## DB 의존과 스위치 — 실제 운영값은 아직 UNKNOWN
@@ -50,7 +51,10 @@
 
 ## 릴리스·native·복구
 
-- 버전은 아직 BASIC556 그대로다. 공식 `bump_release.py --next --dry-run` 결과는557 / 2026.10.26.01 / member591 / coach564, 13파일374치환이다. 실제 metadata write·게시0. 최종 제품 검수 후 같은 묶음의 metadata를 정해야 한다.
+- 첫 제품 검수 당시 BASIC556인19파일 증거는 outputs에 보존했다. DEV557과 구분하여 공식 `bump_release.py 1.0.558 --release-id 2026.10.26.02 --dry-run`을 검토한 뒤 같은 명령의 apply를1회 실행했다. 현재 로컬 후보는558 / 2026.10.26.02 / member591 / coach564이며13파일374치환이다. 캐시는 운영 origin의590/563보다 증가했다. private/native metadata·nativeShell·preparedBuild·서명·스토어는 그대로다. 원격·게시0이다.
+- pre-release 제품11 중 HTML2개만 공식 query metadata와 겹친다. metadata13을 제거하면 기존 제품 aggregate `0da38232af994bdc44eb06237a49380b14b5bf400362d5d973cdb8b843436661`이 그대로다. 기능·정책 본문 변경은 없다. 최종31 = 기존19 + metadata-only11 + release fixture1이다.
+- metadata 영향7검사 PASS: 새3건(공식13재구성/소스기능hash/네이티브보존, 실제 JS·Python 전체연결,12종 계약변조 및 one-byte·경로 실패)과 변경된 연결4건만 실행했다. 이전23건의 비즈니스 행동·화면24/549·prior8·DEV DB 증거는 재사용하며 전체 반복하지 않는다. 별도 기존 exact23 collector 연결1건도 PASS다.
+- 소스 검토에서 제품 HTML2개의 기존 오류 discriminator를 그대로 보존했다. 강화한 새 negative case의 첫 재검사에서 anchored regex가 Error 전체 문자열과 message 본문을 혼동해 실패했다. 반환 오류는 정확했고 차단은 정상이다. message 필드에 정확히 비교하도록 수정 후 그 영향1건만 PASS했다. 기존 기대값/허용 범위는 완화하지 않았다.
 - 예상 후속 public PR은 Tennis Note Public PWA CI, 운영 병합 후 Public CI + Deploy Tennis Note short URLs + Deploy Tennis Note web beta다. 이번에는 새 CI·원격 조회/게시를 실행하지 않는다.
 - native는 private 전체 앱이 아니라 동일 승인 public candidate를 기존 `production-web-source.json`의 commit/tree/content/manifest pin으로 고정해야 한다. 후보 commit이 없으므로 아직 pin/IPA/AAB를 만들거나 완료로 부르지 않는다.
 - 운영 전 실제 main ancestry/tree, DB 의존/권한, 각 쓰기 스위치의 별도 승인 범위를 한 번에 확인해야 한다. 실제 사용자 정산 확정·지급·금융·Auth 작업은 포함하지 않는다.
