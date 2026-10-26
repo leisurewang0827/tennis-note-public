@@ -1,0 +1,74 @@
+{
+  "contract": "r3-production-selected-source/1",
+  "status": "LOCAL_UNCOMMITTED_PRODUCT_ONLY",
+  "base": "8aada4bc43e275c2474c71a535c7e94eca4f26b5",
+  "baseTree": "d65e6a981b351c72405d4d7794e23f0d0238f0cb",
+  "reportedProductionMain": "8face01719c79d075b513df71cf9793f24088c49",
+  "reportedProductionObjectPresent": false,
+  "testedDev": "31ad00f0c2494c089ba91030a9673047e94063d4",
+  "reportedTestedDevMerge": "d1a22ea5faf60b9fb97d10e5029ec6027351b759",
+  "privateSource": "9e4d41e4007cbd74835a9e1eb7b4d3348888898e",
+  "privateTree": "a3ffd4cc3674dc890f253764b264c36a6282cb2b",
+  "privateAdminBlob": "b2e7ed287bf7e7b7822bfaa93868ccc4382095a6",
+  "privateCoachBlob": "f26f248d66a6c7c172053ff381b0cdf9823fea08",
+  "productAggregateSha256": "0da38232af994bdc44eb06237a49380b14b5bf400362d5d973cdb8b843436661",
+  "files": [
+    {
+      "path": "app/admin/actions/billing.js",
+      "baseSha256": "59f88f633a290e7f4c9713567bf046e31d35114b69b762f03839d75c71036b6f",
+      "candidateSha256": "52074e40cb955679ecc5bb5e228ac6745aa68396d123473cb707833f1032f791"
+    },
+    {
+      "path": "app/admin/data/billing.js",
+      "baseSha256": "69e08d7d5c3ea1510906af051646d7d09383e827404beb42360883257b192d4a",
+      "candidateSha256": "0dad5916885b8f56ea2684e166e05a43e6338820d6b8783c86bf34d27ea6fa49"
+    },
+    {
+      "path": "app/admin/events/billing.js",
+      "baseSha256": "d4edcd0e1947ec53ed7f2c3e99c12510a0f58f6ea11bf7ae224f5f90070cc182",
+      "candidateSha256": "53731bd42e033b3d54ae76392fdec0a7b80d93659ac6e8c80633d5bcb49e0e79"
+    },
+    {
+      "path": "app/admin/index.html",
+      "baseSha256": "01a373100052719a1cb12f0449bad9f075ee61c48b9509a0aa7bd6ab892b6e23",
+      "candidateSha256": "ccbf5256d87c16f516e1e2010fe0737d6749a33b658dda295b0e6ff01970f3c3"
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "baseSha256": "626d2cce244287a5b61a50fd9369b24854e13f102cce9f12924ffb97a0adea09",
+      "candidateSha256": "8d2048905cd75c41e3c54a894d63484de6219dc53d4ccbefa5832117311be668"
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/sync.js",
+      "baseSha256": "1ed7acec051d51caf9f65b4150b52b8cfebdffb103120782bbe47a88c98a932d",
+      "candidateSha256": "bc4577b77cb167b5751986338cf65528c082d360621f34291eb04cfc2435a9bf"
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/settlement.js",
+      "baseSha256": "a7329916dceafe0e4698ee1a870d0dfaa61194f8e56c918e792a7160fe7cc232",
+      "candidateSha256": "9edf770e2fa7a6a597015251a13999187e43f297b64d04bfe3489bf44cc789a1"
+    },
+    {
+      "path": "app/tennis-note-coach-app/events/account.js",
+      "baseSha256": "f7ef2b575dadd53c69ecd8615597ae4a342efbdeedc8e86995e2033c1c27baa1",
+      "candidateSha256": "e7660238dff9f4180027a0af3f23cab79117dcde8ab7f4ba7ffe536db958dc7a"
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "baseSha256": "b0ea70ce0b5f9fb04bf5990e3ffc0a7cc15c18c6d696f056fa4a77f7fd23867f",
+      "candidateSha256": "8b6d9a92ddad275ba00bf35c17a0b66e43bae99ef5246e0455c20cdbf0211d4c"
+    },
+    {
+      "path": "app/tennis-note-coach-app/styles.css",
+      "baseSha256": "0e2d8663b0ddee797f58210a5197cd90000125627015d9c66e5b8bbae41a8232",
+      "candidateSha256": "ddfae6da2594fc891c16cf835d6cc4b18aa0959db75fdfd7a95f6115ad67040e"
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "baseSha256": "ecf56944bff63a13c66c7d09b50dab53c608d9c25e6decaef67c713e99bd4220",
+      "candidateSha256": "207f89707f1342cb95ad715974e50f8715c227b5a427263eaec7c47ceae5ddc7"
+    }
+  ],
+  "excluded": "No member/Auth/payment/PG/runtime/curriculum/journal/import/custody250 changes. Existing BASIC freshness kept.",
+  "release": "Unchanged BASIC556; official next dry-run only, no release write/deploy or native pin update."
+}

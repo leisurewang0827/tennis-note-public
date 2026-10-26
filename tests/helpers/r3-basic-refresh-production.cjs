@@ -2,6 +2,7 @@
 // 새 BASIC 층만 기계적으로 검증한 뒤 기존553 원본을 반환한다. 역사 golden은 그대로다.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
+const selected = require("./r3-production-selected.cjs");
 const ROOT = path.resolve(__dirname, "../..");
 const contract = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/r3-basic-refresh-production.json"), "utf8"));
 const normalize = text => text.replace(/\r\n/g, "\n");
@@ -22,20 +23,24 @@ function plan() {
 }
 function restoreSuccessor(file, text) {
   const row = plan()[file];
-  const current = normalize(text);
+  const current = selected.restore(file, text);
   if (!row) return current;
   if (current !== row.after) throw Error(`BASIC refresh exact candidate mismatch: ${file}`);
   return row.before;
 }
 function assertPathSet(paths) {
   const expected = Object.keys(plan()).sort();
-  if (paths.length !== new Set(paths).size || JSON.stringify([...paths].sort()) !== JSON.stringify(expected)) {
+  const withSelected = [...new Set([...expected, ...Object.keys(selected.plan())])].sort();
+  const actual = JSON.stringify([...paths].sort());
+  if (paths.length !== new Set(paths).size || (actual !== JSON.stringify(expected) && actual !== JSON.stringify(withSelected))) {
     throw Error("BASIC refresh exact path set mismatch");
   }
+  if (actual === JSON.stringify(withSelected)) selected.verifyCurrent();
 }
 function verifyCurrent() {
+  selected.verifyCurrent();
   for (const [file, row] of Object.entries(plan())) {
-    if (normalize(fs.readFileSync(path.join(ROOT, file), "utf8")) !== row.after) throw Error(`BASIC refresh exact candidate mismatch: ${file}`);
+    if (selected.restore(file, fs.readFileSync(path.join(ROOT, file), "utf8")) !== row.after) throw Error(`BASIC refresh exact candidate mismatch: ${file}`);
   }
   const paths = execFileSync("git", ["-c", "core.safecrlf=false", "diff", "--name-only", contract.base, "--", "app"], { cwd: ROOT, encoding: "utf8" }).trim().split(/\r?\n/).filter(Boolean);
   paths.push(...execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "app"], { cwd: ROOT, encoding: "utf8" }).trim().split(/\r?\n/).filter(Boolean));

@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { restoreSuccessor } = require("./r3-basic-refresh-production.cjs");
+const selected = require("./r3-production-selected.cjs");
 
 const contract = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/r3-production-promotion.json"), "utf8"));
 const BASE = contract.base;
@@ -14,6 +15,11 @@ const sha256 = value => crypto.createHash("sha256").update(normalize(value)).dig
 function changedAppPaths(base = BASE, cwd = process.cwd()) {
   const tracked = execFileSync("git", ["diff", "--name-only", base, "--", "app"], { cwd, encoding: "utf8" }).trim().split(/\r?\n/).filter(Boolean);
   const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "app"], { cwd, encoding: "utf8" }).trim().split(/\r?\n/).filter(Boolean);
+  if (base === BASE) {
+    if (fs.realpathSync(cwd)!==fs.realpathSync(path.resolve(__dirname,"../.."))) throw Error("R3 historical fixed checkout mismatch");
+    return selected.restoreHistoricalAppPaths([...tracked,...untracked],restoreSuccessor);
+  }
+  // 별도 합성 Git 저장소의 일반 관측 계약은 유지한다. 고정 운영base에는 위 검증이 필수다.
   return [...new Set([...tracked, ...untracked])].sort();
 }
 
