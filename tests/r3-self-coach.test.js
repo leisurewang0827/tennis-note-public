@@ -66,6 +66,78 @@ test("역사적 fake 입력은 유지하고 실제 새 파일은 별도 봉인; 
   assert.equal(guard.restore("scripts/bump_release.py",read("scripts/bump_release.py")),execFileSync("git",["show",guard.plan().base+":scripts/bump_release.py"],{cwd:root,encoding:"utf8"}).replace(/\r\n/g,"\n"));
 });
 
+test("alignment binary boundary: actual verify loop preserves PNG and rejects drift/owned-invalid/unknown paths",()=>{
+  const result=py(String.raw`
+import importlib.util,json,hashlib,base64,copy,io,contextlib,sys,socket
+from pathlib import Path
+from unittest.mock import patch
+def forbidden(*a,**k):raise AssertionError("network/protected/write forbidden")
+socket.create_connection=forbidden;socket.socket.connect=forbidden
+real_open=Path.open
+def guarded_open(q,*a,**k):
+ if q.name in {"check_tennisnote_r3_production_projection.py","check_tennisnote_r3_manual_ledger_http.py"}:forbidden()
+ return real_open(q,*a,**k)
+Path.open=guarded_open
+s=importlib.util.spec_from_file_location("alignment_binary","scripts/check_tennisnote_dev_prod_alignment.py")
+m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+contract=json.loads(Path("tests/fixtures/r3-self-coach-source.json").read_text(encoding="utf-8"))
+expected_owned={r["path"] for r in contract["files"]+contract["metadata"]["files"]}|m.SELECTED_R3_PRODUCTS|{contract["tool"]["path"]}
+assert m.SELF_COACH_TEXT_PATHS==expected_owned
+shared="app/shared/tennisnote-settlement-adjustment.js"
+# Actual source admission and all inverse layers run before virtual asset fixtures.
+assert m.before_r3_candidate(shared,(m.ROOT/shared).read_bytes())==b""
+png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1kAAAAASUVORK5CYII=")
+asset="app/synthetic-pixel.png";textpath="app/synthetic-note.txt";text="합성 문서\r\n".encode()
+assert m.before_selected_release_candidate(asset,png) is png
+assert m.before_selected_release_candidate(textpath,text)==text
+assert m.normalize_product_bytes(asset,png,{})==png
+manifest=json.loads(m.MANIFEST_PATH.read_text(encoding="utf-8"))
+manifest["product_tree"]={"file_count":2,"normalized_sha256_by_path":{
+ asset:hashlib.sha256(png).hexdigest(),textpath:hashlib.sha256(text.replace(b"\r\n",b"\n")).hexdigest()}}
+real_text=Path.read_text;real_bytes=Path.read_bytes;real_glob=Path.rglob;real_is_file=Path.is_file
+def rel(q):
+ try:return q.relative_to(m.ROOT).as_posix()
+ except ValueError:return ""
+checks=[]
+def execute(label,visible,payload,expected_error=None,owned_invalid=False):
+ reads=[]
+ def read_text(q,*a,**k):
+  return json.dumps(manifest) if q==m.MANIFEST_PATH else real_text(q,*a,**k)
+ def read_bytes(q):
+  name=rel(q)
+  if owned_invalid and name=="app/release.json":return png
+  if name in payload:reads.append(name);return payload[name]
+  return real_bytes(q)
+ def paths(q,*a,**k):
+  return iter([m.ROOT/shared,*[m.ROOT/p for p in visible]]) if q==m.ROOT/"app" else real_glob(q,*a,**k)
+ def is_file(q):return True if rel(q) in visible else real_is_file(q)
+ output=io.StringIO();errors=io.StringIO()
+ with patch.object(Path,"read_text",read_text),patch.object(Path,"read_bytes",read_bytes),patch.object(Path,"rglob",paths),patch.object(Path,"is_file",is_file),patch.object(Path,"write_text",forbidden),patch.object(Path,"write_bytes",forbidden),patch.object(sys,"argv",["alignment","--verify"]),contextlib.redirect_stdout(output),contextlib.redirect_stderr(errors):
+  code=m.main()
+ if expected_error is None:
+  assert code==0 and "alignment PASS:" in output.getvalue(),label
+  assert set(reads)=={asset,textpath},label
+ else:
+  assert code==1 and expected_error in errors.getvalue(),label
+  if "path drift" in expected_error:assert not reads,label
+ checks.append(label)
+base={asset:png,textpath:text};visible=[asset,textpath]
+execute("unchanged_png_and_unowned_text",visible,base)
+execute("altered_png",visible,{**base,asset:png[:-1]+bytes([png[-1]^1])},"product hash drift outside approved literals")
+execute("owned_malformed_text",visible,base,"utf-8",True)
+execute("missing_path",[textpath],base,"product path drift")
+unknown="app/synthetic-unknown.png"
+execute("unknown_replacement",[unknown,textpath],{**base,unknown:png},"product path drift")
+extra="app/synthetic-extra.txt"
+execute("extra_path",[*visible,extra],{**base,extra:b"extra"},"product path drift")
+print(json.dumps({"status":"PASS","actualMainCases":checks,"knownPngBytes":len(png),"rawByteEquality":True,"ownedScopeExact":True,"writes":0,"network":0,"protectedAccess":0}))
+`);
+  assert.equal(result.status,"PASS");assert.equal(result.actualMainCases.length,6);
+  assert.deepEqual(result.actualMainCases,["unchanged_png_and_unowned_text","altered_png","owned_malformed_text","missing_path","unknown_replacement","extra_path"]);
+  assert.equal(result.rawByteEquality,true);assert.equal(result.ownedScopeExact,true);
+  assert.equal(result.writes,0);assert.equal(result.network,0);assert.equal(result.protectedAccess,0);
+});
+
 function cacheFloorStageProof(physical=null){
   const result=py(String.raw`
 import importlib.util,json,sys,io,contextlib,subprocess

@@ -58,6 +58,11 @@ SELECTED_R3_PRODUCTS = {
     "app/tennis-note-coach-app/events/account.js", "app/tennis-note-coach-app/index.html",
     "app/tennis-note-coach-app/styles.css", "app/tennis-note-coach-app/views/settlement.js",
 }
+# 이 층이 소유한 텍스트 경로만 역변환한다. 전체 자산의 경로·원바이트 해시는 verify가 검사한다.
+SELF_COACH_TEXT_PATHS = SELECTED_R3_PRODUCTS | BASIC_REFRESH_RELEASE_PATHS | R3_NEW_PATHS | {
+    "app/tennis-note-coach-app/data/auth.js", "app/shared/tennisnote-ui-foundation.css",
+    "scripts/bump_release.py",
+}
 _selected_r3_cache = None
 SELECTED_RELEASE_PATH = ROOT / "tests/fixtures/r3-production-selected-release.json"
 _selected_release_cache = None
@@ -150,6 +155,8 @@ def selected_release_assert_paths(paths):
 
 def before_selected_release_candidate(path: str, data: bytes) -> bytes:
     global _selected_release_cache
+    if path not in SELF_COACH_TEXT_PATHS:
+        return data
     data = self_coach_inverse("--restore", {"path": path, "text": data.decode("utf-8")}).encode("utf-8")
     if _selected_release_cache is None:
         _selected_release_cache = selected_release_plan()
