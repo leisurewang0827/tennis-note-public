@@ -1,3 +1,50 @@
+const r3SubstituteDecisionUi = { preview: null, context: null, recipient: "", operationKey: "", busy: false, message: "" };
+
+function r3SubstituteDecisionCandidate(context, decision) {
+  if (!decision || effectiveSettlementPreview.context !== context
+    || !effectiveSettlementPreviewContextIsCurrent(context) || effectiveSettlementPreview.loading) return null;
+  const matches = effectiveSettlementPreview.results.flatMap((entry) => (entry.candidates || [])
+    .filter((candidate) => entry.coach.serverRoleId === candidate.coachRoleId
+      && candidate.id === decision.assignmentId && candidate.branchId === decision.branchId
+      && candidate.branchId === activeOperationBranchId()
+      && String(candidate.serviceDate || "").slice(0, 7) === state.billingMonth
+      && candidate.lessonId === decision.lessonId
+      && Number(candidate.lessonRevision) === Number(decision.lessonRevision)
+      && candidate.sourceFingerprint === decision.sourceFingerprint
+      && candidate.originalCoachRoleId === decision.originalCoachRoleId
+      && candidate.actualCoachRoleId === decision.actualCoachRoleId));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function r3SubstituteDecisionCandidates(coach) {
+  const entries = effectiveSettlementPreview.results.filter((item) => item.coach.serverRoleId === coach.serverRoleId);
+  return entries.length === 1 && entries[0].errorCode === "settlement_hold_substitute_manual_approval_required"
+    && effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context)
+    ? entries[0].candidates || [] : [];
+}
+
+function validatedR3SubstituteDecisionCandidates(value, scope) {
+  if (value?.branchId !== scope.branchId || value?.coachRoleId !== scope.coachRoleId
+    || String(value?.settlementMonth || "").slice(0, 10) !== scope.settlementMonth
+    || !Array.isArray(value?.candidates) || value.candidates.length > 500) {
+    throw new Error("settlement_substitute_candidate_scope_mismatch");
+  }
+  const seen = new Set();
+  for (const item of value.candidates) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(item?.id || "")) || seen.has(item.id)
+      || item.branchId !== scope.branchId
+      || !/^[0-9a-f-]{36}$/i.test(String(item.lessonId || ""))
+      || !Number.isSafeInteger(Number(item.lessonRevision))
+      || String(item.serviceDate || "").slice(0, 7) !== scope.settlementMonth.slice(0, 7)
+      || ![item.originalCoachRoleId, item.actualCoachRoleId].includes(scope.coachRoleId)
+      || !/^[0-9a-f]{64}$/.test(String(item.sourceFingerprint || ""))) {
+      throw new Error("settlement_substitute_candidate_scope_mismatch");
+    }
+    seen.add(item.id);
+  }
+  return value.candidates;
+}
+
 // 서버(Supabase)에서 결제·정산 데이터를 가져오는 함수들.
 //
 // 서버에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
@@ -439,9 +486,9 @@ async function refreshEffectiveSettlementPreview(signature) {
   effectiveSettlementPreview.loading = true;
   renderEffectiveSettlementPreview();
   const results = await Promise.all(entries.map(async (coach) => {
+    const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
     try {
       if (!requestIsCurrent()) return null;
-      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
       const result = await client.rpc("tn_coach_settlement_scope_v2", {
         target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
       });
@@ -449,7 +496,23 @@ async function refreshEffectiveSettlementPreview(signature) {
       return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };
     } catch (error) {
       if (!requestIsCurrent()) return null;
-      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };
+      const code = String(error?.payload?.message || error?.message || "");
+      const errorCode = code.includes("settlement_hold_substitute_manual_approval_required")
+        ? "settlement_hold_substitute_manual_approval_required" : "";
+      if (!errorCode) return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode: "" };
+      try {
+        const listed = await client.rpc("tn_admin_list_substitute_manual_candidates", {
+          target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
+        });
+        if (!requestIsCurrent()) return null;
+        const candidates = validatedR3SubstituteDecisionCandidates(listed, scope);
+        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,
+          candidates, candidateLoadError: candidates.length ? "" : "정확한 대타 귀속 근거를 찾지 못했습니다." };
+      } catch (_) {
+        if (!requestIsCurrent()) return null;
+        return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error), errorCode,
+          candidates: [], candidateLoadError: "대타 귀속 근거를 불러오지 못했습니다. 저장은 차단됐습니다." };
+      }
     }
   }));
   if (requestId !== effectiveSettlementPreview.requestId) return;

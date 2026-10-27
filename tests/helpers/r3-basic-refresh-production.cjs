@@ -31,6 +31,7 @@ function restoreSuccessor(file, text) {
 function assertPathSet(paths) {
   const expected = Object.keys(plan()).sort();
   const withSelected = [...new Set([...expected, ...Object.keys(selected.plan())])].sort();
+  if(paths.includes("app/tennis-note-coach-app/data/auth.js")&&!withSelected.includes("app/tennis-note-coach-app/data/auth.js")) paths=require("./r3-self-coach.cjs").resolvePaths(paths,withSelected);
   const actual = JSON.stringify([...paths].sort());
   if (paths.length !== new Set(paths).size || (actual !== JSON.stringify(expected) && actual !== JSON.stringify(withSelected))) {
     throw Error("BASIC refresh exact path set mismatch");

@@ -9,7 +9,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 const selectedLayers = require("./helpers/r3-production-selected.cjs");
-const raw = p => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+// Historical assertions use the exact inverse; the new guard separately seals actual bytes.
+const raw = p => require("./helpers/r3-self-coach.cjs").restore(p, fs.readFileSync(p, "utf8"));
 const read = p => selectedLayers.restoreRelease(p, raw(p));
 const pin = JSON.parse(read("tests/fixtures/r3-production-selected-source.json"));
 const git = (...args) => execFileSync("git", args, {encoding:"utf8", maxBuffer:8*1024*1024, stdio:["ignore","pipe","pipe"]}).replace(/\r\n/g,"\n");

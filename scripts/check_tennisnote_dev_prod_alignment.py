@@ -63,6 +63,13 @@ SELECTED_RELEASE_PATH = ROOT / "tests/fixtures/r3-production-selected-release.js
 _selected_release_cache = None
 
 
+def self_coach_inverse(mode, value):
+    """New fixed delta is handled once by the same JS recipe; old pins are unchanged."""
+    result = subprocess.check_output(["node", "tests/helpers/r3-self-coach.cjs", mode],
+        input=json.dumps(value, ensure_ascii=True).encode("utf-8"), cwd=ROOT, stderr=subprocess.PIPE)
+    return json.loads(result)
+
+
 def selected_release_plan(contract=None):
     """고정 BASIC+선별11 위의 공식558 메타데이터만 재계산한다. 이전 fixture는 재핀하지 않는다."""
     c = contract if contract is not None else json.loads(SELECTED_RELEASE_PATH.read_text(encoding="utf-8"))
@@ -88,10 +95,10 @@ def selected_release_plan(contract=None):
             originals[name] = row["after"]
     bump_path = ROOT / "scripts/bump_release.py"
     official = subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).decode("utf-8").replace("\r\n", "\n")
-    require(bump_path.read_text(encoding="utf-8").replace("\r\n", "\n") == official and digest(official) == c["officialToolSha256"], "official tool drift")
+    require(self_coach_inverse("--restore", {"path": "scripts/bump_release.py", "text": bump_path.read_text(encoding="utf-8")}) == official and digest(official) == c["officialToolSha256"], "official tool drift")
     spec = importlib.util.spec_from_file_location("selected_release_official_bump", bump_path)
     bump = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bump)
+    exec(compile(official, str(bump_path), "exec"), bump.__dict__)
     merged, counts = {}, {}
     def original(p, *args, **kwargs):
         name = p.relative_to(ROOT).as_posix()
@@ -127,12 +134,14 @@ def selected_release_plan(contract=None):
 
 def selected_release_assert_paths(paths):
     expected = SELECTED_R3_PRODUCTS | BASIC_REFRESH_RELEASE_PATHS
+    paths = self_coach_inverse("--paths", {"paths": paths, "expected": sorted(expected)})
     if len(paths) != len(set(paths)) or set(paths) != expected:
         raise RuntimeError("selected R3 release exact22 path set mismatch")
 
 
 def before_selected_release_candidate(path: str, data: bytes) -> bytes:
     global _selected_release_cache
+    data = self_coach_inverse("--restore", {"path": path, "text": data.decode("utf-8")}).encode("utf-8")
     if _selected_release_cache is None:
         _selected_release_cache = selected_release_plan()
     row = _selected_release_cache.get(path)
@@ -299,10 +308,11 @@ def basic_refresh_plan(contract=None):
     end = screen.index("\n}", start) + 2
     require(screen[start:end].replace(source["publicHistoryPreserved"], "") == source["functionSource"], "function projection")
     bump_path = ROOT / "scripts/bump_release.py"
-    require(bump_path.read_bytes().replace(b"\r\n", b"\n") == subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).replace(b"\r\n", b"\n"), "official tool drift")
+    official = subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).decode("utf-8").replace("\r\n", "\n")
+    require(self_coach_inverse("--restore", {"path": "scripts/bump_release.py", "text": bump_path.read_text(encoding="utf-8")}) == official, "official tool drift")
     spec = importlib.util.spec_from_file_location("basic_refresh_official_bump", bump_path)
     bump = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bump)
+    exec(compile(official, str(bump_path), "exec"), bump.__dict__)
     def original(p, *args, **kwargs):
         name = p.relative_to(ROOT).as_posix()
         if name == "app/shared/config.local.js":

@@ -185,7 +185,14 @@ function coachSettlementReconciliationErrorContract(error) {
       validation: "",
     };
   }
-  if (raw.includes("approved_coach_scope_required") || raw.includes("authentication_required") || raw.includes("forbidden")) {
+  if (raw.includes("approved_coach_scope_required")) {
+    return {
+      state: "ERROR",
+      message: "현재 계정에 연결된 승인 코치와 지점을 확인할 수 없습니다. 관리자에게 연결 상태 확인을 요청해 주세요.",
+      validation: "",
+    };
+  }
+  if (raw.includes("authentication_required") || raw.includes("forbidden")) {
     return {
       state: "ERROR",
       message: "현재 담당 코치 권한과 지점을 확인할 수 없습니다. 다시 로그인한 뒤 확인해 주세요.",
