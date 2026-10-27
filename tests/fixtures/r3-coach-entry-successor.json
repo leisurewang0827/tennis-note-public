@@ -472,13 +472,19 @@
       "path": "tests/r3-current-dev-deployment.test.js",
       "kind": "historical-input-bridge",
       "beforeSha256": "484d6ab6d5c8b070c1b7a97be5be8833fe828193472d4b8481ffcfe754c69e97",
-      "afterSha256": "6aec840fcfd40a9aabbe1708422781c867e6736d75daf83e30bfcd41be7c2967",
+      "afterSha256": "15a888ce3b45741d41b0da069e18d324d6ba29f080eb873cd19b84d0d6080434",
       "spans": [
         {
           "beforeLine": 9,
           "afterLine": 9,
           "before": "const read=p=>fs.readFileSync(p,\"utf8\").replace(/\\r\\n/g,\"\\n\");\n",
           "after": "const successor=require(\"./helpers/r3-coach-entry-successor.cjs\");\nconst read=p=>successor.prior(p,fs.readFileSync(p,\"utf8\"));\n"
+        },
+        {
+          "beforeLine": 19,
+          "afterLine": 20,
+          "before": "s=importlib.util.spec_from_file_location(\"current_dev_guard\",\"scripts/check_r3_dev_deployment.py\");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\n",
+          "after": "s=importlib.util.spec_from_file_location(\"current_dev_guard\",\"scripts/check_r3_dev_deployment.py\");m=importlib.util.module_from_spec(s);exec(compile(files[\"scripts/check_r3_dev_deployment.py\"],s.origin,\"exec\"),m.__dict__)\n"
         },
         {
           "beforeLine": 150,

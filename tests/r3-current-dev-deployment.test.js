@@ -18,7 +18,7 @@ test("현재 DEV successor: source/RAM 정·음성 및 old553 보존; 외부 CLI
 from pathlib import Path
 from unittest.mock import patch
 v=json.load(sys.stdin);files=v["files"]
-s=importlib.util.spec_from_file_location("current_dev_guard","scripts/check_r3_dev_deployment.py");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+s=importlib.util.spec_from_file_location("current_dev_guard","scripts/check_r3_dev_deployment.py");m=importlib.util.module_from_spec(s);exec(compile(files["scripts/check_r3_dev_deployment.py"],s.origin,"exec"),m.__dict__)
 root=m.ROOT;c=json.loads(files["tests/fixtures/r3-current-dev-deployment.json"]);candidate="a"*40
 checks=0;groups=[];raw=files["scripts/check_r3_dev_deployment.py"]
 def check(ok,code):

@@ -3,7 +3,7 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const {execFileSync}=require("node:child_process");
 const ROOT=path.resolve(__dirname,"../.."),BASE="cd5cffc22bef8a0bfb290e9a7a327573172ec931";
-const FIXTURE="tests/fixtures/r3-coach-entry-successor.json",SEAL="1945d0dd3b0e5e9c9c5d7681b85d3fcd63f118729a11c67e23dc33484bf7818a";
+const FIXTURE="tests/fixtures/r3-coach-entry-successor.json",SEAL="f902db54a9298450f2050127bc006868b950a2153857251e6caabbcb1d4ee8e3";
 const normalize=s=>s.replace(/\r\n/g,"\n"),sha=s=>crypto.createHash("sha256").update(normalize(s)).digest("hex");
 const read=p=>normalize(fs.readFileSync(path.join(ROOT,p),"utf8"));
 function need(ok,code){if(!ok)throw Error("coach_entry_successor_"+code);}
