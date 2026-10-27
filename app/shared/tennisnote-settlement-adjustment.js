@@ -326,9 +326,12 @@
     const locked=control.busy||!a.writesEnabled||a.hasAnyPayout||!ctx.authorized;
     control.submit.disabled=locked||(!admin&&(!a.head||response||!ready));
     for(const input of [control.delta,control.reason,control.answer])input.disabled=locked||control.uncertain;
-    if(!control.message.textContent)control.message.textContent=!a.writesEnabled?"조정 기능이 잠겨 있습니다.":a.hasAnyPayout?"지급·원복 기록이 있는 정산은 조정할 수 없습니다."
+    const derivedMessage=!a.writesEnabled?"조정 기능이 잠겨 있습니다.":a.hasAnyPayout?"지급·원복 기록이 있는 정산은 조정할 수 없습니다."
       :!admin&&!ready?"원본 계산본 확인 후 최신 조정에 응답해 주세요.":response?response.status==="acknowledged"?"최신 조정 확인 완료":"이의 확인 필요 · 지급 기록 차단"
         :a.head?"최신 조정에 대한 코치 재확인이 필요합니다.":"가감액과 필수 사유를 별도 이력으로 남깁니다.";
+    // 상태에서 만든 안내만 갱신하고 요청 중·오류·저장 재조회 메시지는 보존한다.
+    if(!control.message.textContent||control.message.textContent===control.derivedMessage)control.message.textContent=derivedMessage;
+    control.derivedMessage=derivedMessage;
     if(ctx.recordButton&&a.head)ctx.recordButton.disabled=control.busy||control.uncertain||!ready||!a.writesEnabled||a.hasAnyPayout
       ||a.finalAmount<=0||response?.status!=="acknowledged"||ctx.payload.payout?.recordingEnabled!==true;
   }
