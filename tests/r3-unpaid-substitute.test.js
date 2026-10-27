@@ -87,7 +87,7 @@ test("새 결합 후보 제품10 exact inverse와 byte/path 음성; 역사 기�
   }
   assert.throws(()=>guard.resolvePaths([...guard.PRODUCT,"unknown.js"],guard.PRODUCT),/unknown_paths/);
   const {createHash}=await import("node:crypto"),sha=value=>createHash("sha256").update(value).digest("hex");
-  assert.equal(sha(source),plan.files.find(x=>x.path==="app/shared/tennisnote-settlement-adjustment.js").afterSha256);
+  assert.equal(sha(guard.compatibilityRestore("app/shared/tennisnote-settlement-adjustment.js",source)),plan.files.find(x=>x.path==="app/shared/tennisnote-settlement-adjustment.js").afterSha256);
   const block=text=>text.slice(0,text.indexOf("\nhtml[data-tennisnote-surface]"));
   const touch=block(read("app/shared/tennisnote-ui-foundation.css"));assert.match(touch,/min-height: 44px/);
   assert.equal(sha(touch),"cd3839dee1af20335f5a30dc6f178cd6a70b7167b022b1b4bebb07f3720fa6c2");
@@ -96,6 +96,35 @@ test("새 결합 후보 제품10 exact inverse와 byte/path 음성; 역사 기�
     assert.equal(source,read(privateRoot+"/90-Dashboard/shared/tennisnote-settlement-adjustment.js"));
     assert.equal(touch,block(read(privateRoot+"/90-Dashboard/shared/tennisnote-ui-foundation.css")));
   }
+});
+
+test("pure compat inverse: immutable whole source·zero Git/FS·one-byte/duplicate/unknown rejection",async()=>{
+  const {createRequire}=await import("node:module"),path=await import("node:path"),{fileURLToPath}=await import("node:url"),{createHash}=await import("node:crypto");
+  const require=createRequire(import.meta.url),filename=fileURLToPath(new URL("./helpers/r3-self-coach.cjs",import.meta.url));
+  const helper=read("tests/helpers/r3-self-coach.cjs"),plan=JSON.parse(read("tests/fixtures/r3-self-coach-source.json"));
+  const file="app/shared/tennisnote-settlement-adjustment.js",row=plan.files.find(r=>r.path===file),sha=s=>createHash("sha256").update(s).digest("hex");
+  const attempts={git:0,fs:0,http:0},deny=kind=>()=>{attempts[kind]++;throw Error("pure_inverse_external_call");};
+  const blockedFs=new Proxy({},{get:()=>deny("fs")}),blockedChild=new Proxy({},{get:()=>deny("git")});
+  const module={exports:{}},allowed=name=>{
+    if(name==="node:fs")return blockedFs;
+    if(name==="node:child_process")return blockedChild;
+    assert.ok(["node:path","node:crypto"].includes(name),"closed helper imports");return require(name);
+  };
+  vm.runInNewContext(helper,{require:allowed,module,exports:module.exports,__dirname:path.dirname(filename),fetch:deny("http")});
+  const pure=module.exports.compatibilityRestore,original=pure(file,source);
+  assert.equal(sha(original),row.afterSha256);
+  assert.equal(pure(file,original),original);
+  assert.equal(pure(file,source.replace(/\n/g,"\r\n")),original);
+  let prior=original;
+  for(const h of [...row.hunks].reverse()){assert.equal(prior.split(h.after).length,2);prior=prior.replace(h.after,h.before);}
+  assert.equal(sha(prior),row.beforeSha256);assert.equal(pure(file,prior),prior);
+  const line=source.split("\n").find(s=>s.includes("const last="));assert.ok(line);
+  const bad=[source+" ",original+" ",prior+" ",source.replace("a.events.length-1","a.events.length-2"),source+"\n"+line+"\n",source.replace("const last=","const unrelated=")];
+  for(const value of bad){
+    assert.throws(()=>pure(file,value),{message:"self_coach_unknown_bytes",code:"SELF_COACH_BYTES"});
+    assert.throws(()=>pure(file,value,{files:[{afterSha256:sha(value)}]}),{message:"self_coach_unknown_bytes",code:"SELF_COACH_BYTES"});
+  }
+  assert.deepEqual(attempts,{git:0,fs:0,http:0});
 });
 
 async function metadataBridgeProof(physical=null,stageGuard=null){

@@ -158,16 +158,16 @@
     }
   ],
   "guardHashes": {
-    "tests/helpers/r3-self-coach.cjs": "279c56fb40ca25e77bac284b2272d48469e2aa9db2697480d78506bcb57c3143",
+    "tests/helpers/r3-self-coach.cjs": "bb58b08f3e7557ae0b7d4443ed4857b5bcc35ad26daaf06d10ee64ef77c08770",
     "tests/r3-self-coach.test.js": "29b91b6bfbed91fbb8888ee4f205f6debe9c278006e34d635f08d12b23d7cbf3",
     "tests/helpers/r3-production-selected.cjs": "888c1083fc9291516667b60933907979962dc692107c1a4f8b271d120d11351e",
     "tests/helpers/r3-basic-refresh-production.cjs": "720d2f8c911eb56abde38b93bfaa990e55ab10ac5eb855ee80f0a43dcb773acf",
     "scripts/check_tennisnote_dev_prod_alignment.py": "3cc62047d72c3338f18457fb906690108a25347b72a7dbd71976e43024fe0e6d",
     "tests/r3-production-selected.test.js": "1440fd222434dae13f91914a68a20862d0d66dfd84fe259716192ae9d8bcfe67",
-    "tests/r3-unpaid-substitute.test.js": "2095837baafd502fb7eb90212fd2f802ed5d5157202b663e90fb12fa0ff37491",
+    "tests/r3-unpaid-substitute.test.js": "53077c2aee3c9c828192740c7bfaab7e7dd703c7b8315402ede04d40aae4c34b",
     "scripts/check_r3_dev_deployment.py": "eba2366e5ac4f56858b81db5f3ec31b0a6eb3e69c2095ff774dcee2196d40000",
     "tests/fixtures/r3-current-dev-deployment.json": "585ae6bc53dc5da2ba1a89733e759dade28d6782393ee60f5ef4b79ce4133932",
-    "tests/r3-current-dev-deployment.test.js": "d1497e9529abd7fab074cbea0b1683c18c37b54d831874779dc98a410d6f051c"
+    "tests/r3-current-dev-deployment.test.js": "484d6ab6d5c8b070c1b7a97be5be8833fe828193472d4b8481ffcfe754c69e97"
   },
   "tool": {
     "path": "scripts/bump_release.py",

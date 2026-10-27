@@ -13,18 +13,22 @@ const APPROVED=["974731b39b9aec143bd9ff00f3ca04b051823861eaf787c4d9c666f357445ce
 const METADATA_SEAL="b9836171b7f68a8e1fcc4214dbca3fb2b9177edb061b6f9b7c39914628555e5d";
 const LEGACY_BASE="8aada4bc43e275c2474c71a535c7e94eca4f26b5";
 const COMPAT_PATH=PRODUCT[3];
+const COMPAT_PRIOR_SHA="53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34";
 const COMPAT_BEFORE="const last=a.events.at(-1);",COMPAT_AFTER="const last=a.events.length ? a.events[a.events.length-1] : undefined;";
 const normalize=s=>s.replace(/\r\n/g,"\n");
 const sha=s=>crypto.createHash("sha256").update(normalize(s)).digest("hex");
 function need(ok,code){if(!ok)throw Error(code);}
 function byteError(code){const error=Error(code);error.code="SELF_COACH_BYTES";throw error;}
-function compatibilityRestore(file,text,c=plan()){
+function compatibilityRestore(file,text){
   const value=normalize(text);if(file!==COMPAT_PATH)return value;
-  const proof=mechanical(c.files[3],3);
-  need(proof.after.split(COMPAT_BEFORE).length===2,"compat_exact_anchor");
-  const compatible=proof.after.replace(COMPAT_BEFORE,COMPAT_AFTER);
-  // The old source pin stays immutable; only this exact single-hunk successor is new.
-  return value===compatible?proof.after:value;
+  const digest=sha(value);
+  // Pure, zero-I/O stage dispatch: both unchanged historical source images stay exact.
+  if(digest===APPROVED[3]||digest===COMPAT_PRIOR_SHA)return value;
+  if(value.split(COMPAT_AFTER).length!==2)byteError("self_coach_unknown_bytes");
+  const restored=value.replace(COMPAT_AFTER,COMPAT_BEFORE);
+  // The whole old after-image, not a mutable fixture or a matching token, is authority.
+  if(sha(restored)!==APPROVED[3])byteError("self_coach_unknown_bytes");
+  return restored;
 }
 let legacyPlan;
 function exactLegacy(file,text){

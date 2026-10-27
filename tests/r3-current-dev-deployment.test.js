@@ -136,7 +136,7 @@ test("새 DEV guard 직접 연결: physical558/559 + exact guard10, 실제 Git �
   const plan=guard.plan(),root=process.cwd(),base=new Map(),original={};
   const digest=s=>crypto.createHash("sha256").update(s.replace(/\r\n/g,"\n")).digest("hex");
   for(const row of [...plan.files,plan.tool]){
-    let text=guard.metadataRestore(row.path,read(row.path));
+    let text=guard.metadataRestore(row.path,guard.compatibilityRestore(row.path,read(row.path)));
     assert.equal(digest(text),row.afterSha256);
     for(const h of [...row.hunks].reverse()){
       assert.equal(text.split(h.after).length,2);text=text.replace(h.after,h.before);
