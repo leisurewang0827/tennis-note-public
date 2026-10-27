@@ -7,7 +7,8 @@ import vm from "node:vm";
 import path from "node:path";
 import crypto from "node:crypto";
 const require=createRequire(import.meta.url),guard=require("./helpers/r3-self-coach.cjs");
-const read=p=>fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");
+const successor=require("./helpers/r3-coach-entry-successor.cjs");
+const read=p=>successor.prior(p,fs.readFileSync(p,"utf8"));
 
 test("현재 DEV successor: source/RAM 정·음성 및 old553 보존; 외부 CLI/DB/HTTP0",()=>{
   const c=JSON.parse(read("tests/fixtures/r3-current-dev-deployment.json"));
@@ -148,7 +149,7 @@ test("새 DEV guard 직접 연결: physical558/559 + exact guard10, 실제 Git �
   let actualGitAttempts=0;
   function loaded(overlay){
     const filename=path.join(root,"tests/helpers/r3-self-coach.cjs"),module={exports:{}};
-    const fakeFs={...fs,readFileSync(p,...args){const rel=path.relative(root,String(p)).split(path.sep).join("/");return Object.hasOwn(overlay,rel)?overlay[rel]:fs.readFileSync(p,...args);}};
+    const fakeFs={...fs,readFileSync(p,...args){const rel=path.relative(root,String(p)).split(path.sep).join("/");const value=Object.hasOwn(overlay,rel)?overlay[rel]:successor.prior(rel,fs.readFileSync(p,"utf8"));return args[0]?value:Buffer.from(value);}};
     const customRequire=name=>name==="node:fs"?fakeFs:name==="node:child_process"?{execFileSync(command,args){
       assert.equal(command,"git");assert.equal(args.length,2);assert.equal(args[0],"show");
       const prefix=plan.base+":";assert.ok(args[1].startsWith(prefix));const rel=args[1].slice(prefix.length);

@@ -366,7 +366,10 @@ def verify_monotonic_live_candidate(candidate_sha: str, member_root: Path, admin
     coach_cache = _cache_counter((member_root / "tennis-note-coach-app/service-worker.js").read_text(encoding="utf-8"), "tennis-note-coach-mode-")
     if member_cache < EXPECTED_MEMBER_CACHE or coach_cache < EXPECTED_COACH_CACHE:
         fail("candidate cache is below the frozen DEV/PROD monotonic floor")
-    verify_monotonic_release(candidate_release, member_cache, coach_cache, read_live_dev_states(candidate_sha))
+    states = read_live_dev_states(candidate_sha)
+    verify_monotonic_release(candidate_release, member_cache, coach_cache, states)
+    if _numeric_version(candidate_release.get("version"), "candidate version") > (1, 0, 559):
+        verify_dev_ahead_of_production(candidate_release, states, read_live_production_releases(candidate_sha))
 
 
 def rollback_proof(project_name: str, deployments: list[dict[str, object]]) -> dict[str, str]:
@@ -500,8 +503,16 @@ def branch_preflight() -> None:
     candidate_sha = os.environ.get("GITHUB_SHA", "").lower()
     if not SHA40_RE.fullmatch(candidate_sha):
         fail("development branch SHA is missing")
-    verify_dev_artifacts(Path("dist/member-dev"), Path("dist/admin-dev"))
-    verify_monotonic_live_candidate(candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"), EXPECTED_DEV_PROJECT_FINGERPRINT)
+    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    if _numeric_version(release.get("version"), "candidate version") > (1, 0, 559):
+        if os.environ.get("GITHUB_REPOSITORY") != EXPECTED_REPOSITORY:
+            fail("development branch repository mismatch")
+        c = load_coach_entry_successor()
+        verify_current_source(candidate_sha, c)
+        verify_current_live_candidate(c, candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"))
+    else:
+        verify_dev_artifacts(Path("dist/member-dev"), Path("dist/admin-dev"))
+        verify_monotonic_live_candidate(candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"), EXPECTED_DEV_PROJECT_FINGERPRINT)
     proof = verify_live_target(
         expected_account_fp,
         os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
@@ -517,6 +528,43 @@ CURRENT_CONTRACT_SHA256 = "585ae6bc53dc5da2ba1a89733e759dade28d6782393ee60f5ef4b
 CURRENT_BRANCH = "codex/tennisnote-r3-operating558-20261026"
 CURRENT_BASE = "15fe59bdd21bc75a70da810f3a63a0c80853f39f"
 CURRENT_BASE_TREE = "f6e3f569a4b5b1d483e0fcdc884af1f919c38f7c"
+
+# 같은 TLS/redirect/응답크기 보호로 공개 release만 읽는다. DB/Auth client 없음.
+LIVE_READ_ENDPOINTS.update({
+    "production_member_release": ("https://tennisnote-app.pages.dev", "/release.json", True),
+    "production_admin_release": ("https://tennisnote-admin.pages.dev", "/release.json", True),
+})
+
+
+def read_live_production_releases(candidate_sha: str) -> list[dict[str, object]]:
+    return [_http_read("production_member_release", candidate_sha),
+            _http_read("production_admin_release", candidate_sha)]
+
+
+def verify_dev_ahead_of_production(candidate: dict[str, object], dev: list[dict[str, object]],
+                                   production: list[dict[str, object]]) -> None:
+    for label, releases in (("development", [s.get("release") for s in dev]), ("production", production)):
+        if len(releases) != 2 or any(not isinstance(r, dict) for r in releases):
+            fail(label + " member/admin release pair missing")
+        identities = [(_numeric_version(r.get("version"), label + " version"),
+                       _numeric_version(r.get("releaseId"), label + " release id"), r.get("deployedAt")) for r in releases]
+        if identities[0] != identities[1]:
+            fail(label + " member/admin release mismatch")
+    current = _numeric_version(candidate.get("version"), "candidate version")
+    if current <= _numeric_version(production[0].get("version"), "production version"):
+        fail("development candidate must be strictly ahead of fresh production")
+    if current < _numeric_version(dev[0]["release"].get("version"), "development version"):
+        fail("development candidate would roll back the live version")
+    if _numeric_version(candidate.get("releaseId"), "candidate release id") < _numeric_version(production[0].get("releaseId"), "production release id"):
+        fail("development candidate release id is behind fresh production")
+
+
+def load_coach_entry_successor() -> dict[str, object]:
+    c = json.loads(subprocess.check_output(
+        ["node", "tests/helpers/r3-coach-entry-successor.cjs", "--deployment-contract"], cwd=ROOT))
+    if c.get("contract") != "r3-coach-entry-dev-deployment/1" or c.get("successorBase") != "cd5cffc22bef8a0bfb290e9a7a327573172ec931":
+        fail("coach entry successor identity mismatch")
+    return c
 
 
 def is_current_dispatch() -> bool:
@@ -604,13 +652,17 @@ def verify_current_source(candidate_sha: str, c: dict[str, object]) -> None:
     if candidate_sha != run_git("rev-parse", "HEAD") or not SHA40_RE.fullmatch(candidate_sha):
         fail("current candidate head mismatch")
     run_git("merge-base", "--is-ancestor", CURRENT_BASE, candidate_sha)
+    if "successorBase" in c:
+        run_git("merge-base", "--is-ancestor", c["successorBase"], candidate_sha)
+        if run_git("rev-parse", c["successorBase"] + "^{tree}") != c["successorTree"]:
+            fail("coach entry successor frozen tree mismatch")
     if run_git("rev-parse", CURRENT_BASE + "^{tree}") != CURRENT_BASE_TREE:
         fail("current genuine main tree mismatch")
     if run_git("status", "--porcelain=v1", "-uall"):
         fail("current checked-out candidate must be clean")
     changed = run_git("diff", "--name-only", CURRENT_BASE + ".." + candidate_sha).splitlines()
     if len(changed) != len(set(changed)) or set(changed) != set(c["paths"]):
-        fail("current candidate exact34 paths mismatch")
+        fail("current candidate exact paths mismatch")
     approved_app = {r["path"]: r["sha256"] for r in c["appFiles"]}
     for name in c["paths"]:
         target = ROOT / name
@@ -625,12 +677,14 @@ def verify_current_source(candidate_sha: str, c: dict[str, object]) -> None:
             fail("current candidate approved app bytes mismatch")
     release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
     if any(release.get(k) != c["release"][k] for k in ("version", "releaseId", "deployedAt")):
-        fail("current candidate physical559 metadata mismatch")
+        fail("current candidate physical metadata mismatch")
     verify_current_floors(c)
 
 
 def current_source_preflight() -> dict[str, object]:
     c = load_current_contract()
+    if json.loads((ROOT / "app/release.json").read_text(encoding="utf-8")).get("version") != c["release"]["version"]:
+        c = load_coach_entry_successor()
     candidate = validate_current_context(c, run_git("rev-parse", "HEAD"))
     verify_current_source(candidate, c)
     return c
@@ -666,6 +720,8 @@ def verify_current_live_candidate(c: dict[str, object], candidate: str, member: 
         fail("current built exact cache identity mismatch")
     states = read_live_dev_states(candidate)
     verify_monotonic_release(c["release"], member_cache, coach_cache, states)
+    if "successorBase" in c:
+        verify_dev_ahead_of_production(c["release"], states, read_live_production_releases(candidate))
     if any(s["release"].get("version") == c["release"]["version"]
            and s["release"].get("releaseId") == c["release"]["releaseId"] for s in states):
         fail("current candidate already or partly visible; reconcile before another deploy")

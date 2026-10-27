@@ -6,10 +6,15 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import vm from "node:vm";
 const require=createRequire(import.meta.url),guard=require("./helpers/r3-self-coach.cjs");
-const root=new URL("../",import.meta.url),read=p=>readFileSync(new URL(p,root),"utf8").replace(/\r\n/g,"\n");
+const successor=require("./helpers/r3-coach-entry-successor.cjs");
+// 과거559 기대값은 유지한다. 새 후보는 별도 successor 검사에서 실제 bytes로 검증.
+const root=new URL("../",import.meta.url),read=p=>successor.prior(p,readFileSync(new URL(p,root),"utf8"));
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const python=process.env.TENNISNOTE_PYTHON||(process.platform==="win32"?"python":"python3");
-function py(code,input=null){return JSON.parse(execFileSync(python,["-B","-X","utf8","-c",code],{cwd:root,input:input===null?undefined:JSON.stringify(input),encoding:"utf8",maxBuffer:16*1024*1024,stdio:[input===null?"ignore":"pipe","pipe","pipe"]}));}
+function py(code,input=null){
+  const projection=`import json,sys,io\nfrom pathlib import Path\n_tn_wire=json.load(sys.stdin);_tn_hist=_tn_wire['history'];sys.stdin=io.StringIO(json.dumps(_tn_wire['input']))\n_tn_bytes=Path.read_bytes;_tn_text=Path.read_text;_tn_root=Path.cwd()\ndef _tn_key(p):\n try:return p.resolve().relative_to(_tn_root).as_posix()\n except ValueError:return None\ndef _tn_read_bytes(p):\n k=_tn_key(p);return _tn_hist[k].encode('utf-8') if k in _tn_hist else _tn_bytes(p)\ndef _tn_read_text(p,*a,**k):\n n=_tn_key(p);return _tn_hist[n] if n in _tn_hist else _tn_text(p,*a,**k)\nPath.read_bytes=_tn_read_bytes;Path.read_text=_tn_read_text\n`;
+  return JSON.parse(execFileSync(python,["-B","-X","utf8","-c",projection+code],{cwd:root,input:JSON.stringify({input,history:successor.historicalFiles()}),encoding:"utf8",maxBuffer:16*1024*1024,stdio:["pipe","pipe","pipe"]}));
+}
 
 test("현재 결합 제품과 도구1의 exact 역변환; 한 바이트·누락 recipe 거부",()=>{
   const c=guard.plan();

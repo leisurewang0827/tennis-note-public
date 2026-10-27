@@ -75,7 +75,7 @@ function metadataForward(file,text){
   const row=plan().metadata.files.find(x=>x.path===file);need(row,"metadata_path_not_admitted");return metadataSpans(row,text,true);
 }
 function metadataRestore(file,text,c=plan()){
-  const current=normalize(text),row=c.metadata.files.find(x=>x.path===file);if(!row)return current;
+  const current=require("./r3-coach-entry-successor.cjs").prior(file,text),row=c.metadata.files.find(x=>x.path===file);if(!row)return current;
   const digest=sha(current);
   if(digest===row.afterSha256)return metadataSpans(row,current,false);
   if(digest===row.beforeSha256||(c.metadata.legacyAccepted[file]||[]).includes(digest))return current;
@@ -92,20 +92,24 @@ function restore(file,text){
   byteError("self_coach_unknown_bytes");
 }
 function verifyCurrent(){
+  const successor=require("./r3-coach-entry-successor.cjs");
+  const read=file=>successor.prior(file,fs.readFileSync(path.join(ROOT,file),"utf8"));
+  if(JSON.parse(fs.readFileSync(path.join(ROOT,"app/release.json"),"utf8")).version==="1.0.561")successor.verifyCurrent();
   const c=plan();for(const [i,row]of c.files.entries())need(metadataRestore(row.path,compatibilityRestore(row.path,fs.readFileSync(path.join(ROOT,row.path),"utf8"),c),c)===mechanical(row,i).after,"self_coach_missing_product");
   need(normalize(fs.readFileSync(path.join(ROOT,TOOL),"utf8"))===mechanical(c.tool,-1).after,"self_coach_tool_drift");
   need(JSON.stringify(Object.keys(c.guardHashes).sort())===JSON.stringify(["tests/helpers/r3-self-coach.cjs","tests/r3-self-coach.test.js","tests/helpers/r3-production-selected.cjs","tests/helpers/r3-basic-refresh-production.cjs","scripts/check_tennisnote_dev_prod_alignment.py","tests/r3-production-selected.test.js","tests/r3-unpaid-substitute.test.js","scripts/check_r3_dev_deployment.py","tests/fixtures/r3-current-dev-deployment.json","tests/r3-current-dev-deployment.test.js"].sort()),"self_coach_guard_seal");
-  for(const [file,digest]of Object.entries(c.guardHashes))need(sha(fs.readFileSync(path.join(ROOT,file),"utf8"))===digest,"self_coach_guard_drift");
+  for(const [file,digest]of Object.entries(c.guardHashes))need(sha(read(file))===digest,"self_coach_guard_drift");
   // Full physical stage: either all current feature558 or all planned559, never a mix.
-  const release=JSON.parse(fs.readFileSync(path.join(ROOT,"app/release.json"),"utf8"));
+  const release=JSON.parse(read("app/release.json"));
   const planned=release.version===c.metadata.proposed.version&&release.releaseId===c.metadata.proposed.releaseId;
   need(planned||(release.version===c.metadata.old.version&&release.releaseId===c.metadata.old.releaseId),"self_coach_metadata_not_admitted");
-  for(const row of c.metadata.files)need(sha(fs.readFileSync(path.join(ROOT,row.path),"utf8"))===(planned?row.afterSha256:row.beforeSha256),"metadata_mixed_or_unknown_stage");
+  for(const row of c.metadata.files)need(sha(read(row.path))===(planned?row.afterSha256:row.beforeSha256),"metadata_mixed_or_unknown_stage");
 }
 function resolvePaths(paths,expected,label="self_coach_unknown_paths"){
   const historical=paths.length===new Set(paths).size&&JSON.stringify([...paths].sort())===JSON.stringify([...expected].sort());
   if(historical){verifyCurrent();return [...expected].sort();}
-  const extras=[...PRODUCT.filter(p=>!expected.includes(p)),...GUARDS.filter(p=>paths.includes(p)&&!expected.includes(p))];
+  const added=require("./r3-coach-entry-successor.cjs").plan().addedPaths;
+  const extras=[...PRODUCT.filter(p=>!expected.includes(p)),...[...GUARDS,...added].filter(p=>paths.includes(p)&&!expected.includes(p))];
   const required=[...new Set([...expected,...extras])].sort();
   if(!(paths.length===new Set(paths).size&&JSON.stringify([...paths].sort())===JSON.stringify(required))){const error=Error(label);error.code="SELF_COACH_PATHS";throw error;}
   verifyCurrent();return [...expected].sort();

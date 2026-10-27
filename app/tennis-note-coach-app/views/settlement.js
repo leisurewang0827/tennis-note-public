@@ -106,7 +106,7 @@ function renderCoachSettlement() {
         description: state.coachSettlementError || "관리자 결제 귀속과 수업 완료·적용기간을 확인해 주세요.",
       });
   }
-  renderCoachSettlementReconciliation();
+  renderCoachSettlementHistory();
   renderVisibleMemberSettlement();
 }
 

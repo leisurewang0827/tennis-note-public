@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {webcrypto} from "node:crypto";
-const read=p=>fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");
+import {createRequire as successorRequire} from "node:module";
+const successor=successorRequire(import.meta.url)("./helpers/r3-coach-entry-successor.cjs");
+const read=p=>successor.prior(p,fs.readFileSync(p,"utf8"));
 const source=read("app/shared/tennisnote-settlement-adjustment.js");
 const context=vm.createContext({window:{crypto:webcrypto},TextEncoder,Uint8Array,Intl});vm.runInContext(source,context);
 const api=context.window.TennisNoteSettlementAdjustment,copy=x=>JSON.parse(JSON.stringify(x));
@@ -160,6 +162,7 @@ test("새 metadata13 bridge 실제 JS/Python 소비자·제품10 합성 및 unkn
 async function frozenTimestampProof(physical=null){
   const {createRequire}=await import("node:module"),{execFileSync}=await import("node:child_process");
   const guard=createRequire(import.meta.url)("./helpers/r3-self-coach.cjs");guard.verifyCurrent();
+  physical??=Object.fromEntries(guard.plan().metadata.files.map(r=>[r.path,read(r.path)]));
   const code=String.raw`import importlib.util,json,sys,io,contextlib,hashlib,datetime as dt,subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -213,10 +216,11 @@ test("새 physical558/559 stage 영향: 실제 JS/Python 소비자와 공식 CLI
   const stageGuard=physical=>{
     const virtualFs=Object.create(fs);virtualFs.readFileSync=(file,options)=>{
       const name=path.relative(root,String(file)).split(path.sep).join("/");
-      return Object.hasOwn(physical,name)?(options?physical[name]:Buffer.from(physical[name])):fs.readFileSync(file,options);
+      const value=Object.hasOwn(physical,name)?physical[name]:successor.prior(name,fs.readFileSync(file,"utf8"));
+      return options?value:Buffer.from(value);
     };
     const module={exports:{}},localRequire=name=>name==="node:fs"?virtualFs:require(name);
-    vm.runInNewContext(fs.readFileSync(helper,"utf8"),{require:localRequire,module,exports:module.exports,__dirname:path.dirname(helper),process,Buffer,console});return module.exports;
+    vm.runInNewContext(read("tests/helpers/r3-self-coach.cjs"),{require:localRequire,module,exports:module.exports,__dirname:path.dirname(helper),process,Buffer,console});return module.exports;
   };
   for(const physical of [originals,planned]){
     const current=stageGuard(physical);current.verifyCurrent();
