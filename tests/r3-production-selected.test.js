@@ -350,7 +350,7 @@ test("selected correction actual historical collector restores exact old35 witho
   const promotion=require("./helpers/r3-production-promotion.cjs"),basic=require("./helpers/r3-basic-refresh-production.cjs");
   const tracked=git("diff","--name-only",promotion.BASE,"--","app").trim().split("\n").filter(Boolean);
   const untracked=git("ls-files","--others","--exclude-standard","--","app").trim().split("\n").filter(Boolean);
-  const current=[...tracked,...untracked],expected=promotion.files.map(x=>x[0]).sort();
+  const current=require("./helpers/r3-self-coach.cjs").historicalObservation([...tracked,...untracked],promotion.BASE),expected=promotion.files.map(x=>x[0]).sort();
   assert.equal(current.length,36);assert.equal(expected.length,35);
   assert.deepEqual(promotion.changedAppPaths(),expected);
   assert.deepEqual(selectedLayers.restoreHistoricalAppPaths(current,basic.restoreSuccessor),expected);

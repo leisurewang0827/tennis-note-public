@@ -65,8 +65,17 @@ _selected_release_cache = None
 
 def self_coach_inverse(mode, value):
     """New fixed delta is handled once by the same JS recipe; old pins are unchanged."""
-    result = subprocess.check_output(["node", "tests/helpers/r3-self-coach.cjs", mode],
-        input=json.dumps(value, ensure_ascii=True).encode("utf-8"), cwd=ROOT, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.check_output(["node", "tests/helpers/r3-self-coach.cjs", mode],
+            input=json.dumps(value, ensure_ascii=True).encode("utf-8"), cwd=ROOT, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        # Only exact byte/path rejection translates to the historical boundary error.
+        # Recipe/contract/process failures remain failures and never return input bytes.
+        if error.stderr == b"SELF_COACH_PATHS\n" and mode == "--paths":
+            raise RuntimeError("selected R3 release exact22 path set mismatch") from error
+        if error.stderr == b"SELF_COACH_BYTES\n" and mode == "--restore":
+            raise RuntimeError("selected R3 release exact candidate mismatch: " + value["path"]) from error
+        raise
     return json.loads(result)
 
 

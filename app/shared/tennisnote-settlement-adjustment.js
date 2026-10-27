@@ -256,7 +256,7 @@
       seen.add(event.eventId);amount+=event.deltaAmount;
       if(!Number.isSafeInteger(amount)||amount<0||amount>2147483647||event.finalAmount!==amount)throw Error("adjustment_sum_invalid");
     }
-    const last=a.events.at(-1);
+    const last=a.events.length ? a.events[a.events.length-1] : undefined;
     if(amount!==a.finalAmount||(a.head?!last||last.eventId!==a.head||last.revision!==a.revision||last.headFingerprint!==a.headFingerprint
       :a.events.length||a.headFingerprint!=="0".repeat(64)))throw Error("adjustment_head_stale");
     if(a.response&&(!a.head||a.response.headFingerprint!==a.headFingerprint||!validHash(a.response.operationKeyHash)

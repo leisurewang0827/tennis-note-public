@@ -97,7 +97,7 @@
     },
     {
       "path": "app/shared/tennisnote-settlement-adjustment.js",
-      "sha256": "0cc1cef6b10ff1ce5a8ff6a6093f509fa5a03ee22f56e9e6d39102ebcd7389fe"
+      "sha256": "ee8bc56136b4b687bb6db397a3ce8fa418dfc02ff67ea8aec4b7545ba547bb80"
     },
     {
       "path": "app/shared/tennisnote-ui-foundation.css",

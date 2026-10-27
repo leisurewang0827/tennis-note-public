@@ -158,15 +158,15 @@
     }
   ],
   "guardHashes": {
-    "tests/helpers/r3-self-coach.cjs": "c74ede897638ed9c4cd8066a97c432a8a8b9c0fd419326c2d3df18d2997a5dc3",
-    "tests/r3-self-coach.test.js": "9d5a55d4aaeece47355171e7ccb415f311ebcba1b87d791776ebc74815b97c9d",
-    "tests/helpers/r3-production-selected.cjs": "c37d022c71bd1de6ff42595c1dc75a0939960140f264be757ba81faf6787d1f7",
-    "tests/helpers/r3-basic-refresh-production.cjs": "c7d0ae8285fbc4c1aca69777dc824e36c4e7ecafa4ac8bd58d59e4f11f8897d7",
-    "scripts/check_tennisnote_dev_prod_alignment.py": "77ebb94e68e11aaefaade5a4394838d61c45c8b76e29df8bf018c67027528ca2",
-    "tests/r3-production-selected.test.js": "8bf01b4762de8bc96c1f8ca519298b3be08834c3ea03de7fbc9d3a70bd685487",
+    "tests/helpers/r3-self-coach.cjs": "279c56fb40ca25e77bac284b2272d48469e2aa9db2697480d78506bcb57c3143",
+    "tests/r3-self-coach.test.js": "29b91b6bfbed91fbb8888ee4f205f6debe9c278006e34d635f08d12b23d7cbf3",
+    "tests/helpers/r3-production-selected.cjs": "888c1083fc9291516667b60933907979962dc692107c1a4f8b271d120d11351e",
+    "tests/helpers/r3-basic-refresh-production.cjs": "720d2f8c911eb56abde38b93bfaa990e55ab10ac5eb855ee80f0a43dcb773acf",
+    "scripts/check_tennisnote_dev_prod_alignment.py": "3cc62047d72c3338f18457fb906690108a25347b72a7dbd71976e43024fe0e6d",
+    "tests/r3-production-selected.test.js": "1440fd222434dae13f91914a68a20862d0d66dfd84fe259716192ae9d8bcfe67",
     "tests/r3-unpaid-substitute.test.js": "2095837baafd502fb7eb90212fd2f802ed5d5157202b663e90fb12fa0ff37491",
-    "scripts/check_r3_dev_deployment.py": "de148823227613c8af392db8e7c0c590d9496f074073f0dcbb475b183bce0b26",
-    "tests/fixtures/r3-current-dev-deployment.json": "0fb85a47cab796e9bdb16ed0f3c9e6c4ba23b9375423d8410530b373751d2f21",
+    "scripts/check_r3_dev_deployment.py": "eba2366e5ac4f56858b81db5f3ec31b0a6eb3e69c2095ff774dcee2196d40000",
+    "tests/fixtures/r3-current-dev-deployment.json": "585ae6bc53dc5da2ba1a89733e759dade28d6782393ee60f5ef4b79ce4133932",
     "tests/r3-current-dev-deployment.test.js": "d1497e9529abd7fab074cbea0b1683c18c37b54d831874779dc98a410d6f051c"
   },
   "tool": {

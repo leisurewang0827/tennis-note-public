@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import vm from "node:vm";
 const require=createRequire(import.meta.url),guard=require("./helpers/r3-self-coach.cjs");
 const root=new URL("../",import.meta.url),read=p=>readFileSync(new URL(p,root),"utf8").replace(/\r\n/g,"\n");
 const hash=s=>createHash("sha256").update(s).digest("hex");
@@ -32,7 +33,11 @@ test("실제 기존 수집기와 Python 진입점이 새 층을 먼저 복원; u
   assert.deepEqual(selected.restoreProductPaths(observed),Object.keys(selected.plan()).sort());
   const basicObserved=[...new Set([...Object.keys(basic.plan()),...Object.keys(selected.plan()),...guard.PRODUCT])];
   basic.assertPathSet(basicObserved);
-  for(const p of guard.PRODUCT)assert.equal(selected.restoreRelease(p,read(p)),guard.mechanical(guard.plan().files[guard.PRODUCT.indexOf(p)],guard.PRODUCT.indexOf(p)).before);
+  for(const p of guard.PRODUCT){
+    const before=guard.mechanical(guard.plan().files[guard.PRODUCT.indexOf(p)],guard.PRODUCT.indexOf(p)).before;
+    assert.equal(guard.restore(p,read(p)),before);
+    assert.equal(selected.restoreRelease(p,read(p)),selected.releasePlan()[p]?.before||before);
+  }
   const result=py(String.raw`
 import importlib.util,json,hashlib
 from pathlib import Path
@@ -113,6 +118,62 @@ print(json.dumps({"defaultIdentical":True,"positive":1,"negative":len(negative),
 `,{physical});
   return result;
 }
+
+test("compat successor: Android/iOS Array.at 미지원·빈/비어있지 않은 이력·기존 오류 동일",()=>{
+  const file="app/shared/tennisnote-settlement-adjustment.js",modern=read(file),old=guard.compatibilityRestore(file,modern);
+  assert.notEqual(modern,old);
+  assert.equal(modern.replace("const last=a.events.length ? a.events[a.events.length-1] : undefined;","const last=a.events.at(-1);"),old);
+  const scope={branchId:"synthetic-branch",coachRoleId:"synthetic-coach",settlementMonth:"2099-01-01"};
+  const snapshot={snapshotId:"synthetic-snapshot",revision:1,sourceFingerprint:"a".repeat(64),totals:{totalSettlementAmount:20}};
+  const empty={scope,snapshot,adjustment:{version:"r3_unpaid_adjustment_v1",originalAmount:20,finalAmount:20,head:null,headFingerprint:"0".repeat(64),events:[],writesEnabled:false,hasAnyPayout:false,response:null}};
+  const nonempty=structuredClone(empty);nonempty.adjustment.events=[{eventId:"synthetic-event",revision:1,deltaAmount:2,finalAmount:22,headFingerprint:"b".repeat(64),operationKeyHash:"c".repeat(64),reason:"합성 근거"}];
+  Object.assign(nonempty.adjustment,{head:"synthetic-event",revision:1,headFingerprint:"b".repeat(64),finalAmount:22});
+  const cases=[empty,nonempty,{...empty,adjustment:{...empty.adjustment,head:"missing"}},{...nonempty,adjustment:{...nonempty.adjustment,finalAmount:23}}];
+  function evaluate(source,platform,noAt){
+    const context=vm.createContext({window:{},navigator:{userAgent:platform},casesJson:JSON.stringify(cases),scope,snapshot});
+    vm.runInContext("const payload=JSON.parse(casesJson)",context);
+    if(noAt)vm.runInContext("Array.prototype.at=undefined",context);
+    vm.runInContext(source,context);
+    vm.runInContext("for(const inherited of [false,true]){const v=JSON.parse(JSON.stringify(payload[0]));const forged={eventId:'forged',revision:1,headFingerprint:'d'.repeat(64)};if(inherited){const proto=Object.create(Array.prototype);proto['-1']=forged;Object.setPrototypeOf(v.adjustment.events,proto);}else{v.adjustment.events['-1']=forged;}Object.assign(v.adjustment,{head:forged.eventId,revision:1,headFingerprint:forged.headFingerprint});payload.push(v);}",context);
+    return JSON.parse(vm.runInContext("JSON.stringify(payload.map(v=>{try{return {ok:window.TennisNoteSettlementAdjustment.unpaidProjection(v,scope,snapshot)===v};}catch(e){return {error:e.message};}}))",context));
+  }
+  const expected=[{ok:true},{ok:true},...Array.from({length:4},()=>({error:"adjustment_head_stale"}))];
+  for(const platform of ["Android WebView synthetic","iOS WKWebView synthetic"]){assert.deepEqual(evaluate(modern,platform,true),expected);assert.deepEqual(evaluate(old,platform,false),expected);}
+});
+
+test("inverse changed boundaries: historical exact bytes·compat one-byte·observation·mixed metadata fail closed",()=>{
+  const c=guard.plan(),selected=require("./helpers/r3-production-selected.cjs");
+  for(const [file,row]of Object.entries(selected.plan()))for(const text of [row.before,row.after]){
+    assert.equal(guard.restore(file,text),text,file);
+    assert.throws(()=>selected.restore(file,text+" "),/exact candidate mismatch/);
+  }
+  const file="app/shared/tennisnote-settlement-adjustment.js";
+  assert.throws(()=>guard.restore(file,read(file)+" "),/unknown_bytes/);
+  assert.throws(()=>guard.restore(file,read(file).replace("a.events.length-1","a.events.length-2")),/unknown_bytes/);
+  const promotion=require("./helpers/r3-production-promotion.cjs");
+  const actual=execFileSync("git",["diff","--name-only",promotion.BASE,"--","app"],{cwd:root,encoding:"utf8"}).trim().split(/\r?\n/);
+  const projected=guard.historicalObservation(actual,promotion.BASE);
+  assert.equal(projected.length,36);assert.equal(actual.length,37);
+  assert.deepEqual(guard.historicalObservation(projected,promotion.BASE),projected);
+  for(const paths of [actual.slice(1),[...actual,actual[0]],[...actual,"app/unknown.js"]])assert.throws(()=>guard.historicalObservation(paths,promotion.BASE),/historical observed path set mismatch/);
+  assert.throws(()=>guard.historicalObservation(actual,promotion.BASE,p=>read(p)+(p===guard.PRODUCT[0]?" ":"")),/unknown_bytes|candidate bytes mismatch/);
+  const row=c.metadata.files[0];assert.throws(()=>guard.metadataRestore(row.path,read(row.path).replace(c.metadata.proposed.version,"1.0.999")),/unknown_bytes/);
+  assert.deepEqual(py(String.raw`
+import importlib.util,json,hashlib,socket
+from pathlib import Path
+def forbidden(*a,**k):raise AssertionError("network/protected forbidden")
+socket.create_connection=forbidden;socket.socket.connect=forbidden
+original=Path.open
+def safe_open(self,*a,**k):
+ if self.name in {"check_tennisnote_r3_production_projection.py","check_tennisnote_r3_manual_ledger_http.py"}:forbidden()
+ return original(self,*a,**k)
+Path.open=safe_open
+s=importlib.util.spec_from_file_location("deployment","scripts/check_r3_dev_deployment.py");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+c=m.load_current_contract()
+assert all(hashlib.sha256(Path(r["path"]).read_bytes().replace(b"\r\n",b"\n")).hexdigest()==r["sha256"] for r in c["appFiles"])
+print(json.dumps({"paths":len(c["paths"]),"appFiles":len(c["appFiles"]),"dbClients":0}))
+`),{paths:34,appFiles:22,dbClients:0});
+});
 test("공식 cache floor: default 그대로·두 하한 초과·음성·dry-run 무쓰기·native 보존",()=>{
   const result=cacheFloorStageProof();
   assert.deepEqual(result,{defaultIdentical:true,positive:1,negative:8,equalFloor:true,dryRunWrites:0,nativePreserved:true});

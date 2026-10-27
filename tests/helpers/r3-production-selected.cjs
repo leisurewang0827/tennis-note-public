@@ -41,7 +41,12 @@ print(json.dumps(getattr(m,sys.argv[1])(),ensure_ascii=True))
 function plan() { return cached || (cached = loadPlan("selected_r3_plan")); }
 function releasePlan() { return cachedRelease || (cachedRelease = loadPlan("selected_release_plan")); }
 function restoreRelease(file, text) {
-  const current = selfCoach.restore(file,text);
+  let current;
+  try { current = selfCoach.restore(file,text); }
+  catch (error) {
+    if (error.code !== "SELF_COACH_BYTES") throw error;
+    throw Error(`selected R3 ${plan()[file] || !RELEASE_PATHS.includes(file) ? "" : "release "}exact candidate mismatch: ${file}`);
+  }
   if (!RELEASE_PATHS.includes(file)) return current;
   const row = releasePlan()[file];
   if (current === row.before || (plan()[file] && current === plan()[file].before)) return current;
@@ -78,6 +83,7 @@ function restoreHistoricalAppPaths(paths, restoreBasic, io = {}) {
   const historical = JSON.parse(rawContract);
   if (historical.base !== "686cc97d9676da2d16ca3cdfbd862dc9cd19434e" || historical.files.length !== 35) throw Error("selected R3 historical source mismatch");
   const expected = [...new Set([...historical.files.map(x=>x.path), ...Object.keys(plan()), ...RELEASE_PATHS])].sort();
+  paths = selfCoach.historicalObservation(paths,historical.base,io.read);
   paths = selfCoach.resolvePaths(paths,expected,"selected R3 historical observed path set mismatch");
   if (paths.length !== new Set(paths).size || JSON.stringify([...paths].sort()) !== JSON.stringify(expected)) throw Error("selected R3 historical observed path set mismatch");
   // 별도 실제 관측에서도 선별22 전체가 있어야 한다. 알려지지 않은 변경을 단순 제외하지 않는다.

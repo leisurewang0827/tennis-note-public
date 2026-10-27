@@ -513,7 +513,7 @@ def branch_preflight() -> None:
 # CURRENT_SUCCESSOR_BEGIN
 # 현재 후보만 추가 허용한다. 기존553 상수/함수/네트워크 보호는 그대로 둔다.
 CURRENT_CONTRACT_PATH = ROOT / "tests/fixtures/r3-current-dev-deployment.json"
-CURRENT_CONTRACT_SHA256 = "0fb85a47cab796e9bdb16ed0f3c9e6c4ba23b9375423d8410530b373751d2f21"
+CURRENT_CONTRACT_SHA256 = "585ae6bc53dc5da2ba1a89733e759dade28d6782393ee60f5ef4b79ce4133932"
 CURRENT_BRANCH = "codex/tennisnote-r3-operating558-20261026"
 CURRENT_BASE = "15fe59bdd21bc75a70da810f3a63a0c80853f39f"
 CURRENT_BASE_TREE = "f6e3f569a4b5b1d483e0fcdc884af1f919c38f7c"
