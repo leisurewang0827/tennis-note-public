@@ -21,6 +21,7 @@ jobs:
   build-and-deploy-development:
     runs-on: ubuntu-latest
     environment: development
+    timeout-minutes: 10
     env:
       TENNISNOTE_ENVIRONMENT: development
       TENNISNOTE_PAYMENTS_ENABLED: "false"
@@ -53,13 +54,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Admit exact DEV563 child source
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
-        run: node scripts/check_r3_display_source_admission.mjs --dev-source
-
-      - name: Admit exact manual R3 candidate
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
-        run: python scripts/check_r3_dev_deployment.py --source-only
+      - name: Admit exact DEV564 manual successor only
+        run: node scripts/check_r3_purchase_identity_admission.mjs --dev-source
 
       - name: Build isolated development sites
         run: |
@@ -75,16 +71,8 @@ jobs:
           grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html
           grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html
 
-      - name: Prevent development release rollback for exact display source
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r3-display-dev563-20261028')
-        run: python scripts/check_r3_display_dev_deployment.py
-
-      - name: Verify exact existing development target and rollback before manual deploy
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: python scripts/check_r3_dev_deployment.py --live-preflight
+      - name: Verify DEV564 runtime assets and exact rollback target
+        run: python -B scripts/check_r3_purchase_identity_dev.py
 
       - name: Deploy member development PWA
         run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev

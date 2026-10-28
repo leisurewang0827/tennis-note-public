@@ -9,6 +9,7 @@ on:
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
       - "scripts/check_r3_display*"
+      - "scripts/check_r3_purchase_identity*"
       - "scripts/check_production_release_order.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
@@ -27,6 +28,7 @@ on:
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
       - "scripts/check_r3_display*"
+      - "scripts/check_r3_purchase_identity*"
       - "scripts/check_production_release_order.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
@@ -65,10 +67,15 @@ jobs:
           node-version: "22"
       - name: Admit exact reviewed display and release source
         id: display
-        run: node scripts/check_r3_display_source_admission.mjs --ci-route
+        run: node scripts/check_r3_purchase_identity_admission.mjs --ci-route
       - name: New source merge and collector cases only
-        if: steps.display.outputs.scoped == 'true'
+        if: steps.display.outputs.display_only == 'true'
         run: node --test tests/r3-display-source.test.mjs
+      - name: DEV564 purchase identity and successor linkage only
+        if: steps.display.outputs.purchase_identity_only == 'true'
+        run: |
+          node --test tests/r3-purchase-identity-admission.test.mjs tests/admin-purchase-identity-wiring.test.js
+          python -B tests/r3-purchase-identity-dev.test.py
       # 고정 운영 기준 blob과 로컬 검사에 쓰인 동일 브라우저 런타임을 준비한다.
       - name: Prepare pinned browser runtime
         if: steps.display.outputs.scoped != 'true'
