@@ -15,6 +15,10 @@ export const PR_VERSION={main:"1.0.562",dev:"1.0.563"};
 export const NEXT_VERSION={"1.0.561":"1.0.562","1.0.562":"1.0.563"};
 export const SELF="scripts/check_r3_display_source_admission.mjs";
 export const TEST="tests/r3-display-source.test.mjs";
+// 실패한 P는 재봉인하지 않는다. 보완 C는 이 불변 부모의 검사2파일만 바꿀 수 있다.
+export const CORRECTION_BASE="ab81d3a6127bcdf3b12a961838e4f550c1535720";
+export const CORRECTION_BASE_TREE="19286f62a1b8374aa499627897b6c5a7650e90d9";
+export const CORRECTION_PATHS=[SELF,TEST].sort();
 export const UI="app/shared/tennisnote-settlement-adjustment.js";
 export const DEV_GUARD="scripts/check_r3_display_dev_deployment.py";
 export const WORKFLOWS=[".github/workflows/tennisnote-public-ci.yml",".github/workflows/deploy-cloudflare-pages-dev.yml"];
@@ -123,8 +127,8 @@ export const once = (text, before, after) => {
   need(text.split(before).length === 2, "ANCHOR_NOT_EXACT");
   return text.replace(before, after);
 };
-export const SOURCE_SEAL = "23b40e8a5f82bae53b4e4f052d1fd2f83752156337d3fef2819a2c3f1b705317";
-export const TEST_SEAL = "81f6579f8417c14b4dde59f79f28755c4513cee7f1820c08f2d2d8bac52e11d0";
+export const SOURCE_SEAL = "3cf05564ca91c8fd635e641219474a06e290ae5e48eb1ac8c6bae59f05928e33";
+export const TEST_SEAL = "7ac2dbfd1d4df85bc9b71d27c936e6d55f2f2de5d7ccf0b37f2abe34d0fc9918";
 export const read = name => lf(readFileSync(resolve(ROOT,name),"utf8"));
 export const git = (...args) => execFileSync("git",args,{
   cwd:ROOT, encoding:"utf8", stdio:["ignore","pipe","pipe"], timeout:15000, maxBuffer:8*1024*1024
@@ -133,6 +137,7 @@ export const IO = {
   tree: ref => git("rev-parse",ref+"^{tree}"),
   parents: ref => git("show","-s","--format=%P",ref).split(" ").filter(Boolean),
   changes: ref => git("diff","--no-renames","--name-status",BASE,ref).split("\n").filter(Boolean).map(s=>s.split("\t")),
+  delta: (base,ref) => git("diff","--no-renames","--name-status",base,ref).split("\n").filter(Boolean).map(s=>s.split("\t")),
   blob: (ref,name) => lf(execFileSync("git",["show",ref+":"+name],{cwd:ROOT,encoding:"utf8",stdio:["ignore","pipe","pipe"],maxBuffer:8*1024*1024})),
   mode: (ref,name) => git("ls-tree","--format=%(objectmode)",ref,"--",name)
 };
@@ -162,16 +167,37 @@ export function proveTree(ref, io=IO) {
     need(io.blob(ref,name)===expectedMetadata(name,io.blob(BASE,name),profile),"METADATA_ONLY_REQUIRED");
   return {version:profile.version, release:profile, tree:io.tree(ref), reused:REUSED, newDatabaseRuns:0};
 }
-export function proveFeature(ref,io=IO,depth=0) {
-  need(depth<3,"FEATURE_CHAIN_TOO_LONG");
+function exactDelta(base,ref,paths,io) {
+  const delta=io.delta(base,ref);
+  need(same(delta.map(r=>r[1]).sort(),[...paths].sort()),"EXACT_CHILD_SCOPE_REQUIRED");
+  for(const [status,name] of delta)
+    need(status==="M" && io.mode(ref,name)==="100644","CHILD_FILE_KIND_CHANGED");
+}
+function proveCorrection(ref,io,proof=proveTree(ref,io)) {
+  need(proof.version==="1.0.562","METADATA_SEQUENCE_REQUIRED");
+  need(same(io.parents(ref),[CORRECTION_BASE]),"CORRECTION_DIRECT_PARENT_REQUIRED");
+  need(io.tree(CORRECTION_BASE)===CORRECTION_BASE_TREE,"CORRECTION_BASE_TREE_DRIFT");
+  // P의 old SELF/TEST를 새 seal로 검사하지 않는다. 전체 불변 tree와 exact2 delta가 경계다.
+  exactDelta(CORRECTION_BASE,ref,CORRECTION_PATHS,io);
+  for(const name of METADATA)
+    need(io.blob(ref,name)===io.blob(CORRECTION_BASE,name),"CORRECTION_METADATA_CHANGED");
+  return {...proof,sourceRoute:"correction562",frozenParent:CORRECTION_BASE};
+}
+export function proveFeature(ref,io=IO) {
   const proof=proveTree(ref,io), parents=io.parents(ref);
   need(parents.length===1,"FEATURE_SINGLE_PARENT_REQUIRED");
-  if(proof.version===BASE_VERSION) need(parents[0]===BASE,"FEATURE_BASE_REQUIRED");
-  else {
-    const prior=proveFeature(parents[0],io,depth+1);
-    need(NEXT_VERSION[prior.version]===proof.version,"METADATA_SEQUENCE_REQUIRED");
+  if(proof.version===BASE_VERSION) {
+    need(parents[0]===BASE,"FEATURE_BASE_REQUIRED");
+    return proof;
   }
-  return proof;
+  if(proof.version==="1.0.562") return proveCorrection(ref,io,proof);
+  // D는 검증된 C의 metadata-only 직계 자식. P→D 통합/임의 중간 커밋은 허용하지 않는다.
+  need(parents[0]!==CORRECTION_BASE,"DEV_CORRECTION_PARENT_REQUIRED");
+  const correction=proveCorrection(parents[0],io);
+  exactDelta(parents[0],ref,METADATA,io);
+  for(const name of PATHS)
+    need(io.blob(ref,name)===io.blob(parents[0],name),"DEV_SOURCE_CHANGED");
+  return {...proof,sourceRoute:"dev563-metadata-child",correction:parents[0],frozenParent:correction.frozenParent};
 }
 export function proveEvent(c,io=IO) {
   need(c.repo===REPOSITORY && c.attempt==="1","EVENT_IDENTITY");
@@ -247,15 +273,34 @@ export function localOverlay() {
     blob:(ref,p)=>ref===virtual?read(p):IO.blob(ref,p)};
   return proveTree(virtual,io);
 }
+export function localCorrectionOverlay() {
+  need(git("rev-parse","HEAD")===CORRECTION_BASE && git("diff","--cached","--name-only")==="","LOCAL_CORRECTION_BASE_OR_INDEX");
+  need(git("ls-files","--others","--exclude-standard")==="","LOCAL_CORRECTION_UNTRACKED");
+  const tracked=git("diff","--name-only").split("\n").filter(Boolean).sort();
+  need(same(tracked,CORRECTION_PATHS),"LOCAL_CORRECTION_SCOPE");
+  for(const name of CORRECTION_PATHS)
+    need(!lstatSync(resolve(ROOT,name)).isSymbolicLink(),"SYMLINK_FORBIDDEN");
+  const virtual="e".repeat(40);
+  const io={...IO,tree:ref=>ref===virtual?"LOCAL_UNCOMMITTED":IO.tree(ref),
+    parents:ref=>ref===virtual?[CORRECTION_BASE]:IO.parents(ref),
+    changes:ref=>IO.changes(ref===virtual?CORRECTION_BASE:ref),
+    delta:(base,ref)=>{
+      need(base===CORRECTION_BASE && ref===virtual,"LOCAL_CORRECTION_DELTA");
+      return CORRECTION_PATHS.map(name=>["M",name]);
+    },
+    mode:(ref,name)=>IO.mode(ref===virtual?CORRECTION_BASE:ref,name),
+    blob:(ref,name)=>ref===virtual?(CORRECTION_PATHS.includes(name)?read(name):IO.blob(CORRECTION_BASE,name)):IO.blob(ref,name)};
+  return proveFeature(virtual,io);
+}
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   try {
     const mode=process.argv[2];
-    need(["--local","--ci-route","--service-route","--dev-source"].includes(mode),"MODE");
+    need(["--local","--local-correction","--ci-route","--service-route","--dev-source"].includes(mode),"MODE");
     if(mode==="--service-route" && process.env.GITHUB_EVENT_NAME!=="pull_request") {
       need(typeof manualHistorical==="function","NO_MANUAL_ROUTE");
       manualHistorical();
     } else {
-      const proof=mode==="--local"?localOverlay():verifyCheckout();
+      const proof=mode==="--local"?localOverlay():mode==="--local-correction"?localCorrectionOverlay():verifyCheckout();
       need(mode==="--dev-source" || proof.event!=="workflow_dispatch","MANUAL_ROUTE_ONLY");
       if(mode==="--dev-source") need(proof.version==="1.0.563" &&
         (proof.event==="push" || proof.admissionRoute==="dev563-manual"),"DEV563_DEPLOY_ONLY");
