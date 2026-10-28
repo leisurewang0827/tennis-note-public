@@ -280,5 +280,83 @@ class TermHistory(unittest.TestCase):
         self.assertEqual(self.guard.calls, [])
 
 
+class CheckoutMode(unittest.TestCase):
+    read = Successor.read
+
+    def setUp(self):
+        Successor.setUp(self)
+        self.proof.update(contract="r3-checkout-mode-source/1", base=m.CHECKOUT_BASE,
+                          admissionRoute="dev566-manual", release=dict(m.CHECKOUT_RELEASE),
+                          version=m.CHECKOUT_RELEASE["version"], productHashes=dict(m.CHECKOUT_PRODUCTS),
+                          privateCommitBound=True, privateSource={"commit": "9" * 40,
+                          "parent": "c0ab08ef6c654964bc0b3d151341ec16c576022f",
+                          "path": "90-Dashboard/tennis-note-prototype/app.js",
+                          "lfSha256": "3eb277a0583852ffa44ef7cf259dbe8bda2dceb646ad6c3602c1cc8b959d4ad0",
+                          "migrationSha256": "81672833ba677091d44d9929be1b73a22ca1489926db37cdfbc3587eea32119d"})
+        for p in m.CHECKOUT_PRODUCTS:
+            value = (ROOT / p).read_bytes()
+            self.assets[p] = value
+            self.assets["dist/admin-dev/" + p.removeprefix("app/admin/")] = value
+
+    def run_preflight(self):
+        return m.preflight(self.env, self.proof, self.guard, self.read, checkout_mode=True)
+
+    def test_bound_synthetic_source_artifact_runtime_rollback_order(self):
+        self.assertEqual(self.run_preflight(), "synthetic-rollback-proof")
+        self.assertEqual(len(self.reads), 13)
+        self.assertEqual([c[0] for c in self.guard.calls], ["runtime", "rollback"])
+        self.assertEqual(self.guard.calls[0][1]["release"], m.CHECKOUT_RELEASE)
+        self.assertEqual(self.guard.calls[0][1]["successorBase"], m.CHECKOUT_BASE)
+
+    def test_private_pending_or_wrong_source_has_zero_asset_or_http_calls(self):
+        for key, value in [("commit", None), ("commit", "PENDING"), ("parent", "0" * 40),
+                           ("lfSha256", "0" * 64), ("migrationSha256", "0" * 64)]:
+            old = self.proof["privateSource"][key]
+            self.proof["privateSource"][key] = value
+            with self.assertRaisesRegex(RuntimeError, "private source pending"):
+                self.run_preflight()
+            self.proof["privateSource"][key] = old
+        self.proof["privateCommitBound"] = False
+        with self.assertRaisesRegex(RuntimeError, "private source pending"):
+            self.run_preflight()
+        self.assertEqual(self.reads, [])
+        self.assertEqual(self.guard.calls, [])
+
+    def test_asset_release_environment_and_old_proof_drift_stay_closed(self):
+        import copy
+        baseline = copy.deepcopy(self.proof)
+        for key in baseline:
+            self.proof = copy.deepcopy(baseline)
+            self.proof.pop(key)
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+        self.proof = baseline
+        for path in self.assets:
+            old = self.assets[path]
+            self.assets[path] += b"drift"
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+            self.assets[path] = old
+        for key, value in [("TENNISNOTE_ENVIRONMENT", "production"), ("GITHUB_RUN_ATTEMPT", "2"),
+                           ("TENNISNOTE_PAYMENTS_ENABLED", "true"), ("GITHUB_REF", "refs/heads/dev")]:
+            old = self.env[key]
+            self.env[key] = value
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+            self.env[key] = old
+        self.assertEqual(self.guard.calls, [])
+
+    def test_new_cli_mode_and_timeout_never_retry(self):
+        with patch.object(m.subprocess, "check_output", side_effect=subprocess.TimeoutExpired("synthetic", 60)) as call, redirect_stdout(io.StringIO()):
+            self.assertEqual(m.main(["--checkout-mode"]), 2)
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(call.call_args.args[0], ["node", m.SOURCE, "--dev-source", "--checkout-mode"])
+        with patch.object(self.guard, "verify_current_live_candidate", side_effect=TimeoutError("synthetic")) as call:
+            with self.assertRaises(TimeoutError):
+                self.run_preflight()
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(self.guard.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

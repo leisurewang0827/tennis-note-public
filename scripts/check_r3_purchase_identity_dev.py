@@ -33,16 +33,23 @@ TERM_PRODUCTS = {**PRODUCTS,
     "app/admin/actions/coach.js": "48a36468df968686b913051dab2346318100571462814f40ae4d1b5fe89298bf",
     "app/admin/domain/coaches.js": "2380cd04d5c31107482d04e02647ed2901b50a197d2bf5051339d152c4cf37bc"}
 
+CHECKOUT_BASE = "95c1339d760246cd1e0e0e671c11abbd0397fec3"
+CHECKOUT_BASE_TREE = "0af0f67a88630815fc49b7f8c8e2d722f12f82ef"
+CHECKOUT_RELEASE = {"version":"1.0.566","appSurfaceVersion":"1.0.566","releaseId":"2026.10.28.05","deployedAt":"2026-10-28T21:36:51+09:00","memberCache":"tennis-note-member-pwa-v599","coachCache":"tennis-note-coach-mode-v572"}
+CHECKOUT_PRODUCTS = {**TERM_PRODUCTS, "app/admin/actions/member.js": "a28c3c0395e548495c54c38eff39889531ab3edb745e9b860af062b3ad3d1fce"}
+
 
 def digest(value):
     return hashlib.sha256(value.replace(b"\r\n", b"\n")).hexdigest()
 
 
-def preflight(env, proof, guard, read_bytes, term_history=False):
-    release = TERM_RELEASE if term_history else RELEASE
-    base = TERM_BASE if term_history else BASE
-    base_tree = TERM_BASE_TREE if term_history else BASE_TREE
-    products = TERM_PRODUCTS if term_history else PRODUCTS
+def preflight(env, proof, guard, read_bytes, term_history=False, checkout_mode=False):
+    if term_history and checkout_mode:
+        raise RuntimeError("mode")
+    release = CHECKOUT_RELEASE if checkout_mode else TERM_RELEASE if term_history else RELEASE
+    base = CHECKOUT_BASE if checkout_mode else TERM_BASE if term_history else BASE
+    base_tree = CHECKOUT_BASE_TREE if checkout_mode else TERM_BASE_TREE if term_history else BASE_TREE
+    products = CHECKOUT_PRODUCTS if checkout_mode else TERM_PRODUCTS if term_history else PRODUCTS
     expected = {
         "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": REF,
         "GITHUB_REF_TYPE": "branch", "GITHUB_REPOSITORY": REPOSITORY,
@@ -58,12 +65,23 @@ def preflight(env, proof, guard, read_bytes, term_history=False):
     if (len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha)
             or env.get("GITHUB_WORKFLOW_SHA") != sha or env.get("TENNISNOTE_CANDIDATE_SHA") != sha
             or proof.get("head") != sha or proof.get("checkout") != sha
-            or proof.get("contract") != ("r3-term-history-source/1" if term_history else "r3-purchase-identity-source/1")
-            or proof.get("base") != base or proof.get("admissionRoute") != ("dev565-manual" if term_history else "dev564-manual")
+            or proof.get("contract") != ("r3-checkout-mode-source/1" if checkout_mode else "r3-term-history-source/1" if term_history else "r3-purchase-identity-source/1")
+            or proof.get("base") != base or proof.get("admissionRoute") != ("dev566-manual" if checkout_mode else "dev565-manual" if term_history else "dev564-manual")
             or proof.get("event") != "workflow_dispatch" or proof.get("ref") != REF
             or proof.get("environment") != "development" or proof.get("release") != release
             or proof.get("version") != release["version"]):
         raise RuntimeError("source")
+    if checkout_mode:
+        private = proof.get("privateSource", {})
+        commit = private.get("commit")
+        if (proof.get("privateCommitBound") is not True or not isinstance(commit, str)
+                or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit)
+                or private.get("parent") != "c0ab08ef6c654964bc0b3d151341ec16c576022f"
+                or commit == private["parent"]
+                or private.get("path") != "90-Dashboard/tennis-note-prototype/app.js"
+                or private.get("lfSha256") != "3eb277a0583852ffa44ef7cf259dbe8bda2dceb646ad6c3602c1cc8b959d4ad0"
+                or private.get("migrationSha256") != "81672833ba677091d44d9929be1b73a22ca1489926db37cdfbc3587eea32119d"):
+            raise RuntimeError("private source pending")
     layers = proof.get("layers")
     if (not isinstance(layers, dict)
             or set(layers) != {"count", "sourceCommit", "metadataCommit", "sourceTree", "metadataTree"}
@@ -102,9 +120,10 @@ def preflight(env, proof, guard, read_bytes, term_history=False):
 def main(args=None):
     try:
         args = [] if args is None else args
-        if args not in ([], ["--term-history"]):
+        if args not in ([], ["--term-history"], ["--checkout-mode"]):
             raise RuntimeError("mode")
         term_history = args == ["--term-history"]
+        checkout_mode = args == ["--checkout-mode"]
         proof = json.loads(subprocess.check_output(["node", SOURCE, "--dev-source", *args], cwd=ROOT, timeout=60, stderr=subprocess.DEVNULL))
         path = ROOT / RUNTIME_GUARD
         if path.is_symlink() or digest(path.read_bytes()) != RUNTIME_SHA:
@@ -114,8 +133,8 @@ def main(args=None):
         spec = importlib.util.spec_from_file_location("purchase_identity_runtime", path)
         guard = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(guard)
-        preflight(os.environ, proof, guard, lambda name: (ROOT / name).read_bytes(), term_history)
-        print("R3_TERM_HISTORY_DEV_PREFLIGHT_PASS" if term_history else "R3_PURCHASE_IDENTITY_DEV_PREFLIGHT_PASS")
+        preflight(os.environ, proof, guard, lambda name: (ROOT / name).read_bytes(), term_history, checkout_mode)
+        print("R3_CHECKOUT_MODE_DEV_PREFLIGHT_PASS" if checkout_mode else "R3_TERM_HISTORY_DEV_PREFLIGHT_PASS" if term_history else "R3_PURCHASE_IDENTITY_DEV_PREFLIGHT_PASS")
         return 0
     except Exception:
         print("R3_PURCHASE_IDENTITY_DEV_PREFLIGHT_HOLD")

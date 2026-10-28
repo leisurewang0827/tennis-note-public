@@ -47,6 +47,19 @@ export const TERM_PATTERN = "^DEV565 term-history:";
 export const TERM_RELEASE = Object.freeze({version:"1.0.565",appSurfaceVersion:"1.0.565",releaseId:"2026.10.28.04",deployedAt:"2026-10-28T18:49:26+09:00",memberCache:"tennis-note-member-pwa-v598",coachCache:"tennis-note-coach-mode-v571"});
 export const TERM_CONNECTION_PINS = {[TEST]:"819d2c7a86e094f4035a50f9b8b37f0ecbf74c5084baafbf22544914b97810f0",[DEV]:"0ec8813b7d294944a95ef59704132e5581050700687e3fbecd22ee6c40d08e03",[DEV_TEST]:"b2afcbda854f66f886620ab345bedd2a0a883bb13a04984a139f1236f885d789"};
 export const TERM_SEAL = "904fd4e9e0e1c78c46c383ee03bda6969abc47e7351653988f1c713312ef2443";
+
+// 검수된 DEV565 그래프를 보존한 코치 정책 저장 후속. 미커밋 원본은 hosted 경로 차단.
+export const CHECKOUT_BASE = "95c1339d760246cd1e0e0e671c11abbd0397fec3";
+export const CHECKOUT_BASE_TREE = "0af0f67a88630815fc49b7f8c8e2d722f12f82ef";
+export const CHECKOUT_PRODUCTS = Object.freeze({"app/admin/actions/member.js":"a28c3c0395e548495c54c38eff39889531ab3edb745e9b860af062b3ad3d1fce"});
+export const CHECKOUT_PRIVATE_SOURCE = Object.freeze({commit:"7cb17f16a48a0aba27a81bda5d938b6bd5ca5403",parent:"c0ab08ef6c654964bc0b3d151341ec16c576022f",path:PRIVATE_SOURCE.path,lfSha256:"3eb277a0583852ffa44ef7cf259dbe8bda2dceb646ad6c3602c1cc8b959d4ad0",migrationSha256:"81672833ba677091d44d9929be1b73a22ca1489926db37cdfbc3587eea32119d"});
+export const CHECKOUT_SOURCE_PATHS = [...Object.keys(CHECKOUT_PRODUCTS),SELF,TEST,DEV,DEV_TEST,...WORKFLOWS].sort();
+export const CHECKOUT_PATHS = [...CHECKOUT_SOURCE_PATHS,...METADATA].sort();
+export const CHECKOUT_READ_PATHS = [...new Set([...TERM_READ_PATHS,...CHECKOUT_PATHS])].sort();
+export const CHECKOUT_PATTERN = "^DEV566 checkout-mode:";
+export const CHECKOUT_RELEASE = Object.freeze({"version":"1.0.566","appSurfaceVersion":"1.0.566","releaseId":"2026.10.28.05","deployedAt":"2026-10-28T21:36:51+09:00","memberCache":"tennis-note-member-pwa-v599","coachCache":"tennis-note-coach-mode-v572"});
+export const CHECKOUT_CONNECTION_PINS = {[TEST]:"ec95b51d0662f251e4f41ff9ff21984c6df5a07486d56e15faee7a6027e4247e",[DEV]:"5ae36cfe206655cbbb470d4324516281a580a8852ee59c2a77a504add6268898",[DEV_TEST]:"9c200fae990b7e8b8ea102cb1bb04f5a8984314b4317445a6000573794a77a03"};
+export const CHECKOUT_SEAL = "f61395cceea3cddfb187caf5beadca463ab60b4b9c2e2b221e6f9a10716196e5";
 export const PRESERVED = {
   "app/admin/actions/billing.js": "b9552a836fcedfe904ec08b364c04a3afc722cdb1c423619df3fa53f18b33d47",
   "tests/r3-settlement-preview-errors.test.js": "cee1a42b2885363aea120fa443295f7fb2580c2e6da1c08d83d86e786b782fc1",
@@ -101,7 +114,7 @@ export function expectedWorkflow(name, source) {
   return s;
 }
 export const git = (...args) => execFileSync("git", args, {cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 8 * 1024 * 1024}).trimEnd();
-const allowed = name => need(TERM_READ_PATHS.includes(name), "READ_OUTSIDE_SCOPE");
+const allowed = name => need(CHECKOUT_READ_PATHS.includes(name), "READ_OUTSIDE_SCOPE");
 export const IO = {
   tree: ref => git("rev-parse", ref + "^{tree}"),
   parents: ref => git("show", "-s", "--format=%P", ref).split(" ").filter(Boolean),
@@ -181,7 +194,43 @@ export function proveTermTree(ref,io=IO) {
   need(/^[a-f0-9]{40}$/.test(sourceTree)&&/^[a-f0-9]{40}$/.test(metadataTree)&&sourceTree!==metadataTree&&sourceTree!==TERM_BASE_TREE&&metadataTree!==TERM_BASE_TREE,"LAYER_TREES");
   return {contract:"r3-term-history-source/1",base:TERM_BASE,priorBase:BASE,tree:metadataTree,layers:{count:2,sourceCommit:source,metadataCommit:ref,sourceTree,metadataTree},release:TERM_RELEASE,version:TERM_RELEASE.version,privateSource:TERM_PRIVATE_SOURCE,productHashes:{...PRODUCTS,...TERM_PRODUCTS},environment:"development",reusedLocalChecks:59,hostedDb:0};
 }
-export function proveEvent(c, io = IO, term = false) {
+export const checkoutSeal = s => hash(lf(s).replace(/export const CHECKOUT_SEAL = "[^"]+";/, 'export const CHECKOUT_SEAL = "PENDING";'));
+export const expectedCheckoutMetadata = (p,s) => expectedMetadata(p,s,CHECKOUT_RELEASE,TERM_RELEASE.version);
+export function expectedCheckoutWorkflow(name,source) {
+  let s=lf(source);
+  if(name===WORKFLOWS[0]) {
+    s=once(s,"--ci-route --term-history\n","--ci-route --checkout-mode\n");
+    return once(s,"      # 고정 운영 기준 blob","      - name: DEV566 checkout policy public function and admission delta only\n        if: steps.display.outputs.checkout_mode_only == 'true'\n        run: |\n          node --test --test-name-pattern='"+CHECKOUT_PATTERN+"' "+TEST+"\n          python -B "+DEV_TEST+" CheckoutMode\n      # 고정 운영 기준 blob");
+  }
+  need(name===WORKFLOWS[1],"WORKFLOW");
+  s=once(s,"--dev-source --term-history\n","--dev-source --checkout-mode\n");
+  return once(s,"python -B "+DEV+" --term-history\n","python -B "+DEV+" --checkout-mode\n");
+}
+export function proveCheckoutTree(ref,io=IO,allowUnboundLocal=false) {
+  need(io.tree(CHECKOUT_BASE)===CHECKOUT_BASE_TREE,"BASE_TREE");
+  const parents=io.parents(ref),source=parents[0];
+  need(/^[a-f0-9]{40}$/.test(ref)&&parents.length===1&&/^[a-f0-9]{40}$/.test(source||"")&&source!==ref&&source!==CHECKOUT_BASE&&same(io.parents(source),[CHECKOUT_BASE]),"TWO_LAYER_PARENTS");
+  termDelta(io,CHECKOUT_BASE,source,CHECKOUT_SOURCE_PATHS);termDelta(io,source,ref,[...METADATA].sort());termDelta(io,CHECKOUT_BASE,ref,CHECKOUT_PATHS);
+  need(proveTermTree(CHECKOUT_BASE,io).tree===CHECKOUT_BASE_TREE,"BASE_TREE");
+  for(const p of CHECKOUT_SOURCE_PATHS) {
+    const value=io.blob(source,p);
+    if(p===SELF)need(checkoutSeal(value)===CHECKOUT_SEAL,"SOURCE_SEAL");
+    else if(CHECKOUT_PRODUCTS[p]||CHECKOUT_CONNECTION_PINS[p])need(hash(value)===(CHECKOUT_PRODUCTS[p]||CHECKOUT_CONNECTION_PINS[p]),"CONTENT_PIN");
+    else need(value===expectedCheckoutWorkflow(p,io.blob(CHECKOUT_BASE,p)),"WORKFLOW_BYTES");
+    need(io.blob(ref,p)===value,"SOURCE_BYTES");
+  }
+  for(const p of METADATA) {
+    const before=io.blob(CHECKOUT_BASE,p);
+    need(io.mode(source,p)==="100644"&&io.blob(source,p)===before,"EARLY_METADATA");
+    need(io.blob(ref,p)===expectedCheckoutMetadata(p,before),"METADATA_BYTES");
+  }
+  const bound=/^[a-f0-9]{40}$/.test(CHECKOUT_PRIVATE_SOURCE.commit||"");
+  need(bound||allowUnboundLocal===true&&CHECKOUT_PRIVATE_SOURCE.commit===null,"PRIVATE_COMMIT_PENDING");
+  const sourceTree=io.tree(source),metadataTree=io.tree(ref);
+  need(/^[a-f0-9]{40}$/.test(sourceTree)&&/^[a-f0-9]{40}$/.test(metadataTree)&&sourceTree!==metadataTree&&sourceTree!==CHECKOUT_BASE_TREE&&metadataTree!==CHECKOUT_BASE_TREE,"LAYER_TREES");
+  return {contract:"r3-checkout-mode-source/1",base:CHECKOUT_BASE,tree:metadataTree,layers:{count:2,sourceCommit:source,metadataCommit:ref,sourceTree,metadataTree},release:CHECKOUT_RELEASE,version:CHECKOUT_RELEASE.version,privateSource:CHECKOUT_PRIVATE_SOURCE,privateCommitBound:bound,productHashes:{...PRODUCTS,...TERM_PRODUCTS,...CHECKOUT_PRODUCTS},environment:"development",reusedLocalChecks:101,hostedDb:0};
+}
+export function proveEvent(c, io = IO, term = false, checkout = false) {
   need(c.repo === REPOSITORY && c.attempt === "1" && /^[a-f0-9]{40}$/.test(c.head || ""), "EVENT_IDENTITY");
   need(WORKFLOW_NAMES.includes(c.workflow), "WORKFLOW_NAME");
   const file = WORKFLOWS[WORKFLOW_NAMES.indexOf(c.workflow)];
@@ -192,9 +241,9 @@ export function proveEvent(c, io = IO, term = false) {
   } else {
     need(c.event === "workflow_dispatch" && c.workflow === WORKFLOW_NAMES[1] && c.ref === "refs/heads/" + BRANCH && c.refType === "branch" && c.input === c.head && c.sha === c.head && c.checkout === c.head, "MANUAL_DEV_ONLY");
   }
-  const proof = term ? proveTermTree(c.head,io) : proveTree(c.head, io);
+  const proof = checkout ? proveCheckoutTree(c.head,io) : term ? proveTermTree(c.head,io) : proveTree(c.head, io);
   need(io.tree(c.checkout) === proof.tree, "MERGE_PAYLOAD");
-  return {...proof, head: c.head, checkout: c.checkout, event: c.event, ref: c.ref, admissionRoute: (term?"dev565-":"dev564-")+(c.event === "workflow_dispatch" ? "manual" : "qa-pr")};
+  return {...proof, head: c.head, checkout: c.checkout, event: c.event, ref: c.ref, admissionRoute: (checkout?"dev566-":term?"dev565-":"dev564-")+(c.event === "workflow_dispatch" ? "manual" : "qa-pr")};
 }
 export function context(env, event, checkout) {
   const pr = event.pull_request;
@@ -208,10 +257,10 @@ export function regularPath(name, stat = lstatSync) {
   return path;
 }
 function disk(name) { return lf(readFileSync(regularPath(name), "utf8")); }
-export function verifyCheckout(c, host = {status: () => git("status", "--porcelain", "--untracked-files=all"), io: IO, read: disk}, term = false) {
+export function verifyCheckout(c, host = {status: () => git("status", "--porcelain", "--untracked-files=all"), io: IO, read: disk}, term = false, checkout = false) {
   need(host.status() === "", "HOSTED_CLEAN");
-  const proof = proveEvent(c, host.io,term);
-  for (const p of term?TERM_READ_PATHS:PATHS) need(host.read(p) === host.io.blob(c.checkout, p), "WORKTREE_BYTES");
+  const proof = proveEvent(c, host.io,term,checkout);
+  for (const p of checkout?CHECKOUT_READ_PATHS:term?TERM_READ_PATHS:PATHS) need(host.read(p) === host.io.blob(c.checkout, p), "WORKTREE_BYTES");
   return proof;
 }
 export function localOverlay() {
@@ -236,13 +285,23 @@ export function localTermOverlay() {
     mode:(r,p)=>[source,release].includes(r)?"100644":IO.mode(r,p),blob:(r,p)=>[source,release].includes(r)?METADATA.includes(p)?r===release?expectedTermMetadata(p,IO.blob(TERM_BASE,p)):IO.blob(TERM_BASE,p):TERM_SOURCE_PATHS.includes(p)?disk(p):IO.blob(TERM_BASE,p):IO.blob(r,p)};
   return {...proveTermTree(release,io),head:null,tree:null,layers:{count:2,sourceCommit:null,metadataCommit:null,sourceTree:null,metadataTree:null},status:"LOCAL_SOURCE_ONLY_METADATA_PLANNED_NOT_APPLIED"};
 }
+export function localCheckoutOverlay() {
+  need(git("rev-parse","HEAD")===CHECKOUT_BASE&&git("diff","--cached","--name-only")==="","LOCAL_BASE_INDEX");
+  const dirty=[...git("diff","--name-only").split("\n"),...git("ls-files","--others","--exclude-standard").split("\n")].filter(Boolean);
+  need(same(dirty.filter(p=>!Object.hasOwn(PRESERVED,p)).sort(),CHECKOUT_PATHS),"LOCAL_SOURCE_SCOPE");
+  for(const [p,h]of Object.entries(PRESERVED))need(hash(readFileSync(resolve(ROOT,p)))===h,"PRESERVED_DIRTY");
+  const source="c".repeat(40),release="d".repeat(40);
+  const io={...IO,tree:r=>r===source?"e".repeat(40):r===release?"f".repeat(40):IO.tree(r),parents:r=>r===release?[source]:r===source?[CHECKOUT_BASE]:IO.parents(r),changes:(f,t)=>[source,release].includes(t)?(t===source?CHECKOUT_SOURCE_PATHS:f===source?[...METADATA].sort():CHECKOUT_PATHS).map(p=>["M",p]):IO.changes(f,t),mode:(r,p)=>[source,release].includes(r)?"100644":IO.mode(r,p),blob:(r,p)=>[source,release].includes(r)?METADATA.includes(p)?r===release?disk(p):IO.blob(CHECKOUT_BASE,p):CHECKOUT_SOURCE_PATHS.includes(p)?disk(p):IO.blob(CHECKOUT_BASE,p):IO.blob(r,p)};
+  return {...proveCheckoutTree(release,io,true),head:null,tree:null,layers:{count:2,sourceCommit:null,metadataCommit:null,sourceTree:null,metadataTree:null},status:"LOCAL_ONLY_PRIVATE_COMMIT_BINDING_REQUIRED"};
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const mode=process.argv[2],term=process.argv[3]==="--term-history";
-    need(["--local","--ci-route","--dev-source"].includes(mode)&&process.argv.length===(term?4:3),"MODE");
-    const proof=mode==="--local"?(term?localTermOverlay():localOverlay()):verifyCheckout(context(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,"utf8")),git("rev-parse","HEAD")),undefined,term);
-    if(mode==="--dev-source")need(proof.admissionRoute===(term?"dev565-manual":"dev564-manual"),"DEV_ONLY");
-    if(mode==="--ci-route"){need(proof.event==="pull_request","CI_PR_ONLY");appendFileSync(process.env.GITHUB_OUTPUT,term?"scoped=true\nterm_history_only=true\n":"scoped=true\npurchase_identity_only=true\n");}
+    const checkout=process.argv[3]==="--checkout-mode";
+    need(["--local","--ci-route","--dev-source"].includes(mode)&&process.argv.length===(term||checkout?4:3),"MODE");
+    const proof=mode==="--local"?(checkout?localCheckoutOverlay():term?localTermOverlay():localOverlay()):verifyCheckout(context(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,"utf8")),git("rev-parse","HEAD")),undefined,term,checkout);
+    if(mode==="--dev-source")need(proof.admissionRoute===(checkout?"dev566-manual":term?"dev565-manual":"dev564-manual"),"DEV_ONLY");
+    if(mode==="--ci-route"){need(proof.event==="pull_request","CI_PR_ONLY");appendFileSync(process.env.GITHUB_OUTPUT,checkout?"scoped=true\ncheckout_mode_only=true\n":term?"scoped=true\nterm_history_only=true\n":"scoped=true\npurchase_identity_only=true\n");}
     console.log(JSON.stringify(proof));
   } catch { console.error("R3_PURCHASE_IDENTITY_HOLD"); process.exitCode = 2; }
 }

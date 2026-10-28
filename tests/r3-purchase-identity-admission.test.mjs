@@ -270,19 +270,21 @@ const prior=(method,...args)=>{
   return priorMemo.get(key);
 };
 const termMetadata=Object.fromEntries(a.METADATA.map(p=>[p,a.expectedTermMetadata(p,prior("blob",a.TERM_BASE,p))]));
-function termFixture(){
-  const f={files:{...termFiles,...termMetadata},parents:[source],sourceParents:[a.TERM_BASE],mergeParents:[a.BASE,head],status:"",diskSuffix:"",sourceOverrides:{},rows:{},mergeTree:releaseTree};
+function termFixture(checkout=false){
+  const base=checkout?a.CHECKOUT_BASE:a.TERM_BASE,paths=checkout?a.CHECKOUT_PATHS:a.TERM_PATHS,sourcePaths=checkout?a.CHECKOUT_SOURCE_PATHS:a.TERM_SOURCE_PATHS;
+  const selected=checkout?Object.fromEntries(a.CHECKOUT_PATHS.map(p=>[p,read(p)])):{...termFiles,...termMetadata};
+  const f={files:{...selected},parents:[source],sourceParents:[base],mergeParents:[a.BASE,head],status:"",diskSuffix:"",sourceOverrides:{},rows:{},mergeTree:releaseTree};
   f.io={tree:r=>r===source?sourceTree:r===head?releaseTree:r===merge?f.mergeTree:prior("tree",r),
     parents:r=>r===head?f.parents:r===source?f.sourceParents:r===merge?f.mergeParents:prior("parents",r),
-    changes:(from,to)=>Object.hasOwn(f.rows,from+":"+to)?f.rows[from+":"+to]:[source,head].includes(to)?(to===source?a.TERM_SOURCE_PATHS:from===source?[...a.METADATA].sort():a.TERM_PATHS).map(p=>["M",p]):prior("changes",from,to),
+    changes:(from,to)=>Object.hasOwn(f.rows,from+":"+to)?f.rows[from+":"+to]:[source,head].includes(to)?(to===source?sourcePaths:from===source?[...a.METADATA].sort():paths).map(p=>["M",p]):prior("changes",from,to),
     mode:(r,p)=>[source,head,merge].includes(r)?f.badMode===p?"120000":"100644":prior("mode",r,p),
-    blob:(r,p)=>r===source?f.sourceOverrides[p]??(a.METADATA.includes(p)?prior("blob",a.TERM_BASE,p):f.files[p]??prior("blob",a.TERM_BASE,p)):[head,merge].includes(r)?f.files[p]??prior("blob",a.TERM_BASE,p):prior("blob",r,p)};
+    blob:(r,p)=>r===source?f.sourceOverrides[p]??(a.METADATA.includes(p)?prior("blob",base,p):f.files[p]??prior("blob",base,p)):[head,merge].includes(r)?f.files[p]??prior("blob",base,p):prior("blob",r,p)};
   return f;
 }
-function runTermCli(manual=false,f=termFixture(),patch={}){
+function runTermCli(manual=false,f=termFixture(),patch={},checkout=false){
   const e={...event(manual),...patch},outputs=[],printed=[],errors=[],calls=[],script=resolve(a.ROOT,a.SELF);
   const payload=manual?{inputs:{candidate_sha:e.input}}:{pull_request:{head:{sha:e.head,ref:e.headRef,repo:{full_name:e.headRepo}},base:{sha:e.base,ref:e.target}}};
-  const fakeProcess={argv:["node",script,manual?"--dev-source":"--ci-route","--term-history"],exitCode:0,env:{
+  const fakeProcess={argv:["node",script,manual?"--dev-source":"--ci-route",checkout?"--checkout-mode":"--term-history"],exitCode:0,env:{
     GITHUB_REPOSITORY:e.repo,GITHUB_RUN_ATTEMPT:e.attempt,GITHUB_EVENT_NAME:e.event,GITHUB_WORKFLOW:e.workflow,GITHUB_WORKFLOW_REF:e.workflowRef,GITHUB_WORKFLOW_SHA:e.workflowSha,
     GITHUB_SHA:e.sha,GITHUB_REF:e.ref,GITHUB_REF_TYPE:e.refType,GITHUB_EVENT_PATH:"term-event",GITHUB_OUTPUT:"term-output"}};
   const exec=(bin,args)=>{
@@ -295,9 +297,9 @@ function runTermCli(manual=false,f=termFixture(),patch={}){
     if(args[0]==="ls-tree")return f.io.mode(args[2],args.at(-1));
     throw Error("UNEXPECTED_COMMAND");
   };
-  const body=termFiles[a.SELF].replace(/^import .*;\n/gm,"").replace(/^export /gm,"").replaceAll("import.meta.url",JSON.stringify(pathToFileURL(script).href));
+  const body=f.files[a.SELF].replace(/^import .*;\n/gm,"").replace(/^export /gm,"").replaceAll("import.meta.url",JSON.stringify(pathToFileURL(script).href));
   runInNewContext(body,{createHash,fileURLToPath,pathToFileURL,dirname,resolve,process:fakeProcess,execFileSync:exec,
-    readFileSync:p=>{if(p==="term-event")return JSON.stringify(payload);const name=a.TERM_READ_PATHS.find(n=>resolve(a.ROOT,n)===p);assert.ok(name);return f.io.blob(head,name)+f.diskSuffix;},
+    readFileSync:p=>{if(p==="term-event")return JSON.stringify(payload);const name=(checkout?a.CHECKOUT_READ_PATHS:a.TERM_READ_PATHS).find(n=>resolve(a.ROOT,n)===p);assert.ok(name);return f.io.blob(head,name)+f.diskSuffix;},
     appendFileSync:(p,s)=>{assert.equal(p,"term-output");outputs.push(s);},lstatSync:()=>({isSymbolicLink:()=>false,isFile:()=>true}),
     console:{log:s=>printed.push(JSON.parse(s)),error:s=>errors.push(s)},fetch:()=>{throw Error("NETWORK_FORBIDDEN");}}, {timeout:10000});
   return {exit:fakeProcess.exitCode,outputs,printed,errors,calls};
@@ -357,4 +359,62 @@ test("DEV565 term-history: actual public matcher and save call use fresh histori
   assert.ok(action.includes(call));const actual=terms=>runInNewContext(call,{coachStaffServerMatches:match,saved,draft,adminLiveDataState:{coachSettlementTerms:terms}});
   assert.equal(actual([term,current]),true);assert.equal(actual([term]),false);assert.equal(actual([term,term,current]),false);
   saved.settlement.ratio=0.5;assert.equal(actual([term,current]),false);
+});
+
+// 실제 미커밋 원본은 hosted NO-GO. 아래 bound SHA는 메모리 합성 CLI에만 사용한다.
+function boundCheckoutFixture() {
+  const f=termFixture(true);
+  if(a.CHECKOUT_PRIVATE_SOURCE.commit===null) {
+    let s=a.once(f.files[a.SELF],'CHECKOUT_PRIVATE_SOURCE = Object.freeze({commit:null,','CHECKOUT_PRIVATE_SOURCE = Object.freeze({commit:"'+"9".repeat(40)+'",');
+    s=s.replace(/export const CHECKOUT_SEAL = "[^"]+";/,'export const CHECKOUT_SEAL = "PENDING";');
+    f.files[a.SELF]=s.replace('export const CHECKOUT_SEAL = "PENDING";','export const CHECKOUT_SEAL = "'+a.hash(s)+'";');
+  }
+  return f;
+}
+test("DEV566 checkout-mode: exact seven source plus thirteen official release paths",()=>{
+  const f=termFixture(true),p=a.proveCheckoutTree(head,f.io,true);
+  assert.equal(p.version,"1.0.566");assert.equal(p.reusedLocalChecks,101);assert.equal(p.hostedDb,0);
+  assert.equal(a.CHECKOUT_SOURCE_PATHS.length,7);assert.equal(a.CHECKOUT_PATHS.length,20);
+  assert.equal(a.checkoutSeal(f.files[a.SELF]),a.CHECKOUT_SEAL);
+  for(const p of Object.keys(a.CHECKOUT_CONNECTION_PINS))assert.equal(a.hash(f.files[p]),a.CHECKOUT_CONNECTION_PINS[p]);
+});
+test("DEV566 checkout-mode: pending real private commit denies actual PR and DEV CLI",()=>{
+  if(a.CHECKOUT_PRIVATE_SOURCE.commit===null) {
+    for(const manual of [false,true])termHeld(runTermCli(manual,termFixture(true),{},true));
+    assert.throws(()=>a.proveCheckoutTree(head,termFixture(true).io),/PRIVATE_COMMIT_PENDING/);
+  } else assert.match(a.CHECKOUT_PRIVATE_SOURCE.commit,/^[a-f0-9]{40}$/);
+});
+test("DEV566 checkout-mode: synthetic bound actual CLI only admits PR and exact manual DEV",()=>{
+  for(const manual of [false,true]) {
+    const r=runTermCli(manual,boundCheckoutFixture(),{},true);
+    assert.equal(r.exit,0);assert.deepEqual(r.errors,[]);
+    assert.deepEqual(r.outputs,manual?[]:["scoped=true\ncheckout_mode_only=true\n"]);
+    assert.equal(r.printed[0].admissionRoute,manual?"dev566-manual":"dev566-qa-pr");
+    assert.equal(r.calls.some(c=>!["status","rev-parse","show","diff","ls-tree"].includes(c[0])),false);
+  }
+});
+test("DEV566 checkout-mode: wrong bytes paths layers and source commit binding fail closed",()=>{
+  for(const p of a.CHECKOUT_PATHS){const f=boundCheckoutFixture();f.files[p]+="\n";termHeld(runTermCli(false,f,{},true));}
+  for(const pair of [[a.CHECKOUT_BASE,source],[source,head],[a.CHECKOUT_BASE,head]]) {
+    const f=boundCheckoutFixture();f.rows[pair.join(":")]=[...f.io.changes(...pair),["M","outside"]];termHeld(runTermCli(false,f,{},true));
+  }
+  const mode=boundCheckoutFixture();mode.badMode=a.DEV;termHeld(runTermCli(false,mode,{},true));
+  for(const p of a.METADATA){const f=boundCheckoutFixture();f.sourceOverrides[p]=f.files[p];termHeld(runTermCli(false,f,{},true));}
+  for(const parents of [[a.TERM_BASE],[source,a.CHECKOUT_BASE],[]]){const f=boundCheckoutFixture();f.parents=parents;termHeld(runTermCli(false,f,{},true));}
+});
+test("DEV566 checkout-mode: fork production rerun dirty and merge drift blocked",()=>{
+  for(const patch of [{attempt:"2"},{target:"main"},{base:a.CHECKOUT_BASE},{headRepo:"other/repo"},{workflowSha:head},{checkout:head}])termHeld(runTermCli(false,boundCheckoutFixture(),patch,true));
+  for(const patch of [{event:"push"},{input:source},{ref:"refs/heads/main"},{refType:"tag"}])termHeld(runTermCli(true,boundCheckoutFixture(),patch,true));
+  const f=boundCheckoutFixture();f.status=" M unrelated";termHeld(runTermCli(false,f,{},true));
+  const m=boundCheckoutFixture();m.mergeTree="8".repeat(40);termHeld(runTermCli(false,m,{},true));
+});
+test("DEV566 checkout-mode: official generated metadata and workflow guards match",()=>{
+  const f=termFixture(true);
+  for(const p of a.WORKFLOWS)assert.equal(f.files[p],a.expectedCheckoutWorkflow(p,prior("blob",a.CHECKOUT_BASE,p)));
+  for(const p of a.METADATA)assert.equal(read(p),a.expectedCheckoutMetadata(p,prior("blob",a.CHECKOUT_BASE,p)));
+  assert.deepEqual(JSON.parse(read("app/release.json")).nativePlatforms,JSON.parse(prior("blob",a.CHECKOUT_BASE,"app/release.json")).nativePlatforms);
+  assert.ok(f.files[a.WORKFLOWS[0]].includes("python -B "+a.DEV_TEST+" CheckoutMode"));
+  assert.ok(f.files[a.WORKFLOWS[0]].includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.ok(f.files[a.WORKFLOWS[1]].includes("environment: development"));
+  assert.equal(a.CHECKOUT_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
 });

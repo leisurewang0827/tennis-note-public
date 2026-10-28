@@ -209,6 +209,30 @@ async function updateMembershipProductSetting(productId, options = {}) {
     showToast("현재 운영 지점의 회원권 상품만 수정할 수 있습니다.");
     return;
   }
+  if (nextProduct.coachSaleMode === "selected") {
+    const entries = Object.entries(nextProduct.coachSaleAvailability || {});
+    const selectedEntries = entries.filter(([, allowed]) => allowed === true);
+    const serverRoles = Array.isArray(adminLiveDataState.coachRoles) ? adminLiveDataState.coachRoles : [];
+    const selectionValid = entries.every(([, allowed]) => allowed === true || allowed === false)
+      && selectedEntries.every(([roleId]) => {
+        const matches = serverRoles.filter((role) => role?.id === roleId);
+        const role = matches[0];
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roleId)
+          && matches.length === 1
+          && role.branch_id === branchId
+          && role.status === "approved"
+          && Object.prototype.hasOwnProperty.call(role, "employment_status")
+          && (role.employment_status ?? "active") === "active"
+          && role.archived_at === null
+          && role.deleted_at === null;
+      });
+    if (!selectionValid) {
+      showToast("회원권 상품 저장에 실패했습니다. 서버 연결과 관리자 권한을 확인해 주세요.");
+      return false;
+    }
+    // 선택 모드는 true만 허용한다. false/누락은 모두 거부하며, 다른 지점의 미선택 키는 전송하지 않는다.
+    nextProduct.coachSaleAvailability = Object.fromEntries(selectedEntries);
+  }
   if (saveButton) {
     saveButton.disabled = true;
     saveButton.textContent = "저장 중";
