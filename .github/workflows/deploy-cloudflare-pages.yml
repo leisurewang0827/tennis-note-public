@@ -44,6 +44,9 @@ jobs:
       - name: Verify production deployment configuration
         run: python scripts/check_cloudflare_build.py
 
+      - name: Require fresh DEV ahead of first production deployment
+        run: python scripts/check_production_release_order.py
+
       - name: Deploy member PWA
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         uses: cloudflare/wrangler-action@v4

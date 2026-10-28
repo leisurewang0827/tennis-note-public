@@ -2,6 +2,7 @@
 // 새 선별층의 기계적 소스만 먼저 검증한다. 기존 BASIC/553 기대값은 변경하지 않는다.
 const fs = require("node:fs"), path = require("node:path");
 const {execFileSync} = require("node:child_process");
+const selfCoach = require("./r3-self-coach.cjs");
 const ROOT = path.resolve(__dirname, "../..");
 const SOURCE_BASE = "8aada4bc43e275c2474c71a535c7e94eca4f26b5";
 const DOC_ANCHOR = "| 버전 올리기 · 배포 | [docs/releasing.md](docs/releasing.md) |";
@@ -40,7 +41,12 @@ print(json.dumps(getattr(m,sys.argv[1])(),ensure_ascii=True))
 function plan() { return cached || (cached = loadPlan("selected_r3_plan")); }
 function releasePlan() { return cachedRelease || (cachedRelease = loadPlan("selected_release_plan")); }
 function restoreRelease(file, text) {
-  const current = text.replace(/\r\n/g,"\n");
+  let current;
+  try { current = selfCoach.restore(file,text); }
+  catch (error) {
+    if (error.code !== "SELF_COACH_BYTES") throw error;
+    throw Error(`selected R3 ${plan()[file] || !RELEASE_PATHS.includes(file) ? "" : "release "}exact candidate mismatch: ${file}`);
+  }
   if (!RELEASE_PATHS.includes(file)) return current;
   const row = releasePlan()[file];
   if (current === row.before || (plan()[file] && current === plan()[file].before)) return current;
@@ -61,9 +67,10 @@ function verifyDocRegistration(text = fs.readFileSync(path.join(ROOT,"AGENTS.md"
   return before;
 }
 function verifyCurrent() {
+  selfCoach.verifyCurrent();
   verifyDocRegistration();
   for (const [file,row] of Object.entries(releasePlan())) {
-    if (fs.readFileSync(path.join(ROOT,file),"utf8").replace(/\r\n/g,"\n") !== row.after) throw Error(`selected R3 release exact candidate mismatch: ${file}`);
+    if (selfCoach.restore(file,fs.readFileSync(path.join(ROOT,file),"utf8")) !== row.after) throw Error(`selected R3 release exact candidate mismatch: ${file}`);
   }
   for (const [file,row] of Object.entries(plan())) {
     const current = restoreRelease(file,fs.readFileSync(path.join(ROOT,file),"utf8"));
@@ -76,6 +83,8 @@ function restoreHistoricalAppPaths(paths, restoreBasic, io = {}) {
   const historical = JSON.parse(rawContract);
   if (historical.base !== "686cc97d9676da2d16ca3cdfbd862dc9cd19434e" || historical.files.length !== 35) throw Error("selected R3 historical source mismatch");
   const expected = [...new Set([...historical.files.map(x=>x.path), ...Object.keys(plan()), ...RELEASE_PATHS])].sort();
+  paths = selfCoach.historicalObservation(paths,historical.base,io.read);
+  paths = selfCoach.resolvePaths(paths,expected,"selected R3 historical observed path set mismatch");
   if (paths.length !== new Set(paths).size || JSON.stringify([...paths].sort()) !== JSON.stringify(expected)) throw Error("selected R3 historical observed path set mismatch");
   // 별도 실제 관측에서도 선별22 전체가 있어야 한다. 알려지지 않은 변경을 단순 제외하지 않는다.
   const observed = [
@@ -103,12 +112,14 @@ function restoreHistoricalAppPaths(paths, restoreBasic, io = {}) {
 }
 function restoreProductPaths(paths) {
   const expected = [...new Set([...Object.keys(plan()), ...RELEASE_PATHS])].sort();
+  paths = selfCoach.resolvePaths(paths,expected,"selected R3 release exact22 path set mismatch");
   if (paths.length !== new Set(paths).size || JSON.stringify([...paths].sort()) !== JSON.stringify(expected)) throw Error("selected R3 release exact22 path set mismatch");
   verifyCurrent();
   return Object.keys(plan()).sort();
 }
 function restoreCheckpointPaths(paths, baselinePaths) {
   const expected = [...new Set([...baselinePaths, ...CHECKPOINT_PATHS])].sort();
+  paths = selfCoach.resolvePaths(paths,expected,"selected R3 checkpoint exact path set mismatch");
   if (paths.length !== new Set(paths).size || JSON.stringify([...paths].sort()) !== JSON.stringify(expected)) {
     throw Error("selected R3 checkpoint exact path set mismatch");
   }

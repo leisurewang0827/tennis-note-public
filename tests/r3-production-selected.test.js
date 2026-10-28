@@ -9,7 +9,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 const selectedLayers = require("./helpers/r3-production-selected.cjs");
-const raw = p => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+// Historical assertions use the exact inverse; the new guard separately seals actual bytes.
+const raw = p => require("./helpers/r3-self-coach.cjs").restore(p, fs.readFileSync(p, "utf8"));
 const read = p => selectedLayers.restoreRelease(p, raw(p));
 const pin = JSON.parse(read("tests/fixtures/r3-production-selected-source.json"));
 const git = (...args) => execFileSync("git", args, {encoding:"utf8", maxBuffer:8*1024*1024, stdio:["ignore","pipe","pipe"]}).replace(/\r\n/g,"\n");
@@ -349,7 +350,7 @@ test("selected correction actual historical collector restores exact old35 witho
   const promotion=require("./helpers/r3-production-promotion.cjs"),basic=require("./helpers/r3-basic-refresh-production.cjs");
   const tracked=git("diff","--name-only",promotion.BASE,"--","app").trim().split("\n").filter(Boolean);
   const untracked=git("ls-files","--others","--exclude-standard","--","app").trim().split("\n").filter(Boolean);
-  const current=[...tracked,...untracked],expected=promotion.files.map(x=>x[0]).sort();
+  const current=require("./helpers/r3-self-coach.cjs").historicalObservation([...tracked,...untracked],promotion.BASE),expected=promotion.files.map(x=>x[0]).sort();
   assert.equal(current.length,36);assert.equal(expected.length,35);
   assert.deepEqual(promotion.changedAppPaths(),expected);
   assert.deepEqual(selectedLayers.restoreHistoricalAppPaths(current,basic.restoreSuccessor),expected);

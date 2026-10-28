@@ -1,0 +1,164 @@
+{
+  "contract": "r3-current-dev-deployment/1",
+  "repository": "leisurewang0827/tennis-note-public",
+  "base": "15fe59bdd21bc75a70da810f3a63a0c80853f39f",
+  "baseTree": "f6e3f569a4b5b1d483e0fcdc884af1f919c38f7c",
+  "branch": "codex/tennisnote-r3-operating558-20261026",
+  "workflow": ".github/workflows/deploy-cloudflare-pages-dev.yml",
+  "workflowName": "Deploy Tennis Note development sites",
+  "release": {
+    "version": "1.0.559",
+    "releaseId": "2026.10.27.01",
+    "deployedAt": "2026-10-27T01:07:08+09:00",
+    "memberCache": "tennis-note-member-pwa-v593",
+    "coachCache": "tennis-note-coach-mode-v566"
+  },
+  "runtime": {
+    "environment": "development",
+    "projectFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "paymentsEnabled": false
+  },
+  "floors": {
+    "development": {
+      "source": "d1a22ea5faf60b9fb97d10e5029ec6027351b759",
+      "version": "1.0.557",
+      "releaseId": "2026.10.26.01",
+      "member": 592,
+      "coach": 565
+    },
+    "production": {
+      "source": "15fe59bdd21bc75a70da810f3a63a0c80853f39f",
+      "version": "1.0.558",
+      "releaseId": "2026.10.26.02",
+      "member": 591,
+      "coach": 564
+    }
+  },
+  "paths": [
+    "app/admin/actions/billing.js",
+    "app/admin/data/billing.js",
+    "app/admin/index.html",
+    "app/admin/views/billing.js",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/shared/tennisnote-settlement-adjustment.js",
+    "app/shared/tennisnote-ui-foundation.css",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/data/auth.js",
+    "app/tennis-note-coach-app/data/sync.js",
+    "app/tennis-note-coach-app/domain/coaches.js",
+    "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/index.html",
+    "app/tennis-note-coach-app/service-worker.js",
+    "app/tennis-note-coach-app/views/settlement.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/ui/screens.js",
+    "scripts/bump_release.py",
+    "scripts/check_r3_dev_deployment.py",
+    "scripts/check_tennisnote_dev_prod_alignment.py",
+    "tests/fixtures/r3-current-dev-deployment.json",
+    "tests/fixtures/r3-self-coach-source.json",
+    "tests/helpers/r3-basic-refresh-production.cjs",
+    "tests/helpers/r3-production-selected.cjs",
+    "tests/helpers/r3-self-coach.cjs",
+    "tests/r3-current-dev-deployment.test.js",
+    "tests/r3-production-selected.test.js",
+    "tests/r3-self-coach.test.js",
+    "tests/r3-unpaid-substitute.test.js"
+  ],
+  "appFiles": [
+    {
+      "path": "app/admin/actions/billing.js",
+      "sha256": "1527b16a13edcdcca6456d34b61177d4938847290b3af0acc3514ac9e783596c"
+    },
+    {
+      "path": "app/admin/data/billing.js",
+      "sha256": "a80af14c3b910e7cb72891cb7f49037e83849f0c95853ffdac01e1531a062636"
+    },
+    {
+      "path": "app/admin/index.html",
+      "sha256": "c6cf09facbce7a68f0efbff7435bc9d9eb9ab4f060366d77e6c3228cd7c9fb03"
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "sha256": "04d674e8726464e176f42063cb21b91636e55e12edb5eea0498e1d38eaddaef6"
+    },
+    {
+      "path": "app/release.json",
+      "sha256": "285b0fbbe22c1615f53f6370a9d18653999328cd18a33785630c17901c9a823e"
+    },
+    {
+      "path": "app/shared/tennisnote-release.js",
+      "sha256": "c26a1d83a3dbb86d4a59a45834ad62661e7e1adf4dcf3e7b66672cc9abf6b05b"
+    },
+    {
+      "path": "app/shared/tennisnote-settlement-adjustment.js",
+      "sha256": "ee8bc56136b4b687bb6db397a3ce8fa418dfc02ff67ea8aec4b7545ba547bb80"
+    },
+    {
+      "path": "app/shared/tennisnote-ui-foundation.css",
+      "sha256": "7840c3435ceab526fcb6a000b082fcb222815b0f59a0c7ddea443bc560f81d76"
+    },
+    {
+      "path": "app/tennis-note-coach-app/app.js",
+      "sha256": "6ddec6fc8cf7efbf7af5b63db9419bd1c6e93c7f9c691a5a9d75428810fd5030"
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/auth.js",
+      "sha256": "974731b39b9aec143bd9ff00f3ca04b051823861eaf787c4d9c666f357445ce6"
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/sync.js",
+      "sha256": "3e7a5f3fdb1907b2272bf04814dd4ef27a6a0312e3d48e76de7bc5466a0a7a78"
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/coaches.js",
+      "sha256": "75f11cb343d15283207a1be912a80c927c4b44b06e22e0ae18f94c7e7d99651c"
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/settlement.js",
+      "sha256": "25552c63367476cb1ff4634799e4a08b8d7e7ae7558bfa26cdf9bd44b874ef8f"
+    },
+    {
+      "path": "app/tennis-note-coach-app/forms/common.js",
+      "sha256": "20ca1d72c8acaf454f6ed1dde47eeb1e0bca95d6e7aac8242fbfa528669920cc"
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "sha256": "ddc6e1fa4f7308dbe4d235906eaff25cef4c085cb505bc705a83bd3a86c96d27"
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "sha256": "96ac930853aed5dc9c51a28909a675698cab151bce3c96fc939bc0120e7303e2"
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "sha256": "d9aba8637133ca2a87b02bf376fa8f53bf038ef32a2c6ce56d14a375c8197098"
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "sha256": "6c09c6c14f87ff46c113e2c1e879eb7ca92b8655091e3194fc7eebc85badc694"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "sha256": "42e920f3a1d882fc550bcdbe97fc7647d1ec054f46b07d14dc789f55f51e2911"
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "sha256": "d945007169245e7b52587ba629a4cfccb30e7cdd7f603a10bfa616a42b3757d4"
+    },
+    {
+      "path": "app/tennis-note-member-app/service-worker.js",
+      "sha256": "0b508d2ccf522803702665d2b719de258cd20a01f2c007b2ea1e9a93195cb9b3"
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "sha256": "a0590b819a0f774b7e0b9fdc3c5faa3ae5da2160fd859b7eae4b9eef32919542"
+    }
+  ],
+  "legacySourceSha256": "f067cbf860ab1073b162abe224bffc8fd9b8470ebd0cbc06a26f5167700833a4"
+}

@@ -8,6 +8,8 @@ on:
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
+      - "scripts/check_r3_display*"
+      - "scripts/check_production_release_order.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
       - "scripts/check_tennisnote_dev_prod_alignment.py"
@@ -24,6 +26,8 @@ on:
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
+      - "scripts/check_r3_display*"
+      - "scripts/check_production_release_order.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - "scripts/check_tennisnote_self_profile_a_only_browser.cjs"
       - "scripts/check_tennisnote_dev_prod_alignment.py"
@@ -59,8 +63,15 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
+      - name: Admit exact reviewed display and release source
+        id: display
+        run: node scripts/check_r3_display_source_admission.mjs --ci-route
+      - name: New source merge and collector cases only
+        if: steps.display.outputs.scoped == 'true'
+        run: node --test tests/r3-display-source.test.mjs
       # 고정 운영 기준 blob과 로컬 검사에 쓰인 동일 브라우저 런타임을 준비한다.
       - name: Prepare pinned browser runtime
+        if: steps.display.outputs.scoped != 'true'
         run: |
           npm install --prefix "$RUNNER_TEMP/tennisnote-browser" --no-save --package-lock=false playwright@1.62.1
           echo "NODE_PATH=$RUNNER_TEMP/tennisnote-browser/node_modules" >> "$GITHUB_ENV"
@@ -68,4 +79,5 @@ jobs:
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify
+        if: steps.display.outputs.scoped != 'true'
         run: ./scripts/verify.sh

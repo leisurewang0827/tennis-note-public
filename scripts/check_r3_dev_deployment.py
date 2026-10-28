@@ -366,7 +366,10 @@ def verify_monotonic_live_candidate(candidate_sha: str, member_root: Path, admin
     coach_cache = _cache_counter((member_root / "tennis-note-coach-app/service-worker.js").read_text(encoding="utf-8"), "tennis-note-coach-mode-")
     if member_cache < EXPECTED_MEMBER_CACHE or coach_cache < EXPECTED_COACH_CACHE:
         fail("candidate cache is below the frozen DEV/PROD monotonic floor")
-    verify_monotonic_release(candidate_release, member_cache, coach_cache, read_live_dev_states(candidate_sha))
+    states = read_live_dev_states(candidate_sha)
+    verify_monotonic_release(candidate_release, member_cache, coach_cache, states)
+    if _numeric_version(candidate_release.get("version"), "candidate version") > (1, 0, 559):
+        verify_dev_ahead_of_production(candidate_release, states, read_live_production_releases(candidate_sha))
 
 
 def rollback_proof(project_name: str, deployments: list[dict[str, object]]) -> dict[str, str]:
@@ -455,6 +458,11 @@ def verify_live_target(expected_account_fp: str, account_id: str, token: str) ->
 
 
 def preflight() -> None:
+    # CURRENT_ROUTE_BEGIN
+    if is_current_dispatch():
+        current_preflight()
+        return
+    # CURRENT_ROUTE_END
     validate_dispatch_context(
         event_name=os.environ.get("GITHUB_EVENT_NAME", ""),
         ref=os.environ.get("GITHUB_REF", ""),
@@ -495,14 +503,259 @@ def branch_preflight() -> None:
     candidate_sha = os.environ.get("GITHUB_SHA", "").lower()
     if not SHA40_RE.fullmatch(candidate_sha):
         fail("development branch SHA is missing")
-    verify_dev_artifacts(Path("dist/member-dev"), Path("dist/admin-dev"))
-    verify_monotonic_live_candidate(candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"), EXPECTED_DEV_PROJECT_FINGERPRINT)
+    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    if _numeric_version(release.get("version"), "candidate version") > (1, 0, 559):
+        if os.environ.get("GITHUB_REPOSITORY") != EXPECTED_REPOSITORY:
+            fail("development branch repository mismatch")
+        c = load_coach_entry_successor()
+        verify_current_source(candidate_sha, c)
+        verify_current_live_candidate(c, candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"))
+    else:
+        verify_dev_artifacts(Path("dist/member-dev"), Path("dist/admin-dev"))
+        verify_monotonic_live_candidate(candidate_sha, Path("dist/member-dev"), Path("dist/admin-dev"), EXPECTED_DEV_PROJECT_FINGERPRINT)
     proof = verify_live_target(
         expected_account_fp,
         os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
         os.environ.get("CLOUDFLARE_API_TOKEN", ""),
     )
     print(f"Development branch runtime, exact existing projects, rollback and monotonic release PASS; proof sha256={proof}")
+
+
+# CURRENT_SUCCESSOR_BEGIN
+# 현재 후보만 추가 허용한다. 기존553 상수/함수/네트워크 보호는 그대로 둔다.
+CURRENT_CONTRACT_PATH = ROOT / "tests/fixtures/r3-current-dev-deployment.json"
+CURRENT_CONTRACT_SHA256 = "585ae6bc53dc5da2ba1a89733e759dade28d6782393ee60f5ef4b79ce4133932"
+CURRENT_BRANCH = "codex/tennisnote-r3-operating558-20261026"
+CURRENT_BASE = "15fe59bdd21bc75a70da810f3a63a0c80853f39f"
+CURRENT_BASE_TREE = "f6e3f569a4b5b1d483e0fcdc884af1f919c38f7c"
+
+# 같은 TLS/redirect/응답크기 보호로 공개 release만 읽는다. DB/Auth client 없음.
+LIVE_READ_ENDPOINTS.update({
+    "production_member_release": ("https://tennisnote-app.pages.dev", "/release.json", True),
+    "production_admin_release": ("https://tennisnote-admin.pages.dev", "/release.json", True),
+})
+
+
+def read_live_production_releases(candidate_sha: str) -> list[dict[str, object]]:
+    return [_http_read("production_member_release", candidate_sha),
+            _http_read("production_admin_release", candidate_sha)]
+
+
+def verify_dev_ahead_of_production(candidate: dict[str, object], dev: list[dict[str, object]],
+                                   production: list[dict[str, object]]) -> None:
+    for label, releases in (("development", [s.get("release") for s in dev]), ("production", production)):
+        if len(releases) != 2 or any(not isinstance(r, dict) for r in releases):
+            fail(label + " member/admin release pair missing")
+        identities = [(_numeric_version(r.get("version"), label + " version"),
+                       _numeric_version(r.get("releaseId"), label + " release id"), r.get("deployedAt")) for r in releases]
+        if identities[0] != identities[1]:
+            fail(label + " member/admin release mismatch")
+    current = _numeric_version(candidate.get("version"), "candidate version")
+    if current <= _numeric_version(production[0].get("version"), "production version"):
+        fail("development candidate must be strictly ahead of fresh production")
+    if current < _numeric_version(dev[0]["release"].get("version"), "development version"):
+        fail("development candidate would roll back the live version")
+    if _numeric_version(candidate.get("releaseId"), "candidate release id") < _numeric_version(production[0].get("releaseId"), "production release id"):
+        fail("development candidate release id is behind fresh production")
+
+
+def load_coach_entry_successor() -> dict[str, object]:
+    c = json.loads(subprocess.check_output(
+        ["node", "tests/helpers/r3-coach-entry-successor.cjs", "--deployment-contract"], cwd=ROOT))
+    if c.get("contract") != "r3-coach-entry-dev-deployment/1" or c.get("successorBase") != "cd5cffc22bef8a0bfb290e9a7a327573172ec931":
+        fail("coach entry successor identity mismatch")
+    return c
+
+
+def is_current_dispatch() -> bool:
+    return os.environ.get("GITHUB_REF", "") == "refs/heads/" + CURRENT_BRANCH
+
+
+def load_current_contract() -> dict[str, object]:
+    raw = normalize_text(CURRENT_CONTRACT_PATH.read_bytes())
+    if sha256(raw) != CURRENT_CONTRACT_SHA256:
+        fail("current development contract bytes mismatch")
+    c = json.loads(raw)
+    if (c.get("contract") != "r3-current-dev-deployment/1"
+        or c.get("repository") != EXPECTED_REPOSITORY or c.get("branch") != CURRENT_BRANCH
+        or c.get("base") != CURRENT_BASE or c.get("baseTree") != CURRENT_BASE_TREE
+        or c.get("workflow") != ".github/workflows/deploy-cloudflare-pages-dev.yml"
+        or c.get("workflowName") != EXPECTED_WORKFLOW_NAME
+        or c.get("runtime") != {"environment": "development", "projectFingerprint": EXPECTED_DEV_PROJECT_FINGERPRINT, "paymentsEnabled": False}
+        or c.get("release", {}).get("version") != "1.0.559"
+        or c.get("release", {}).get("releaseId") != "2026.10.27.01"):
+        fail("current development contract identity mismatch")
+    paths = c.get("paths", [])
+    app = c.get("appFiles", [])
+    if (len(paths) != 34 or len(set(paths)) != 34 or paths != sorted(paths)
+        or len(app) != 22 or len({r["path"] for r in app}) != 22
+        or {r["path"] for r in app} != {p for p in paths if p.startswith("app/")}
+        or any(not isinstance(p, str) or Path(p).is_absolute() or ".." in Path(p).parts for p in paths)
+        or any(set(r) != {"path", "sha256"} or not SHA256_RE.fullmatch(r["sha256"]) for r in app)):
+        fail("current development exact path contract mismatch")
+    return c
+
+
+def current_account_ready(expected_fp: str, account_id: str, token: str) -> None:
+    if (not SHA256_RE.fullmatch(expected_fp) or not re.fullmatch(r"[a-f0-9]{32}", account_id)
+        or not token or sha256(account_id.encode("utf-8")) != expected_fp):
+        fail("current development approved account identity missing")
+
+
+def validate_current_context(c: dict[str, object], head_sha: str) -> str:
+    candidate = os.environ.get("TENNISNOTE_CANDIDATE_SHA", "").lower()
+    if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+        or os.environ.get("GITHUB_REPOSITORY") != EXPECTED_REPOSITORY
+        or os.environ.get("GITHUB_REF_TYPE") != "branch"
+        or os.environ.get("GITHUB_REF") != "refs/heads/" + CURRENT_BRANCH
+        or os.environ.get("TENNISNOTE_WORKFLOW_REF") != EXPECTED_REPOSITORY + "/" + c["workflow"] + "@refs/heads/" + CURRENT_BRANCH
+        or os.environ.get("GITHUB_WORKFLOW") != EXPECTED_WORKFLOW_NAME
+        or os.environ.get("GITHUB_RUN_ATTEMPT") != "1"
+        or not SHA40_RE.fullmatch(candidate) or candidate == "0" * 40
+        or candidate != os.environ.get("GITHUB_SHA", "").lower() or candidate != head_sha):
+        fail("current development exact dispatch context mismatch")
+    if (os.environ.get("TENNISNOTE_ENVIRONMENT") != "development"
+        or os.environ.get("TENNISNOTE_PAYMENTS_ENABLED") != "false"
+        or os.environ.get("TENNISNOTE_PAYMENT_MODE") != "disabled"
+        or os.environ.get("TENNISNOTE_ALLOWED_PAYMENT_METHODS") != ""
+        or os.environ.get("TENNISNOTE_BANK_TRANSFER_ENABLED") != "false"
+        or project_fingerprint(os.environ.get("TENNISNOTE_SUPABASE_URL", "")) != EXPECTED_DEV_PROJECT_FINGERPRINT
+        or not os.environ.get("TENNISNOTE_SUPABASE_PUBLISHABLE_KEY")):
+        fail("current development runtime environment mismatch")
+    current_account_ready(os.environ.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", "").lower(),
+                          os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""), os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+    return candidate
+
+
+def current_git_blob(revision: str, name: str) -> bytes:
+    if not SHA40_RE.fullmatch(revision) or Path(name).is_absolute() or ".." in Path(name).parts:
+        fail("current git object input rejected")
+    return normalize_text(subprocess.check_output(["git", "show", f"{revision}:{name}"], cwd=ROOT))
+
+
+def verify_current_floors(c: dict[str, object]) -> None:
+    for label, source in c["floors"].items():
+        release = json.loads(current_git_blob(source["source"], "app/release.json"))
+        if release.get("version") != source["version"] or release.get("releaseId") != source["releaseId"]:
+            fail("current frozen floor release provenance mismatch")
+        for role, prefix, name in (
+            ("member", "tennis-note-member-pwa-", "app/tennis-note-member-app/service-worker.js"),
+            ("coach", "tennis-note-coach-mode-", "app/tennis-note-coach-app/service-worker.js")):
+            if _cache_counter(current_git_blob(source["source"], name).decode("utf-8"), prefix) != source[role]:
+                fail("current frozen floor cache provenance mismatch")
+    if (int(c["release"]["memberCache"].rsplit("v", 1)[1]) <= max(x["member"] for x in c["floors"].values())
+        or int(c["release"]["coachCache"].rsplit("v", 1)[1]) <= max(x["coach"] for x in c["floors"].values())):
+        fail("current candidate does not exceed both frozen cache floors")
+
+
+def verify_current_source(candidate_sha: str, c: dict[str, object]) -> None:
+    if candidate_sha != run_git("rev-parse", "HEAD") or not SHA40_RE.fullmatch(candidate_sha):
+        fail("current candidate head mismatch")
+    run_git("merge-base", "--is-ancestor", CURRENT_BASE, candidate_sha)
+    if "successorBase" in c:
+        run_git("merge-base", "--is-ancestor", c["successorBase"], candidate_sha)
+        if run_git("rev-parse", c["successorBase"] + "^{tree}") != c["successorTree"]:
+            fail("coach entry successor frozen tree mismatch")
+    if run_git("rev-parse", CURRENT_BASE + "^{tree}") != CURRENT_BASE_TREE:
+        fail("current genuine main tree mismatch")
+    if run_git("status", "--porcelain=v1", "-uall"):
+        fail("current checked-out candidate must be clean")
+    changed = run_git("diff", "--name-only", CURRENT_BASE + ".." + candidate_sha).splitlines()
+    if len(changed) != len(set(changed)) or set(changed) != set(c["paths"]):
+        fail("current candidate exact paths mismatch")
+    approved_app = {r["path"]: r["sha256"] for r in c["appFiles"]}
+    for name in c["paths"]:
+        target = ROOT / name
+        if target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):
+            fail("current candidate symlink or external path rejected")
+        actual = normalize_text(target.read_bytes())
+        # The reviewed workflow input is the immutable commit binding. This also
+        # covers checker/manifest bytes without a self-referential commit field.
+        if actual != current_git_blob(candidate_sha, name):
+            fail("current candidate physical bytes differ from reviewed commit")
+        if name in approved_app and sha256(actual) != approved_app[name]:
+            fail("current candidate approved app bytes mismatch")
+    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    if any(release.get(k) != c["release"][k] for k in ("version", "releaseId", "deployedAt")):
+        fail("current candidate physical metadata mismatch")
+    verify_current_floors(c)
+
+
+def current_source_preflight() -> dict[str, object]:
+    c = load_current_contract()
+    if json.loads((ROOT / "app/release.json").read_text(encoding="utf-8")).get("version") != c["release"]["version"]:
+        c = load_coach_entry_successor()
+    candidate = validate_current_context(c, run_git("rev-parse", "HEAD"))
+    verify_current_source(candidate, c)
+    return c
+
+
+def verify_current_dev_artifacts(c: dict[str, object], member_root: Path, admin_root: Path) -> None:
+    for root in (member_root, admin_root):
+        release = json.loads((root / "release.json").read_text(encoding="utf-8"))
+        if any(release.get(k) != c["release"][k] for k in ("version", "releaseId", "deployedAt")):
+            fail("current built release differs from the reviewed candidate")
+        text = (root / "shared/config.local.js").read_text(encoding="utf-8")
+        browser = _extract_assignment(text, "window.TENNISNOTE_CONFIG = ", ";\n\nwindow.TENNIS_NOTE_PAYMENT_CONFIG")
+        payment = _extract_assignment(text, "window.TENNIS_NOTE_PAYMENT_CONFIG = ")
+        if (browser.get("environment") != "development" or not isinstance(browser.get("supabaseUrl"), str)
+            or project_fingerprint(browser["supabaseUrl"]) != EXPECTED_DEV_PROJECT_FINGERPRINT
+            or browser.get("projectFingerprint") != EXPECTED_DEV_PROJECT_FINGERPRINT
+            or not browser.get("supabasePublishableKey")):
+            fail("current built project/runtime mismatch")
+        if (payment.get("enabled") is not False or payment.get("mode") != "disabled"
+            or payment.get("allowedMethods") != [] or payment.get("bankTransfer") != {"enabled": False}
+            or payment.get("channels") not in ({}, None)):
+            fail("current built payment capability is not disabled")
+        if "개발계 · 실제 결제·푸시 차단" not in (root / "index.html").read_text(encoding="utf-8"):
+            fail("current development banner missing")
+
+
+def verify_current_live_candidate(c: dict[str, object], candidate: str, member: Path, admin: Path) -> None:
+    verify_current_dev_artifacts(c, member, admin)
+    member_cache = _cache_counter((member / "service-worker.js").read_text(encoding="utf-8"), "tennis-note-member-pwa-")
+    coach_cache = _cache_counter((member / "tennis-note-coach-app/service-worker.js").read_text(encoding="utf-8"), "tennis-note-coach-mode-")
+    if (member_cache != int(c["release"]["memberCache"].rsplit("v", 1)[1])
+        or coach_cache != int(c["release"]["coachCache"].rsplit("v", 1)[1])):
+        fail("current built exact cache identity mismatch")
+    states = read_live_dev_states(candidate)
+    verify_monotonic_release(c["release"], member_cache, coach_cache, states)
+    if "successorBase" in c:
+        verify_dev_ahead_of_production(c["release"], states, read_live_production_releases(candidate))
+    if any(s["release"].get("version") == c["release"]["version"]
+           and s["release"].get("releaseId") == c["release"]["releaseId"] for s in states):
+        fail("current candidate already or partly visible; reconcile before another deploy")
+
+
+def verify_current_live_target(c: dict[str, object], expected_fp: str, account_id: str, token: str) -> str:
+    current_account_ready(expected_fp, account_id, token)
+    rollback = {}
+    for name in EXPECTED_PROJECTS:
+        response = cloudflare_get(account_id, token, f"pages/projects/{urllib.parse.quote(name, safe='')}")
+        project = response.get("result")
+        domain = EXPECTED_PROJECT_DOMAINS[name]
+        if (not isinstance(project, dict) or project.get("name") != name or project.get("production_branch") != "dev"
+            or project.get("subdomain") != domain or domain not in (project.get("domains") or [])
+            or any(d in {"tennisnote-app.pages.dev", "tennisnote-admin.pages.dev"} for d in (project.get("domains") or []))):
+            fail("current exact development project/domain mismatch")
+        rows = cloudflare_get(account_id, token, f"pages/projects/{urllib.parse.quote(name, safe='')}/deployments?env=production&per_page=1").get("result")
+        if not isinstance(rows, list):
+            fail("current rollback inventory malformed")
+        previous = rollback_proof(name, rows)
+        if previous["commit_sha"] != c["floors"]["development"]["source"]:
+            fail("current rollback source differs from the frozen DEV baseline")
+        rollback[name] = previous
+    return sha256(json.dumps(rollback, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def current_preflight() -> None:
+    c = current_source_preflight()
+    candidate = os.environ["TENNISNOTE_CANDIDATE_SHA"].lower()
+    verify_current_live_candidate(c, candidate, Path("dist/member-dev"), Path("dist/admin-dev"))
+    proof = verify_current_live_target(c, os.environ.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", "").lower(),
+                                     os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""), os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+    print(f"R3 current candidate/dev target/rollback preflight PASS; rollback proof sha256={proof}")
+# CURRENT_SUCCESSOR_END
 
 
 def main() -> int:
@@ -513,6 +766,12 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.source_only:
+            # CURRENT_SOURCE_ROUTE_BEGIN
+            if is_current_dispatch():
+                current_source_preflight()
+                print("R3 current exact candidate source preflight PASS")
+                return 0
+            # CURRENT_SOURCE_ROUTE_END
             validate_dispatch_context(
                 event_name=os.environ.get("GITHUB_EVENT_NAME", ""),
                 ref=os.environ.get("GITHUB_REF", ""),

@@ -48,8 +48,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up exact source admission runtime
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Admit exact DEV563 child source
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
+        run: node scripts/check_r3_display_source_admission.mjs --dev-source
+
       - name: Admit exact manual R3 candidate
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
         run: python scripts/check_r3_dev_deployment.py --source-only
 
       - name: Build isolated development sites
@@ -66,12 +75,12 @@ jobs:
           grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html
           grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html
 
-      - name: Prevent development release rollback on dev branch pushes
-        if: github.event_name == 'push'
-        run: python scripts/check_r3_dev_deployment.py --branch-preflight
+      - name: Prevent development release rollback for exact display source
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r3-display-dev563-20261028')
+        run: python scripts/check_r3_display_dev_deployment.py
 
       - name: Verify exact existing development target and rollback before manual deploy
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/codex/tennisnote-r3-display-dev563-20261028'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -1,0 +1,556 @@
+{
+  "contract": "r3-coach-entry-successor/1",
+  "base": "cd5cffc22bef8a0bfb290e9a7a327573172ec931",
+  "baseTree": "1aeabc2a9c583cf2bb65e5662fa2dbb0c91a6549",
+  "release": {
+    "version": "1.0.561",
+    "releaseId": "2026.10.27.02",
+    "deployedAt": "2026-10-27T23:28:26+09:00",
+    "memberCache": "tennis-note-member-pwa-v594",
+    "coachCache": "tennis-note-coach-mode-v567"
+  },
+  "files": [
+    {
+      "path": "app/admin/index.html",
+      "kind": "metadata",
+      "beforeSha256": "c6cf09facbce7a68f0efbff7435bc9d9eb9ab4f060366d77e6c3228cd7c9fb03",
+      "afterSha256": "35ea70051357742cb681b4c4569a4040fbd161e7593e9ff273b9c45c213fc97b",
+      "spans": [
+        {
+          "beforeLine": 19,
+          "afterLine": 19,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.559\" />\n",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.561\" />\n"
+        },
+        {
+          "beforeLine": 21,
+          "afterLine": 21,
+          "before": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.559\" />\n",
+          "after": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.561\" />\n"
+        },
+        {
+          "beforeLine": 2224,
+          "afterLine": 2224,
+          "before": "    <script src=\"../shared/tennisnote-escape-html.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-data-client.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-schedule-revision.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.559\"></script>\n",
+          "after": "    <script src=\"../shared/tennisnote-escape-html.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-data-client.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-schedule-revision.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 2229,
+          "afterLine": 2229,
+          "before": "    <script src=\"../shared/tennisnote-curriculum-search.js?v=1.0.559\"></script>\n",
+          "after": "    <script src=\"../shared/tennisnote-curriculum-search.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 2231,
+          "afterLine": 2231,
+          "before": "    <script src=\"../shared/tennisnote-release.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-release-updater.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-ui-language.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-ticket-state.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-comment-draft.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-input-guard.js?v=1.0.559\"></script>\n",
+          "after": "    <script src=\"../shared/tennisnote-release.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-release-updater.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-ui-language.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-ticket-state.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-comment-draft.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-input-guard.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 2239,
+          "afterLine": 2239,
+          "before": "    <script src=\"../shared/tennisnote-single-sheet-snapshot.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-batch.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-transport.js?v=1.0.559\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-preview-ui.js?v=1.0.559\"></script>\n    <script src=\"./catalog.js?v=1.0.559\"></script>\n    <script src=\"./settings.js?v=1.0.559\"></script>\n    <script src=\"./domain/values.js?v=1.0.559\"></script>\n    <script src=\"./domain/lessons.js?v=1.0.559\"></script>\n    <script src=\"./domain/billing.js?v=1.0.559\"></script>\n    <script src=\"./domain/tickets.js?v=1.0.559\"></script>\n    <script src=\"./domain/coaches.js?v=1.0.559\"></script>\n    <script src=\"./domain/schedule.js?v=1.0.559\"></script>\n    <script src=\"./domain/payment.js?v=1.0.559\"></script>\n    <script src=\"./domain/policy.js?v=1.0.559\"></script>\n    <script src=\"./domain/record.js?v=1.0.559\"></script>\n    <script src=\"./domain/members.js?v=1.0.559\"></script>\n    <script src=\"./domain/common.js?v=1.0.559\"></script>\n    <script src=\"./events/billing.js?v=1.0.559\"></script>\n    <script src=\"./events/common.js?v=1.0.559\"></script>\n    <script src=\"./events/data.js?v=1.0.559\"></script>\n    <script src=\"./events/delegated.js?v=1.0.559\"></script>\n    <script src=\"./events/members.js?v=1.0.559\"></script>\n    <script src=\"./events/notes.js?v=1.0.559\"></script>\n    <script src=\"./events/reports.js?v=1.0.559\"></script>\n    <script src=\"./events/schedule.js?v=1.0.559\"></script>\n    <script src=\"./events/settings.js?v=1.0.559\"></script>\n    <script src=\"./views/billing.js?v=1.0.559\"></script>\n    <script src=\"./views/common.js?v=1.0.559\"></script>\n    <script src=\"./views/dashboard.js?v=1.0.559\"></script>\n    <script src=\"./views/data.js?v=1.0.559\"></script>\n    <script src=\"./views/makeup.js?v=1.0.559\"></script>\n    <script src=\"./views/members.js?v=1.0.559\"></script>\n    <script src=\"./views/notes.js?v=1.0.559\"></script>\n    <script src=\"./views/reports.js?v=1.0.559\"></script>\n    <script src=\"./views/schedule.js?v=1.0.559\"></script>\n    <script src=\"./views/settings.js?v=1.0.559\"></script>\n    <script src=\"./data/billing.js?v=1.0.559\"></script>\n    <script src=\"./data/common.js?v=1.0.559\"></script>\n    <script src=\"./data/member.js?v=1.0.559\"></script>\n    <script src=\"./data/schedule.js?v=1.0.559\"></script>\n    <script src=\"./data/settings.js?v=1.0.559\"></script>\n    <script src=\"./forms/coach.js?v=1.0.559\"></script>\n    <script src=\"./forms/common.js?v=1.0.559\"></script>\n    <script src=\"./forms/member.js?v=1.0.559\"></script>\n    <script src=\"./forms/schedule.js?v=1.0.559\"></script>\n    <script src=\"./actions/billing.js?v=1.0.559\"></script>\n    <script src=\"./actions/coach.js?v=1.0.559\"></script>\n    <script src=\"./actions/common.js?v=1.0.559\"></script>\n    <script src=\"./actions/member.js?v=1.0.559\"></script>\n    <script src=\"./actions/notice.js?v=1.0.559\"></script>\n    <script src=\"./actions/report.js?v=1.0.559\"></script>\n    <script src=\"./actions/schedule.js?v=1.0.559\"></script>\n    <script src=\"./actions/settings.js?v=1.0.559\"></script>\n    <script src=\"./ui/billing.js?v=1.0.559\"></script>\n    <script src=\"./ui/common.js?v=1.0.559\"></script>\n    <script src=\"./ui/member.js?v=1.0.559\"></script>\n    <script src=\"./ui/schedule.js?v=1.0.559\"></script>\n    <script src=\"./ui/settings.js?v=1.0.559\"></script>\n    <script src=\"./storage.js?v=1.0.559\"></script>\n    <script src=\"./views/tickets.js?v=1.0.559\"></script>\n    <script src=\"./forms/policy.js?v=1.0.559\"></script>\n    <script src=\"./forms/tickets.js?v=1.0.559\"></script>\n    <script src=\"./app.js?v=1.0.559\"></script>\n",
+          "after": "    <script src=\"../shared/tennisnote-single-sheet-snapshot.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-batch.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-transport.js?v=1.0.561\"></script>\n    <script src=\"../shared/tennisnote-single-sheet-preview-ui.js?v=1.0.561\"></script>\n    <script src=\"./catalog.js?v=1.0.561\"></script>\n    <script src=\"./settings.js?v=1.0.561\"></script>\n    <script src=\"./domain/values.js?v=1.0.561\"></script>\n    <script src=\"./domain/lessons.js?v=1.0.561\"></script>\n    <script src=\"./domain/billing.js?v=1.0.561\"></script>\n    <script src=\"./domain/tickets.js?v=1.0.561\"></script>\n    <script src=\"./domain/coaches.js?v=1.0.561\"></script>\n    <script src=\"./domain/schedule.js?v=1.0.561\"></script>\n    <script src=\"./domain/payment.js?v=1.0.561\"></script>\n    <script src=\"./domain/policy.js?v=1.0.561\"></script>\n    <script src=\"./domain/record.js?v=1.0.561\"></script>\n    <script src=\"./domain/members.js?v=1.0.561\"></script>\n    <script src=\"./domain/common.js?v=1.0.561\"></script>\n    <script src=\"./events/billing.js?v=1.0.561\"></script>\n    <script src=\"./events/common.js?v=1.0.561\"></script>\n    <script src=\"./events/data.js?v=1.0.561\"></script>\n    <script src=\"./events/delegated.js?v=1.0.561\"></script>\n    <script src=\"./events/members.js?v=1.0.561\"></script>\n    <script src=\"./events/notes.js?v=1.0.561\"></script>\n    <script src=\"./events/reports.js?v=1.0.561\"></script>\n    <script src=\"./events/schedule.js?v=1.0.561\"></script>\n    <script src=\"./events/settings.js?v=1.0.561\"></script>\n    <script src=\"./views/billing.js?v=1.0.561\"></script>\n    <script src=\"./views/common.js?v=1.0.561\"></script>\n    <script src=\"./views/dashboard.js?v=1.0.561\"></script>\n    <script src=\"./views/data.js?v=1.0.561\"></script>\n    <script src=\"./views/makeup.js?v=1.0.561\"></script>\n    <script src=\"./views/members.js?v=1.0.561\"></script>\n    <script src=\"./views/notes.js?v=1.0.561\"></script>\n    <script src=\"./views/reports.js?v=1.0.561\"></script>\n    <script src=\"./views/schedule.js?v=1.0.561\"></script>\n    <script src=\"./views/settings.js?v=1.0.561\"></script>\n    <script src=\"./data/billing.js?v=1.0.561\"></script>\n    <script src=\"./data/common.js?v=1.0.561\"></script>\n    <script src=\"./data/member.js?v=1.0.561\"></script>\n    <script src=\"./data/schedule.js?v=1.0.561\"></script>\n    <script src=\"./data/settings.js?v=1.0.561\"></script>\n    <script src=\"./forms/coach.js?v=1.0.561\"></script>\n    <script src=\"./forms/common.js?v=1.0.561\"></script>\n    <script src=\"./forms/member.js?v=1.0.561\"></script>\n    <script src=\"./forms/schedule.js?v=1.0.561\"></script>\n    <script src=\"./actions/billing.js?v=1.0.561\"></script>\n    <script src=\"./actions/coach.js?v=1.0.561\"></script>\n    <script src=\"./actions/common.js?v=1.0.561\"></script>\n    <script src=\"./actions/member.js?v=1.0.561\"></script>\n    <script src=\"./actions/notice.js?v=1.0.561\"></script>\n    <script src=\"./actions/report.js?v=1.0.561\"></script>\n    <script src=\"./actions/schedule.js?v=1.0.561\"></script>\n    <script src=\"./actions/settings.js?v=1.0.561\"></script>\n    <script src=\"./ui/billing.js?v=1.0.561\"></script>\n    <script src=\"./ui/common.js?v=1.0.561\"></script>\n    <script src=\"./ui/member.js?v=1.0.561\"></script>\n    <script src=\"./ui/schedule.js?v=1.0.561\"></script>\n    <script src=\"./ui/settings.js?v=1.0.561\"></script>\n    <script src=\"./storage.js?v=1.0.561\"></script>\n    <script src=\"./views/tickets.js?v=1.0.561\"></script>\n    <script src=\"./forms/policy.js?v=1.0.561\"></script>\n    <script src=\"./forms/tickets.js?v=1.0.561\"></script>\n    <script src=\"./app.js?v=1.0.561\"></script>\n"
+        }
+      ]
+    },
+    {
+      "path": "app/release.json",
+      "kind": "metadata",
+      "beforeSha256": "285b0fbbe22c1615f53f6370a9d18653999328cd18a33785630c17901c9a823e",
+      "afterSha256": "0123315e01a9ae09899aa59913239db452f604953e09f96e388cb5ff81a38a8b",
+      "spans": [
+        {
+          "beforeLine": 1,
+          "afterLine": 1,
+          "before": "  \"version\": \"1.0.559\",\n  \"releaseId\": \"2026.10.27.01\",\n  \"appSurfaceVersion\": \"1.0.559\",\n",
+          "after": "  \"version\": \"1.0.561\",\n  \"releaseId\": \"2026.10.27.02\",\n  \"appSurfaceVersion\": \"1.0.561\",\n"
+        },
+        {
+          "beforeLine": 31,
+          "afterLine": 31,
+          "before": "  \"deployedAt\": \"2026-10-27T01:07:08+09:00\"\n",
+          "after": "  \"deployedAt\": \"2026-10-27T23:28:26+09:00\"\n"
+        }
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-release.js",
+      "kind": "metadata",
+      "beforeSha256": "c26a1d83a3dbb86d4a59a45834ad62661e7e1adf4dcf3e7b66672cc9abf6b05b",
+      "afterSha256": "aeaff0fc9e7ddb438bcbfd0d9bf8dac9e5201915cf98f279c3e67f7bc4459493",
+      "spans": [
+        {
+          "beforeLine": 2,
+          "afterLine": 2,
+          "before": "    version: \"1.0.559\",\n    releaseId: \"2026.10.27.01\",\n    appSurfaceVersion: \"1.0.559\",\n    deployedAt: \"2026-10-27T01:07:08+09:00\",\n",
+          "after": "    version: \"1.0.561\",\n    releaseId: \"2026.10.27.02\",\n    appSurfaceVersion: \"1.0.561\",\n    deployedAt: \"2026-10-27T23:28:26+09:00\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/app.js",
+      "kind": "metadata",
+      "beforeSha256": "6ddec6fc8cf7efbf7af5b63db9419bd1c6e93c7f9c691a5a9d75428810fd5030",
+      "afterSha256": "986c4037c036e186244358348cefda537c754a2522ed266f79bb3c0acc03bd01",
+      "spans": [
+        {
+          "beforeLine": 562,
+          "afterLine": 562,
+          "before": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.559\",\n",
+          "after": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/coaches.js",
+      "kind": "metadata",
+      "beforeSha256": "75f11cb343d15283207a1be912a80c927c4b44b06e22e0ae18f94c7e7d99651c",
+      "afterSha256": "39cda32baf89f92ad8b8c1e4182436c9376dcf3fb02e9f1f143321c73d71fca8",
+      "spans": [
+        {
+          "beforeLine": 68,
+          "afterLine": 68,
+          "before": "  const params = new URLSearchParams({ v: \"1.0.559\" });\n",
+          "after": "  const params = new URLSearchParams({ v: \"1.0.561\" });\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/forms/common.js",
+      "kind": "metadata",
+      "beforeSha256": "20ca1d72c8acaf454f6ed1dde47eeb1e0bca95d6e7aac8242fbfa528669920cc",
+      "afterSha256": "c0ae044cbf1f9a21093c7019bd9c890aabb75caa002ac1f752722c38949ffb0a",
+      "spans": [
+        {
+          "beforeLine": 31,
+          "afterLine": 31,
+          "before": "    workerUrl: \"./service-worker.js?v=1.0.559\",\n",
+          "after": "    workerUrl: \"./service-worker.js?v=1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "kind": "metadata",
+      "beforeSha256": "ddc6e1fa4f7308dbe4d235906eaff25cef4c085cb505bc705a83bd3a86c96d27",
+      "afterSha256": "40561de0f16630422afca13601dbd269f93d6174a9d95795dae0d6bb32badc25",
+      "spans": [
+        {
+          "beforeLine": 10,
+          "afterLine": 10,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.559\" />\n    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.559\" />\n",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.561\" />\n    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.561\" />\n"
+        },
+        {
+          "beforeLine": 391,
+          "afterLine": 391,
+          "before": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-escape-html.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-escape-html.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 398,
+          "afterLine": 398,
+          "before": "    <script defer src=\"../shared/tennisnote-curriculum-search.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-release.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-comment-draft.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-curriculum-search.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-release.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-comment-draft.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 408,
+          "afterLine": 408,
+          "before": "    <script defer src=\"../shared/tennisnote-app-common.js?v=1.0.559\"></script>\n    <script defer src=\"./settings.js?v=1.0.559\"></script>\n    <script defer src=\"./catalog.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/values.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/policy.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/coaches.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/lessons.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/records.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/members.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/schedule-v2.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/notices.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/curriculum.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/settlement.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/makeup.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/shared-data.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/tasks.js?v=1.0.559\"></script>\n    <script defer src=\"./views/home.js?v=1.0.559\"></script>\n    <script defer src=\"./views/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./views/members.js?v=1.0.559\"></script>\n    <script defer src=\"./views/records.js?v=1.0.559\"></script>\n    <script defer src=\"./views/curriculum.js?v=1.0.559\"></script>\n    <script defer src=\"./views/settlement.js?v=1.0.559\"></script>\n    <script defer src=\"./views/profile.js?v=1.0.559\"></script>\n    <script defer src=\"./events/account.js?v=1.0.559\"></script>\n    <script defer src=\"./events/delegated.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/common.js?v=1.0.559\"></script>\n    <script defer src=\"./views/common.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/coaches.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/common.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/common.js?v=1.0.559\"></script>\n    <script defer src=\"./data/auth.js?v=1.0.559\"></script>\n    <script defer src=\"./data/sync.js?v=1.0.559\"></script>\n    <script defer src=\"./data/push.js?v=1.0.559\"></script>\n    <script defer src=\"./data/records.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/sheet.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/screens.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/records.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/profile.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/session.js?v=1.0.559\"></script>\n    <script defer src=\"./storage.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-app-common.js?v=1.0.561\"></script>\n    <script defer src=\"./settings.js?v=1.0.561\"></script>\n    <script defer src=\"./catalog.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/values.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/policy.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/coaches.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/lessons.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/records.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/members.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/schedule-v2.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/notices.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/curriculum.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/settlement.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/makeup.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/shared-data.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/tasks.js?v=1.0.561\"></script>\n    <script defer src=\"./views/home.js?v=1.0.561\"></script>\n    <script defer src=\"./views/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./views/members.js?v=1.0.561\"></script>\n    <script defer src=\"./views/records.js?v=1.0.561\"></script>\n    <script defer src=\"./views/curriculum.js?v=1.0.561\"></script>\n    <script defer src=\"./views/settlement.js?v=1.0.561\"></script>\n    <script defer src=\"./views/profile.js?v=1.0.561\"></script>\n    <script defer src=\"./events/account.js?v=1.0.561\"></script>\n    <script defer src=\"./events/delegated.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/common.js?v=1.0.561\"></script>\n    <script defer src=\"./views/common.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/coaches.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/common.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/common.js?v=1.0.561\"></script>\n    <script defer src=\"./data/auth.js?v=1.0.561\"></script>\n    <script defer src=\"./data/sync.js?v=1.0.561\"></script>\n    <script defer src=\"./data/push.js?v=1.0.561\"></script>\n    <script defer src=\"./data/records.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/sheet.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/screens.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/records.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/profile.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/session.js?v=1.0.561\"></script>\n    <script defer src=\"./storage.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 467,
+          "afterLine": 467,
+          "before": "          appScript.src = \"./app.js?v=1.0.559\";\n",
+          "after": "          appScript.src = \"./app.js?v=1.0.561\";\n"
+        },
+        {
+          "beforeLine": 480,
+          "afterLine": 480,
+          "before": "          appScript.src = \"./app.js?v=1.0.559\";\n",
+          "after": "          appScript.src = \"./app.js?v=1.0.561\";\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "kind": "metadata",
+      "beforeSha256": "96ac930853aed5dc9c51a28909a675698cab151bce3c96fc939bc0120e7303e2",
+      "afterSha256": "70cfe5cc59bc5e8e4ef16736bdf1937972897e4f21582a99b0cd2068cc9b868d",
+      "spans": [
+        {
+          "beforeLine": 0,
+          "afterLine": 0,
+          "before": "const CACHE_NAME = \"tennis-note-coach-mode-v566\";\n",
+          "after": "const CACHE_NAME = \"tennis-note-coach-mode-v567\";\n"
+        },
+        {
+          "beforeLine": 5,
+          "afterLine": 5,
+          "before": "  \"./styles.css?v=1.0.559\",\n  \"../shared/tennisnote-app-common.js?v=1.0.559\",\n  \"./settings.js?v=1.0.559\",\n  \"./catalog.js?v=1.0.559\",\n  \"./domain/values.js?v=1.0.559\",\n  \"./domain/schedule.js?v=1.0.559\",\n  \"./domain/policy.js?v=1.0.559\",\n  \"./domain/coaches.js?v=1.0.559\",\n  \"./domain/lessons.js?v=1.0.559\",\n  \"./domain/records.js?v=1.0.559\",\n  \"./domain/members.js?v=1.0.559\",\n  \"./domain/schedule-v2.js?v=1.0.559\",\n  \"./domain/notices.js?v=1.0.559\",\n  \"./domain/curriculum.js?v=1.0.559\",\n  \"./domain/settlement.js?v=1.0.559\",\n  \"./domain/makeup.js?v=1.0.559\",\n  \"./domain/shared-data.js?v=1.0.559\",\n  \"./domain/tasks.js?v=1.0.559\",\n  \"./views/home.js?v=1.0.559\",\n  \"./views/schedule.js?v=1.0.559\",\n  \"./views/members.js?v=1.0.559\",\n  \"./views/records.js?v=1.0.559\",\n  \"./views/curriculum.js?v=1.0.559\",\n  \"./views/settlement.js?v=1.0.559\",\n  \"./views/profile.js?v=1.0.559\",\n  \"./events/account.js?v=1.0.559\",\n  \"./events/delegated.js?v=1.0.559\",\n  \"./data/auth.js?v=1.0.559\",\n  \"./data/sync.js?v=1.0.559\",\n  \"./data/push.js?v=1.0.559\",\n  \"./data/records.js?v=1.0.559\",\n  \"./ui/sheet.js?v=1.0.559\",\n  \"./ui/screens.js?v=1.0.559\",\n  \"./actions/records.js?v=1.0.559\",\n  \"./actions/schedule.js?v=1.0.559\",\n  \"./actions/profile.js?v=1.0.559\",\n  \"./actions/session.js?v=1.0.559\",\n  \"./storage.js?v=1.0.559\",\n  \"./domain/common.js?v=1.0.559\",\n  \"./views/common.js?v=1.0.559\",\n  \"./forms/coaches.js?v=1.0.559\",\n  \"./forms/common.js?v=1.0.559\",\n  \"./ui/common.js?v=1.0.559\",\n  \"./app.js?v=1.0.559\",\n",
+          "after": "  \"./styles.css?v=1.0.561\",\n  \"../shared/tennisnote-app-common.js?v=1.0.561\",\n  \"./settings.js?v=1.0.561\",\n  \"./catalog.js?v=1.0.561\",\n  \"./domain/values.js?v=1.0.561\",\n  \"./domain/schedule.js?v=1.0.561\",\n  \"./domain/policy.js?v=1.0.561\",\n  \"./domain/coaches.js?v=1.0.561\",\n  \"./domain/lessons.js?v=1.0.561\",\n  \"./domain/records.js?v=1.0.561\",\n  \"./domain/members.js?v=1.0.561\",\n  \"./domain/schedule-v2.js?v=1.0.561\",\n  \"./domain/notices.js?v=1.0.561\",\n  \"./domain/curriculum.js?v=1.0.561\",\n  \"./domain/settlement.js?v=1.0.561\",\n  \"./domain/makeup.js?v=1.0.561\",\n  \"./domain/shared-data.js?v=1.0.561\",\n  \"./domain/tasks.js?v=1.0.561\",\n  \"./views/home.js?v=1.0.561\",\n  \"./views/schedule.js?v=1.0.561\",\n  \"./views/members.js?v=1.0.561\",\n  \"./views/records.js?v=1.0.561\",\n  \"./views/curriculum.js?v=1.0.561\",\n  \"./views/settlement.js?v=1.0.561\",\n  \"./views/profile.js?v=1.0.561\",\n  \"./events/account.js?v=1.0.561\",\n  \"./events/delegated.js?v=1.0.561\",\n  \"./data/auth.js?v=1.0.561\",\n  \"./data/sync.js?v=1.0.561\",\n  \"./data/push.js?v=1.0.561\",\n  \"./data/records.js?v=1.0.561\",\n  \"./ui/sheet.js?v=1.0.561\",\n  \"./ui/screens.js?v=1.0.561\",\n  \"./actions/records.js?v=1.0.561\",\n  \"./actions/schedule.js?v=1.0.561\",\n  \"./actions/profile.js?v=1.0.561\",\n  \"./actions/session.js?v=1.0.561\",\n  \"./storage.js?v=1.0.561\",\n  \"./domain/common.js?v=1.0.561\",\n  \"./views/common.js?v=1.0.561\",\n  \"./forms/coaches.js?v=1.0.561\",\n  \"./forms/common.js?v=1.0.561\",\n  \"./ui/common.js?v=1.0.561\",\n  \"./app.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 51,
+          "afterLine": 51,
+          "before": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.559\",\n  \"../shared/tennisnote-escape-html.js?v=1.0.559\",\n  \"../shared/tennisnote-data-client.js?v=1.0.559\",\n  \"../shared/tennisnote-schedule-revision.js?v=1.0.559\",\n  \"../shared/tennisnote-schedule-lanes.js?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.561\",\n  \"../shared/tennisnote-escape-html.js?v=1.0.561\",\n  \"../shared/tennisnote-data-client.js?v=1.0.561\",\n  \"../shared/tennisnote-schedule-revision.js?v=1.0.561\",\n  \"../shared/tennisnote-schedule-lanes.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 57,
+          "afterLine": 57,
+          "before": "  \"../shared/tennisnote-curriculum-search.js?v=1.0.559\",\n  \"../shared/tennisnote-release.js?v=1.0.559\",\n  \"../shared/tennisnote-release-updater.js?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-curriculum-search.js?v=1.0.561\",\n  \"../shared/tennisnote-release.js?v=1.0.561\",\n  \"../shared/tennisnote-release-updater.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 62,
+          "afterLine": 62,
+          "before": "  \"../shared/tennisnote-ui-language.js?v=1.0.559\",\n  \"../shared/tennisnote-ticket-state.js?v=1.0.559\",\n  \"../shared/tennisnote-settlement-adjustment.js?v=1.0.559\",\n  \"../shared/tennisnote-mode-transition.js?v=1.0.559\",\n  \"../shared/tennisnote-comment-draft.js?v=1.0.559\",\n  \"../shared/tennisnote-input-guard.js?v=1.0.559\",\n  \"../shared/tennisnote-ui-foundation.css?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-ui-language.js?v=1.0.561\",\n  \"../shared/tennisnote-ticket-state.js?v=1.0.561\",\n  \"../shared/tennisnote-settlement-adjustment.js?v=1.0.561\",\n  \"../shared/tennisnote-mode-transition.js?v=1.0.561\",\n  \"../shared/tennisnote-comment-draft.js?v=1.0.561\",\n  \"../shared/tennisnote-input-guard.js?v=1.0.561\",\n  \"../shared/tennisnote-ui-foundation.css?v=1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "kind": "product",
+      "beforeSha256": "d9aba8637133ca2a87b02bf376fa8f53bf038ef32a2c6ce56d14a375c8197098",
+      "afterSha256": "e1866a029795fb54ef60fa8936eb196695d7d530a2d1c535c7167aa7c0af604f",
+      "spans": [
+        {
+          "beforeLine": 108,
+          "afterLine": 108,
+          "before": "  renderCoachSettlementReconciliation();\n",
+          "after": "  renderCoachSettlementHistory();\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "kind": "metadata",
+      "beforeSha256": "6c09c6c14f87ff46c113e2c1e879eb7ca92b8655091e3194fc7eebc85badc694",
+      "afterSha256": "070c7e8ee1f6e33cae4d1b4cc300436c2aa03e7bac187051cbb2c92b84925110",
+      "spans": [
+        {
+          "beforeLine": 1125,
+          "afterLine": 1125,
+          "before": "  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.559\");\n",
+          "after": "  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.561\");\n"
+        },
+        {
+          "beforeLine": 1210,
+          "afterLine": 1210,
+          "before": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.559\",\n",
+          "after": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "kind": "metadata",
+      "beforeSha256": "42e920f3a1d882fc550bcdbe97fc7647d1ec054f46b07d14dc789f55f51e2911",
+      "afterSha256": "a719c0207ff23e424c69406b3ccfa29e66a23e5b585150c6c2656120e1ed6c67",
+      "spans": [
+        {
+          "beforeLine": 48,
+          "afterLine": 48,
+          "before": "    workerUrl: \"./service-worker.js?v=1.0.559\",\n",
+          "after": "    workerUrl: \"./service-worker.js?v=1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "kind": "metadata",
+      "beforeSha256": "d945007169245e7b52587ba629a4cfccb30e7cdd7f603a10bfa616a42b3757d4",
+      "afterSha256": "4aed7ee1e993330f23c30dd757b79d97f776d768a4f30c9baecec392966b3f4e",
+      "spans": [
+        {
+          "beforeLine": 23,
+          "afterLine": 23,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.559\" />\n    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.559\" />\n",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.561\" />\n    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.561\" />\n"
+        },
+        {
+          "beforeLine": 1413,
+          "afterLine": 1413,
+          "before": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-escape-html.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-mp4-faststart.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-personal-journal.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-escape-html.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-mp4-faststart.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-personal-journal.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 1423,
+          "afterLine": 1423,
+          "before": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-policy-history.js?v=1.0.559\"></script>\n    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-ticket-policy-history.js?v=1.0.561\"></script>\n    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 1430,
+          "afterLine": 1430,
+          "before": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 1432,
+          "afterLine": 1432,
+          "before": "    <script defer src=\"../shared/tennisnote-app-common.js?v=1.0.559\"></script>\n    <script defer src=\"./settings.js?v=1.0.559\"></script>\n    <script defer src=\"./catalog.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/products.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/identity.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/journal.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/curriculum.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/payment.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/purchase.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/tickets.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/policy.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/lessons.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/changes.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/coaches.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/shared-data.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/notices.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/values.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/onboarding.js?v=1.0.559\"></script>\n    <script defer src=\"./views/home.js?v=1.0.559\"></script>\n    <script defer src=\"./views/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./views/profile.js?v=1.0.559\"></script>\n    <script defer src=\"./views/tickets.js?v=1.0.559\"></script>\n    <script defer src=\"./views/products.js?v=1.0.559\"></script>\n    <script defer src=\"./views/journal.js?v=1.0.559\"></script>\n    <script defer src=\"./views/curriculum.js?v=1.0.559\"></script>\n    <script defer src=\"./views/requests.js?v=1.0.559\"></script>\n    <script defer src=\"./views/onboarding.js?v=1.0.559\"></script>\n    <script defer src=\"./events/delegated.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/common.js?v=1.0.559\"></script>\n    <script defer src=\"./domain/members.js?v=1.0.559\"></script>\n    <script defer src=\"./views/common.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/common.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/members.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/notices.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/payment.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./forms/tickets.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/common.js?v=1.0.559\"></script>\n    <script defer src=\"./events/account.js?v=1.0.559\"></script>\n    <script defer src=\"./events/makeup.js?v=1.0.559\"></script>\n    <script defer src=\"./events/journal.js?v=1.0.559\"></script>\n    <script defer src=\"./events/profile.js?v=1.0.559\"></script>\n    <script defer src=\"./events/schedule.js?v=1.0.559\"></script>\n    <script defer src=\"./events/home.js?v=1.0.559\"></script>\n    <script defer src=\"./data/auth.js?v=1.0.559\"></script>\n    <script defer src=\"./data/sync.js?v=1.0.559\"></script>\n    <script defer src=\"./data/push.js?v=1.0.559\"></script>\n    <script defer src=\"./data/payment.js?v=1.0.559\"></script>\n    <script defer src=\"./data/journal.js?v=1.0.559\"></script>\n    <script defer src=\"./data/tickets.js?v=1.0.559\"></script>\n    <script defer src=\"./data/onboarding.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/sheet.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/screens.js?v=1.0.559\"></script>\n    <script defer src=\"./ui/login-entry.js?v=1.0.559\"></script>\n    <script defer src=\"./storage.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/requests.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/enrollment.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/profile.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/journal.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/payment.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/refunds.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/session.js?v=1.0.559\"></script>\n    <script defer src=\"./actions/onboarding.js?v=1.0.559\"></script>\n",
+          "after": "    <script defer src=\"../shared/tennisnote-app-common.js?v=1.0.561\"></script>\n    <script defer src=\"./settings.js?v=1.0.561\"></script>\n    <script defer src=\"./catalog.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/products.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/identity.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/journal.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/curriculum.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/payment.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/purchase.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/tickets.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/policy.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/lessons.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/changes.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/coaches.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/shared-data.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/notices.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/values.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/onboarding.js?v=1.0.561\"></script>\n    <script defer src=\"./views/home.js?v=1.0.561\"></script>\n    <script defer src=\"./views/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./views/profile.js?v=1.0.561\"></script>\n    <script defer src=\"./views/tickets.js?v=1.0.561\"></script>\n    <script defer src=\"./views/products.js?v=1.0.561\"></script>\n    <script defer src=\"./views/journal.js?v=1.0.561\"></script>\n    <script defer src=\"./views/curriculum.js?v=1.0.561\"></script>\n    <script defer src=\"./views/requests.js?v=1.0.561\"></script>\n    <script defer src=\"./views/onboarding.js?v=1.0.561\"></script>\n    <script defer src=\"./events/delegated.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/common.js?v=1.0.561\"></script>\n    <script defer src=\"./domain/members.js?v=1.0.561\"></script>\n    <script defer src=\"./views/common.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/common.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/members.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/notices.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/payment.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./forms/tickets.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/common.js?v=1.0.561\"></script>\n    <script defer src=\"./events/account.js?v=1.0.561\"></script>\n    <script defer src=\"./events/makeup.js?v=1.0.561\"></script>\n    <script defer src=\"./events/journal.js?v=1.0.561\"></script>\n    <script defer src=\"./events/profile.js?v=1.0.561\"></script>\n    <script defer src=\"./events/schedule.js?v=1.0.561\"></script>\n    <script defer src=\"./events/home.js?v=1.0.561\"></script>\n    <script defer src=\"./data/auth.js?v=1.0.561\"></script>\n    <script defer src=\"./data/sync.js?v=1.0.561\"></script>\n    <script defer src=\"./data/push.js?v=1.0.561\"></script>\n    <script defer src=\"./data/payment.js?v=1.0.561\"></script>\n    <script defer src=\"./data/journal.js?v=1.0.561\"></script>\n    <script defer src=\"./data/tickets.js?v=1.0.561\"></script>\n    <script defer src=\"./data/onboarding.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/sheet.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/screens.js?v=1.0.561\"></script>\n    <script defer src=\"./ui/login-entry.js?v=1.0.561\"></script>\n    <script defer src=\"./storage.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/requests.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/enrollment.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/profile.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/journal.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/payment.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/refunds.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/session.js?v=1.0.561\"></script>\n    <script defer src=\"./actions/onboarding.js?v=1.0.561\"></script>\n"
+        },
+        {
+          "beforeLine": 1513,
+          "afterLine": 1513,
+          "before": "          appScript.src = \"./app.js?v=1.0.559\";\n",
+          "after": "          appScript.src = \"./app.js?v=1.0.561\";\n"
+        },
+        {
+          "beforeLine": 1526,
+          "afterLine": 1526,
+          "before": "          appScript.src = \"./app.js?v=1.0.559\";\n",
+          "after": "          appScript.src = \"./app.js?v=1.0.561\";\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/service-worker.js",
+      "kind": "metadata",
+      "beforeSha256": "0b508d2ccf522803702665d2b719de258cd20a01f2c007b2ea1e9a93195cb9b3",
+      "afterSha256": "6d9df3259cce09d88da8c534db56696d96e68fbad5edf60da1546d89ac00d22e",
+      "spans": [
+        {
+          "beforeLine": 0,
+          "afterLine": 0,
+          "before": "const CACHE_NAME = \"tennis-note-member-pwa-v593\";\n",
+          "after": "const CACHE_NAME = \"tennis-note-member-pwa-v594\";\n"
+        },
+        {
+          "beforeLine": 5,
+          "afterLine": 5,
+          "before": "  \"./styles.css?v=1.0.559\",\n  \"../shared/tennisnote-app-common.js?v=1.0.559\",\n  \"./settings.js?v=1.0.559\",\n  \"./catalog.js?v=1.0.559\",\n  \"./domain/products.js?v=1.0.559\",\n  \"./domain/identity.js?v=1.0.559\",\n  \"./domain/journal.js?v=1.0.559\",\n  \"./domain/curriculum.js?v=1.0.559\",\n  \"./domain/payment.js?v=1.0.559\",\n  \"./domain/purchase.js?v=1.0.559\",\n  \"./domain/tickets.js?v=1.0.559\",\n  \"./domain/policy.js?v=1.0.559\",\n  \"./domain/lessons.js?v=1.0.559\",\n  \"./domain/changes.js?v=1.0.559\",\n  \"./domain/schedule.js?v=1.0.559\",\n  \"./domain/coaches.js?v=1.0.559\",\n  \"./domain/shared-data.js?v=1.0.559\",\n  \"./domain/notices.js?v=1.0.559\",\n  \"./domain/values.js?v=1.0.559\",\n  \"./domain/onboarding.js?v=1.0.559\",\n  \"./views/home.js?v=1.0.559\",\n  \"./views/schedule.js?v=1.0.559\",\n  \"./views/profile.js?v=1.0.559\",\n  \"./views/tickets.js?v=1.0.559\",\n  \"./views/products.js?v=1.0.559\",\n  \"./views/journal.js?v=1.0.559\",\n  \"./views/curriculum.js?v=1.0.559\",\n  \"./views/requests.js?v=1.0.559\",\n  \"./views/onboarding.js?v=1.0.559\",\n  \"./events/delegated.js?v=1.0.559\",\n  \"./events/account.js?v=1.0.559\",\n  \"./events/makeup.js?v=1.0.559\",\n  \"./events/journal.js?v=1.0.559\",\n  \"./events/profile.js?v=1.0.559\",\n  \"./events/schedule.js?v=1.0.559\",\n  \"./events/home.js?v=1.0.559\",\n  \"./data/auth.js?v=1.0.559\",\n  \"./data/sync.js?v=1.0.559\",\n  \"./data/push.js?v=1.0.559\",\n  \"./data/payment.js?v=1.0.559\",\n  \"./data/journal.js?v=1.0.559\",\n  \"./data/tickets.js?v=1.0.559\",\n  \"./data/onboarding.js?v=1.0.559\",\n  \"./ui/sheet.js?v=1.0.559\",\n  \"./ui/screens.js?v=1.0.559\",\n  \"./ui/login-entry.js?v=1.0.559\",\n  \"./storage.js?v=1.0.559\",\n  \"./actions/requests.js?v=1.0.559\",\n  \"./actions/enrollment.js?v=1.0.559\",\n  \"./actions/profile.js?v=1.0.559\",\n  \"./actions/journal.js?v=1.0.559\",\n  \"./actions/payment.js?v=1.0.559\",\n  \"./actions/session.js?v=1.0.559\",\n  \"./actions/onboarding.js?v=1.0.559\",\n  \"./domain/common.js?v=1.0.559\",\n  \"./domain/members.js?v=1.0.559\",\n  \"./views/common.js?v=1.0.559\",\n  \"./forms/common.js?v=1.0.559\",\n  \"./forms/members.js?v=1.0.559\",\n  \"./forms/notices.js?v=1.0.559\",\n  \"./forms/payment.js?v=1.0.559\",\n  \"./forms/schedule.js?v=1.0.559\",\n  \"./forms/tickets.js?v=1.0.559\",\n  \"./ui/common.js?v=1.0.559\",\n  \"./app.js?v=1.0.559\",\n",
+          "after": "  \"./styles.css?v=1.0.561\",\n  \"../shared/tennisnote-app-common.js?v=1.0.561\",\n  \"./settings.js?v=1.0.561\",\n  \"./catalog.js?v=1.0.561\",\n  \"./domain/products.js?v=1.0.561\",\n  \"./domain/identity.js?v=1.0.561\",\n  \"./domain/journal.js?v=1.0.561\",\n  \"./domain/curriculum.js?v=1.0.561\",\n  \"./domain/payment.js?v=1.0.561\",\n  \"./domain/purchase.js?v=1.0.561\",\n  \"./domain/tickets.js?v=1.0.561\",\n  \"./domain/policy.js?v=1.0.561\",\n  \"./domain/lessons.js?v=1.0.561\",\n  \"./domain/changes.js?v=1.0.561\",\n  \"./domain/schedule.js?v=1.0.561\",\n  \"./domain/coaches.js?v=1.0.561\",\n  \"./domain/shared-data.js?v=1.0.561\",\n  \"./domain/notices.js?v=1.0.561\",\n  \"./domain/values.js?v=1.0.561\",\n  \"./domain/onboarding.js?v=1.0.561\",\n  \"./views/home.js?v=1.0.561\",\n  \"./views/schedule.js?v=1.0.561\",\n  \"./views/profile.js?v=1.0.561\",\n  \"./views/tickets.js?v=1.0.561\",\n  \"./views/products.js?v=1.0.561\",\n  \"./views/journal.js?v=1.0.561\",\n  \"./views/curriculum.js?v=1.0.561\",\n  \"./views/requests.js?v=1.0.561\",\n  \"./views/onboarding.js?v=1.0.561\",\n  \"./events/delegated.js?v=1.0.561\",\n  \"./events/account.js?v=1.0.561\",\n  \"./events/makeup.js?v=1.0.561\",\n  \"./events/journal.js?v=1.0.561\",\n  \"./events/profile.js?v=1.0.561\",\n  \"./events/schedule.js?v=1.0.561\",\n  \"./events/home.js?v=1.0.561\",\n  \"./data/auth.js?v=1.0.561\",\n  \"./data/sync.js?v=1.0.561\",\n  \"./data/push.js?v=1.0.561\",\n  \"./data/payment.js?v=1.0.561\",\n  \"./data/journal.js?v=1.0.561\",\n  \"./data/tickets.js?v=1.0.561\",\n  \"./data/onboarding.js?v=1.0.561\",\n  \"./ui/sheet.js?v=1.0.561\",\n  \"./ui/screens.js?v=1.0.561\",\n  \"./ui/login-entry.js?v=1.0.561\",\n  \"./storage.js?v=1.0.561\",\n  \"./actions/requests.js?v=1.0.561\",\n  \"./actions/enrollment.js?v=1.0.561\",\n  \"./actions/profile.js?v=1.0.561\",\n  \"./actions/journal.js?v=1.0.561\",\n  \"./actions/payment.js?v=1.0.561\",\n  \"./actions/session.js?v=1.0.561\",\n  \"./actions/onboarding.js?v=1.0.561\",\n  \"./domain/common.js?v=1.0.561\",\n  \"./domain/members.js?v=1.0.561\",\n  \"./views/common.js?v=1.0.561\",\n  \"./forms/common.js?v=1.0.561\",\n  \"./forms/members.js?v=1.0.561\",\n  \"./forms/notices.js?v=1.0.561\",\n  \"./forms/payment.js?v=1.0.561\",\n  \"./forms/schedule.js?v=1.0.561\",\n  \"./forms/tickets.js?v=1.0.561\",\n  \"./ui/common.js?v=1.0.561\",\n  \"./app.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 77,
+          "afterLine": 77,
+          "before": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.559\",\n  \"../shared/tennisnote-escape-html.js?v=1.0.559\",\n  \"../shared/tennisnote-data-client.js?v=1.0.559\",\n  \"../shared/tennisnote-mp4-faststart.js?v=1.0.559\",\n  \"../shared/tennisnote-personal-journal.js?v=1.0.559\",\n  \"../shared/tennisnote-schedule-revision.js?v=1.0.559\",\n  \"../shared/tennisnote-schedule-lanes.js?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.561\",\n  \"../shared/tennisnote-escape-html.js?v=1.0.561\",\n  \"../shared/tennisnote-data-client.js?v=1.0.561\",\n  \"../shared/tennisnote-mp4-faststart.js?v=1.0.561\",\n  \"../shared/tennisnote-personal-journal.js?v=1.0.561\",\n  \"../shared/tennisnote-schedule-revision.js?v=1.0.561\",\n  \"../shared/tennisnote-schedule-lanes.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 87,
+          "afterLine": 87,
+          "before": "  \"../shared/tennisnote-release.js?v=1.0.559\",\n  \"../shared/tennisnote-release-updater.js?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-release.js?v=1.0.561\",\n  \"../shared/tennisnote-release-updater.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 91,
+          "afterLine": 91,
+          "before": "  \"../shared/tennisnote-ui-language.js?v=1.0.559\",\n  \"../shared/tennisnote-ticket-state.js?v=1.0.559\",\n  \"../shared/tennisnote-mode-transition.js?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-ui-language.js?v=1.0.561\",\n  \"../shared/tennisnote-ticket-state.js?v=1.0.561\",\n  \"../shared/tennisnote-mode-transition.js?v=1.0.561\",\n"
+        },
+        {
+          "beforeLine": 95,
+          "afterLine": 95,
+          "before": "  \"../shared/tennisnote-input-guard.js?v=1.0.559\",\n  \"../shared/tennisnote-ui-foundation.css?v=1.0.559\",\n",
+          "after": "  \"../shared/tennisnote-input-guard.js?v=1.0.561\",\n  \"../shared/tennisnote-ui-foundation.css?v=1.0.561\",\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "kind": "metadata",
+      "beforeSha256": "a0590b819a0f774b7e0b9fdc3c5faa3ae5da2160fd859b7eae4b9eef32919542",
+      "afterSha256": "9d3abdf13a9a73a143f66956ceeb245a3eb6834b062cefe0150026305452136f",
+      "spans": [
+        {
+          "beforeLine": 483,
+          "afterLine": 483,
+          "before": "  const params = new URLSearchParams({ v: \"1.0.559\", view: target.view || \"todayView\" });\n",
+          "after": "  const params = new URLSearchParams({ v: \"1.0.561\", view: target.view || \"todayView\" });\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/check_r3_dev_deployment.py",
+      "kind": "historical-input-bridge",
+      "beforeSha256": "eba2366e5ac4f56858b81db5f3ec31b0a6eb3e69c2095ff774dcee2196d40000",
+      "afterSha256": "a3019d1b523ac8a30495a7683d8aa3028f1dcff55faa6f56556066b07c767418",
+      "spans": [
+        {
+          "beforeLine": 368,
+          "afterLine": 368,
+          "before": "    verify_monotonic_release(candidate_release, member_cache, coach_cache, read_live_dev_states(candidate_sha))\n",
+          "after": "    states = read_live_dev_states(candidate_sha)\n    verify_monotonic_release(candidate_release, member_cache, coach_cache, states)\n    if _numeric_version(candidate_release.get(\"version\"), \"candidate version\") > (1, 0, 559):\n        verify_dev_ahead_of_production(candidate_release, states, read_live_production_releases(candidate_sha))\n"
+        },
+        {
+          "beforeLine": 502,
+          "afterLine": 505,
+          "before": "    verify_dev_artifacts(Path(\"dist/member-dev\"), Path(\"dist/admin-dev\"))\n    verify_monotonic_live_candidate(candidate_sha, Path(\"dist/member-dev\"), Path(\"dist/admin-dev\"), EXPECTED_DEV_PROJECT_FINGERPRINT)\n",
+          "after": "    release = json.loads((ROOT / \"app/release.json\").read_text(encoding=\"utf-8\"))\n    if _numeric_version(release.get(\"version\"), \"candidate version\") > (1, 0, 559):\n        if os.environ.get(\"GITHUB_REPOSITORY\") != EXPECTED_REPOSITORY:\n            fail(\"development branch repository mismatch\")\n        c = load_coach_entry_successor()\n        verify_current_source(candidate_sha, c)\n        verify_current_live_candidate(c, candidate_sha, Path(\"dist/member-dev\"), Path(\"dist/admin-dev\"))\n    else:\n        verify_dev_artifacts(Path(\"dist/member-dev\"), Path(\"dist/admin-dev\"))\n        verify_monotonic_live_candidate(candidate_sha, Path(\"dist/member-dev\"), Path(\"dist/admin-dev\"), EXPECTED_DEV_PROJECT_FINGERPRINT)\n"
+        },
+        {
+          "beforeLine": 519,
+          "afterLine": 530,
+          "before": "",
+          "after": "\n# 같은 TLS/redirect/응답크기 보호로 공개 release만 읽는다. DB/Auth client 없음.\nLIVE_READ_ENDPOINTS.update({\n    \"production_member_release\": (\"https://tennisnote-app.pages.dev\", \"/release.json\", True),\n    \"production_admin_release\": (\"https://tennisnote-admin.pages.dev\", \"/release.json\", True),\n})\n\n\ndef read_live_production_releases(candidate_sha: str) -> list[dict[str, object]]:\n    return [_http_read(\"production_member_release\", candidate_sha),\n            _http_read(\"production_admin_release\", candidate_sha)]\n\n\ndef verify_dev_ahead_of_production(candidate: dict[str, object], dev: list[dict[str, object]],\n                                   production: list[dict[str, object]]) -> None:\n    for label, releases in ((\"development\", [s.get(\"release\") for s in dev]), (\"production\", production)):\n        if len(releases) != 2 or any(not isinstance(r, dict) for r in releases):\n            fail(label + \" member/admin release pair missing\")\n        identities = [(_numeric_version(r.get(\"version\"), label + \" version\"),\n                       _numeric_version(r.get(\"releaseId\"), label + \" release id\"), r.get(\"deployedAt\")) for r in releases]\n        if identities[0] != identities[1]:\n            fail(label + \" member/admin release mismatch\")\n    current = _numeric_version(candidate.get(\"version\"), \"candidate version\")\n    if current <= _numeric_version(production[0].get(\"version\"), \"production version\"):\n        fail(\"development candidate must be strictly ahead of fresh production\")\n    if current < _numeric_version(dev[0][\"release\"].get(\"version\"), \"development version\"):\n        fail(\"development candidate would roll back the live version\")\n    if _numeric_version(candidate.get(\"releaseId\"), \"candidate release id\") < _numeric_version(production[0].get(\"releaseId\"), \"production release id\"):\n        fail(\"development candidate release id is behind fresh production\")\n\n\ndef load_coach_entry_successor() -> dict[str, object]:\n    c = json.loads(subprocess.check_output(\n        [\"node\", \"tests/helpers/r3-coach-entry-successor.cjs\", \"--deployment-contract\"], cwd=ROOT))\n    if c.get(\"contract\") != \"r3-coach-entry-dev-deployment/1\" or c.get(\"successorBase\") != \"cd5cffc22bef8a0bfb290e9a7a327573172ec931\":\n        fail(\"coach entry successor identity mismatch\")\n    return c\n"
+        },
+        {
+          "beforeLine": 606,
+          "afterLine": 654,
+          "before": "",
+          "after": "    if \"successorBase\" in c:\n        run_git(\"merge-base\", \"--is-ancestor\", c[\"successorBase\"], candidate_sha)\n        if run_git(\"rev-parse\", c[\"successorBase\"] + \"^{tree}\") != c[\"successorTree\"]:\n            fail(\"coach entry successor frozen tree mismatch\")\n"
+        },
+        {
+          "beforeLine": 612,
+          "afterLine": 664,
+          "before": "        fail(\"current candidate exact34 paths mismatch\")\n",
+          "after": "        fail(\"current candidate exact paths mismatch\")\n"
+        },
+        {
+          "beforeLine": 627,
+          "afterLine": 679,
+          "before": "        fail(\"current candidate physical559 metadata mismatch\")\n",
+          "after": "        fail(\"current candidate physical metadata mismatch\")\n"
+        },
+        {
+          "beforeLine": 633,
+          "afterLine": 685,
+          "before": "",
+          "after": "    if json.loads((ROOT / \"app/release.json\").read_text(encoding=\"utf-8\")).get(\"version\") != c[\"release\"][\"version\"]:\n        c = load_coach_entry_successor()\n"
+        },
+        {
+          "beforeLine": 668,
+          "afterLine": 722,
+          "before": "",
+          "after": "    if \"successorBase\" in c:\n        verify_dev_ahead_of_production(c[\"release\"], states, read_live_production_releases(candidate))\n"
+        }
+      ]
+    },
+    {
+      "path": "tests/helpers/r3-self-coach.cjs",
+      "kind": "historical-input-bridge",
+      "beforeSha256": "bb58b08f3e7557ae0b7d4443ed4857b5bcc35ad26daaf06d10ee64ef77c08770",
+      "afterSha256": "81dc90dc1f7ce7eeaa9f174e5ea3688f0e098c8b5db2c6f836edb381aca06fb6",
+      "spans": [
+        {
+          "beforeLine": 77,
+          "afterLine": 77,
+          "before": "  const current=normalize(text),row=c.metadata.files.find(x=>x.path===file);if(!row)return current;\n",
+          "after": "  const current=require(\"./r3-coach-entry-successor.cjs\").prior(file,text),row=c.metadata.files.find(x=>x.path===file);if(!row)return current;\n"
+        },
+        {
+          "beforeLine": 94,
+          "afterLine": 94,
+          "before": "",
+          "after": "  const successor=require(\"./r3-coach-entry-successor.cjs\");\n  const read=file=>successor.prior(file,fs.readFileSync(path.join(ROOT,file),\"utf8\"));\n  if(JSON.parse(fs.readFileSync(path.join(ROOT,\"app/release.json\"),\"utf8\")).version===\"1.0.561\")successor.verifyCurrent();\n"
+        },
+        {
+          "beforeLine": 97,
+          "afterLine": 100,
+          "before": "  for(const [file,digest]of Object.entries(c.guardHashes))need(sha(fs.readFileSync(path.join(ROOT,file),\"utf8\"))===digest,\"self_coach_guard_drift\");\n",
+          "after": "  for(const [file,digest]of Object.entries(c.guardHashes))need(sha(read(file))===digest,\"self_coach_guard_drift\");\n"
+        },
+        {
+          "beforeLine": 99,
+          "afterLine": 102,
+          "before": "  const release=JSON.parse(fs.readFileSync(path.join(ROOT,\"app/release.json\"),\"utf8\"));\n",
+          "after": "  const release=JSON.parse(read(\"app/release.json\"));\n"
+        },
+        {
+          "beforeLine": 102,
+          "afterLine": 105,
+          "before": "  for(const row of c.metadata.files)need(sha(fs.readFileSync(path.join(ROOT,row.path),\"utf8\"))===(planned?row.afterSha256:row.beforeSha256),\"metadata_mixed_or_unknown_stage\");\n",
+          "after": "  for(const row of c.metadata.files)need(sha(read(row.path))===(planned?row.afterSha256:row.beforeSha256),\"metadata_mixed_or_unknown_stage\");\n"
+        },
+        {
+          "beforeLine": 107,
+          "afterLine": 110,
+          "before": "  const extras=[...PRODUCT.filter(p=>!expected.includes(p)),...GUARDS.filter(p=>paths.includes(p)&&!expected.includes(p))];\n",
+          "after": "  const added=require(\"./r3-coach-entry-successor.cjs\").plan().addedPaths;\n  const extras=[...PRODUCT.filter(p=>!expected.includes(p)),...[...GUARDS,...added].filter(p=>paths.includes(p)&&!expected.includes(p))];\n"
+        }
+      ]
+    },
+    {
+      "path": "tests/r3-current-dev-deployment.test.js",
+      "kind": "historical-input-bridge",
+      "beforeSha256": "484d6ab6d5c8b070c1b7a97be5be8833fe828193472d4b8481ffcfe754c69e97",
+      "afterSha256": "15a888ce3b45741d41b0da069e18d324d6ba29f080eb873cd19b84d0d6080434",
+      "spans": [
+        {
+          "beforeLine": 9,
+          "afterLine": 9,
+          "before": "const read=p=>fs.readFileSync(p,\"utf8\").replace(/\\r\\n/g,\"\\n\");\n",
+          "after": "const successor=require(\"./helpers/r3-coach-entry-successor.cjs\");\nconst read=p=>successor.prior(p,fs.readFileSync(p,\"utf8\"));\n"
+        },
+        {
+          "beforeLine": 19,
+          "afterLine": 20,
+          "before": "s=importlib.util.spec_from_file_location(\"current_dev_guard\",\"scripts/check_r3_dev_deployment.py\");m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\n",
+          "after": "s=importlib.util.spec_from_file_location(\"current_dev_guard\",\"scripts/check_r3_dev_deployment.py\");m=importlib.util.module_from_spec(s);exec(compile(files[\"scripts/check_r3_dev_deployment.py\"],s.origin,\"exec\"),m.__dict__)\n"
+        },
+        {
+          "beforeLine": 150,
+          "afterLine": 151,
+          "before": "    const fakeFs={...fs,readFileSync(p,...args){const rel=path.relative(root,String(p)).split(path.sep).join(\"/\");return Object.hasOwn(overlay,rel)?overlay[rel]:fs.readFileSync(p,...args);}};\n",
+          "after": "    const fakeFs={...fs,readFileSync(p,...args){const rel=path.relative(root,String(p)).split(path.sep).join(\"/\");const value=Object.hasOwn(overlay,rel)?overlay[rel]:successor.prior(rel,fs.readFileSync(p,\"utf8\"));return args[0]?value:Buffer.from(value);}};\n"
+        }
+      ]
+    },
+    {
+      "path": "tests/r3-self-coach.test.js",
+      "kind": "historical-input-bridge",
+      "beforeSha256": "696f145958b66aeb49e11ec0223f1c59bbe38f26fd7d9e95e1fd7e04b89c765b",
+      "afterSha256": "3fd4759952aa0fb49a437f098cce6c96c34b54fd92a6286f8f14701e1823b0f3",
+      "spans": [
+        {
+          "beforeLine": 8,
+          "afterLine": 8,
+          "before": "const root=new URL(\"../\",import.meta.url),read=p=>readFileSync(new URL(p,root),\"utf8\").replace(/\\r\\n/g,\"\\n\");\n",
+          "after": "const successor=require(\"./helpers/r3-coach-entry-successor.cjs\");\n// 과거559 기대값은 유지한다. 새 후보는 별도 successor 검사에서 실제 bytes로 검증.\nconst root=new URL(\"../\",import.meta.url),read=p=>successor.prior(p,readFileSync(new URL(p,root),\"utf8\"));\n"
+        },
+        {
+          "beforeLine": 11,
+          "afterLine": 13,
+          "before": "function py(code,input=null){return JSON.parse(execFileSync(python,[\"-B\",\"-X\",\"utf8\",\"-c\",code],{cwd:root,input:input===null?undefined:JSON.stringify(input),encoding:\"utf8\",maxBuffer:16*1024*1024,stdio:[input===null?\"ignore\":\"pipe\",\"pipe\",\"pipe\"]}));}\n",
+          "after": "function py(code,input=null){\n  const projection=`import json,sys,io\\nfrom pathlib import Path\\n_tn_wire=json.load(sys.stdin);_tn_hist=_tn_wire['history'];sys.stdin=io.StringIO(json.dumps(_tn_wire['input']))\\n_tn_bytes=Path.read_bytes;_tn_text=Path.read_text;_tn_root=Path.cwd()\\ndef _tn_key(p):\\n try:return p.resolve().relative_to(_tn_root).as_posix()\\n except ValueError:return None\\ndef _tn_read_bytes(p):\\n k=_tn_key(p);return _tn_hist[k].encode('utf-8') if k in _tn_hist else _tn_bytes(p)\\ndef _tn_read_text(p,*a,**k):\\n n=_tn_key(p);return _tn_hist[n] if n in _tn_hist else _tn_text(p,*a,**k)\\nPath.read_bytes=_tn_read_bytes;Path.read_text=_tn_read_text\\n`;\n  return JSON.parse(execFileSync(python,[\"-B\",\"-X\",\"utf8\",\"-c\",projection+code],{cwd:root,input:JSON.stringify({input,history:successor.historicalFiles()}),encoding:\"utf8\",maxBuffer:16*1024*1024,stdio:[\"pipe\",\"pipe\",\"pipe\"]}));\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "tests/r3-unpaid-substitute.test.js",
+      "kind": "historical-input-bridge",
+      "beforeSha256": "53077c2aee3c9c828192740c7bfaab7e7dd703c7b8315402ede04d40aae4c34b",
+      "afterSha256": "18db183ef5f3f7c99e57573c6a5efadc7a042dce88e929a439dca20ee4aea7e9",
+      "spans": [
+        {
+          "beforeLine": 5,
+          "afterLine": 5,
+          "before": "const read=p=>fs.readFileSync(p,\"utf8\").replace(/\\r\\n/g,\"\\n\");\n",
+          "after": "import {createRequire as successorRequire} from \"node:module\";\nconst successor=successorRequire(import.meta.url)(\"./helpers/r3-coach-entry-successor.cjs\");\nconst read=p=>successor.prior(p,fs.readFileSync(p,\"utf8\"));\n"
+        },
+        {
+          "beforeLine": 162,
+          "afterLine": 164,
+          "before": "",
+          "after": "  physical??=Object.fromEntries(guard.plan().metadata.files.map(r=>[r.path,read(r.path)]));\n"
+        },
+        {
+          "beforeLine": 215,
+          "afterLine": 218,
+          "before": "      return Object.hasOwn(physical,name)?(options?physical[name]:Buffer.from(physical[name])):fs.readFileSync(file,options);\n",
+          "after": "      const value=Object.hasOwn(physical,name)?physical[name]:successor.prior(name,fs.readFileSync(file,\"utf8\"));\n      return options?value:Buffer.from(value);\n"
+        },
+        {
+          "beforeLine": 218,
+          "afterLine": 222,
+          "before": "    vm.runInNewContext(fs.readFileSync(helper,\"utf8\"),{require:localRequire,module,exports:module.exports,__dirname:path.dirname(helper),process,Buffer,console});return module.exports;\n",
+          "after": "    vm.runInNewContext(read(\"tests/helpers/r3-self-coach.cjs\"),{require:localRequire,module,exports:module.exports,__dirname:path.dirname(helper),process,Buffer,console});return module.exports;\n"
+        }
+      ]
+    }
+  ],
+  "addedPaths": [
+    "tests/fixtures/r3-coach-entry-successor.json",
+    "tests/helpers/r3-coach-entry-successor.cjs",
+    "tests/r3-coach-entry-successor.test.js",
+    "tests/r3-settlement-entry.test.js"
+  ]
+}

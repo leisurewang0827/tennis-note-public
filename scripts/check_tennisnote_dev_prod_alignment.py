@@ -58,9 +58,30 @@ SELECTED_R3_PRODUCTS = {
     "app/tennis-note-coach-app/events/account.js", "app/tennis-note-coach-app/index.html",
     "app/tennis-note-coach-app/styles.css", "app/tennis-note-coach-app/views/settlement.js",
 }
+# 이 층이 소유한 텍스트 경로만 역변환한다. 전체 자산의 경로·원바이트 해시는 verify가 검사한다.
+SELF_COACH_TEXT_PATHS = SELECTED_R3_PRODUCTS | BASIC_REFRESH_RELEASE_PATHS | R3_NEW_PATHS | {
+    "app/tennis-note-coach-app/data/auth.js", "app/shared/tennisnote-ui-foundation.css",
+    "scripts/bump_release.py",
+}
 _selected_r3_cache = None
 SELECTED_RELEASE_PATH = ROOT / "tests/fixtures/r3-production-selected-release.json"
 _selected_release_cache = None
+
+
+def self_coach_inverse(mode, value):
+    """New fixed delta is handled once by the same JS recipe; old pins are unchanged."""
+    try:
+        result = subprocess.check_output(["node", "tests/helpers/r3-self-coach.cjs", mode],
+            input=json.dumps(value, ensure_ascii=True).encode("utf-8"), cwd=ROOT, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        # Only exact byte/path rejection translates to the historical boundary error.
+        # Recipe/contract/process failures remain failures and never return input bytes.
+        if error.stderr == b"SELF_COACH_PATHS\n" and mode == "--paths":
+            raise RuntimeError("selected R3 release exact22 path set mismatch") from error
+        if error.stderr == b"SELF_COACH_BYTES\n" and mode == "--restore":
+            raise RuntimeError("selected R3 release exact candidate mismatch: " + value["path"]) from error
+        raise
+    return json.loads(result)
 
 
 def selected_release_plan(contract=None):
@@ -88,10 +109,10 @@ def selected_release_plan(contract=None):
             originals[name] = row["after"]
     bump_path = ROOT / "scripts/bump_release.py"
     official = subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).decode("utf-8").replace("\r\n", "\n")
-    require(bump_path.read_text(encoding="utf-8").replace("\r\n", "\n") == official and digest(official) == c["officialToolSha256"], "official tool drift")
+    require(self_coach_inverse("--restore", {"path": "scripts/bump_release.py", "text": bump_path.read_text(encoding="utf-8")}) == official and digest(official) == c["officialToolSha256"], "official tool drift")
     spec = importlib.util.spec_from_file_location("selected_release_official_bump", bump_path)
     bump = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bump)
+    exec(compile(official, str(bump_path), "exec"), bump.__dict__)
     merged, counts = {}, {}
     def original(p, *args, **kwargs):
         name = p.relative_to(ROOT).as_posix()
@@ -127,12 +148,16 @@ def selected_release_plan(contract=None):
 
 def selected_release_assert_paths(paths):
     expected = SELECTED_R3_PRODUCTS | BASIC_REFRESH_RELEASE_PATHS
+    paths = self_coach_inverse("--paths", {"paths": paths, "expected": sorted(expected)})
     if len(paths) != len(set(paths)) or set(paths) != expected:
         raise RuntimeError("selected R3 release exact22 path set mismatch")
 
 
 def before_selected_release_candidate(path: str, data: bytes) -> bytes:
     global _selected_release_cache
+    if path not in SELF_COACH_TEXT_PATHS:
+        return data
+    data = self_coach_inverse("--restore", {"path": path, "text": data.decode("utf-8")}).encode("utf-8")
     if _selected_release_cache is None:
         _selected_release_cache = selected_release_plan()
     row = _selected_release_cache.get(path)
@@ -299,10 +324,11 @@ def basic_refresh_plan(contract=None):
     end = screen.index("\n}", start) + 2
     require(screen[start:end].replace(source["publicHistoryPreserved"], "") == source["functionSource"], "function projection")
     bump_path = ROOT / "scripts/bump_release.py"
-    require(bump_path.read_bytes().replace(b"\r\n", b"\n") == subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).replace(b"\r\n", b"\n"), "official tool drift")
+    official = subprocess.check_output(["git", "show", c["base"] + ":scripts/bump_release.py"], cwd=ROOT).decode("utf-8").replace("\r\n", "\n")
+    require(self_coach_inverse("--restore", {"path": "scripts/bump_release.py", "text": bump_path.read_text(encoding="utf-8")}) == official, "official tool drift")
     spec = importlib.util.spec_from_file_location("basic_refresh_official_bump", bump_path)
     bump = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bump)
+    exec(compile(official, str(bump_path), "exec"), bump.__dict__)
     def original(p, *args, **kwargs):
         name = p.relative_to(ROOT).as_posix()
         if name == "app/shared/config.local.js":

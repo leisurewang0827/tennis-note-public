@@ -179,20 +179,26 @@ def plan_app_literals(old: str, new: str, read: Reader) -> list[tuple[Path, str,
     return plans
 
 
-def plan_cache_names(read: Reader) -> list[tuple[Path, str, int, str, str]]:
+def plan_cache_names(read: Reader, member_cache_floor: int | None = None, coach_cache_floor: int | None = None) -> list[tuple[Path, str, int, str, str]]:
     """서비스워커 캐시 이름의 카운터를 +1 한다.
 
     이름이 그대로면 브라우저가 옛 캐시를 계속 쓴다. 버전 문자열과 별개의
     카운터라 검사기가 잡지 못하므로 여기서 반드시 같이 올린다.
     """
     plans: list[tuple[Path, str, int, str, str]] = []
-    for path in SERVICE_WORKERS:
+    floors = (member_cache_floor, coach_cache_floor)
+    if any(value is not None for value in floors):
+        if not all(type(value) is int and value > 0 for value in floors):
+            raise BumpError("캐시 하한은 회원·코치 두 개를 양의 정수로 함께 지정하세요.")
+    for path, floor in zip(SERVICE_WORKERS, floors):
         text = read(path)
         match = re.search(r'(const CACHE_NAME = ")([a-z-]+-v)(\d+)(";)', text)
         if not match:
             raise BumpError(f"{path.relative_to(ROOT)}: CACHE_NAME 을 찾지 못했습니다.")
         prefix, counter = match.group(2), int(match.group(3))
-        before, after = f"{prefix}{counter}", f"{prefix}{counter + 1}"
+        if floor is not None and floor < counter:
+            raise BumpError(f"{path.relative_to(ROOT)}: 캐시 하한이 현재 카운터보다 낮습니다.")
+        before, after = f"{prefix}{counter}", f"{prefix}{max(counter, floor if floor is not None else counter) + 1}"
         updated = text[: match.start()] + f'{match.group(1)}{after}{match.group(4)}' + text[match.end():]
         plans.append((path, updated, 1, before, after))
     return plans
@@ -236,7 +242,10 @@ def main() -> int:
     parser.add_argument("version", nargs="?", help="올릴 버전 (예: 1.0.380)")
     parser.add_argument("--next", action="store_true", help="끝자리를 1 올립니다")
     parser.add_argument("--release-id", help="releaseId 를 직접 지정합니다 (기본: 오늘 날짜로 자동)")
+    parser.add_argument("--deployed-at", help="검증한 릴리스 계획의 KST 시각 고정 (기본: 현재 시각)")
     parser.add_argument("--dry-run", action="store_true", help="파일을 바꾸지 않고 무엇이 바뀔지만 보여줍니다")
+    parser.add_argument("--member-cache-floor", type=int, help="다른 승인 origin을 포함한 회원 캐시 하한 (코치 하한과 함께)")
+    parser.add_argument("--coach-cache-floor", type=int, help="다른 승인 origin을 포함한 코치 캐시 하한 (회원 하한과 함께)")
     args = parser.parse_args()
 
     try:
@@ -264,6 +273,17 @@ def main() -> int:
         now = dt.datetime.now(KST)
         release_id = args.release_id or next_release_id(old_release_id, now)
         deployed_at = now.replace(microsecond=0).isoformat()
+        if args.deployed_at is not None:
+            try:
+                frozen = dt.datetime.fromisoformat(args.deployed_at)
+            except ValueError as error:
+                raise BumpError("고정 시각은 초 단위 KST ISO 형식이어야 합니다.") from error
+            if (frozen.tzinfo is None or frozen.utcoffset() != dt.timedelta(hours=9)
+                    or frozen.isoformat(timespec="seconds") != args.deployed_at
+                    or frozen > now
+                    or frozen.strftime("%Y.%m.%d") != release_id[:10]):
+                raise BumpError("고정 시각은 미래가 아닌 KST 시각이며 releaseId 날짜와 같아야 합니다.")
+            deployed_at = args.deployed_at
 
         # 한 파일을 여러 단계가 함께 고친다 (예: 서비스워커는 ?v= 와 캐시 이름 둘 다).
         # 각 단계는 디스크가 아니라 앞 단계의 결과를 읽어야 한다. 아니면 뒤엣것이
@@ -286,7 +306,7 @@ def main() -> int:
         absorb(plan_version_queries(old_version, new_version, read))
         absorb(plan_app_literals(old_version, new_version, read))
 
-        cache_plans = plan_cache_names(read)
+        cache_plans = plan_cache_names(read, args.member_cache_floor, args.coach_cache_floor)
         absorb([(path, text, changed) for path, text, changed, _b, _a in cache_plans])
 
         # read() 가 손대지 않은 파일까지 담아두므로, 실제로 바뀐 것만 남긴다.
