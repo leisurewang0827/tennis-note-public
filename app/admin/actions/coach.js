@@ -247,7 +247,7 @@ async function saveCoachStaff() {
       coach.serverRoleId === coachRoleId
       && String(coach.branchId || "") === branchId
     ));
-    if (!coachStaffServerMatches(saved, draft)
+    if (!coachStaffServerMatches(saved, draft, adminLiveDataState.coachSettlementTerms)
       || !coachStaffFreshSettlementTermMatches(
         adminLiveDataState.coachSettlementTerms,
         coachRoleId,

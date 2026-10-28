@@ -1,0 +1,420 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { runInNewContext } from "node:vm";
+import * as a from "../scripts/check_r3_purchase_identity_admission.mjs";
+
+// 새 후속 경계만 검사한다. 과거60/DB/역사적 검사/전체 파일 스캔은 실행하지 않는다.
+const head = "1".repeat(40), merge = "2".repeat(40), source = "3".repeat(40);
+const sourceTree = "4".repeat(40), releaseTree = "5".repeat(40);
+const read = p => a.lf(readFileSync(resolve(a.ROOT, p), "utf8"));
+const candidate = Object.fromEntries(a.PATHS.map(p => [p, read(p)]));
+const baseline = Object.fromEntries([...a.METADATA, ...a.WORKFLOWS].map(p => [p, a.IO.blob(a.BASE, p)]));
+function fixture() {
+  const files = {...candidate}, reads = [], sourceOverrides = {}, releaseOverrides = {};
+  const io = {
+    tree: r => r === a.BASE ? a.BASE_TREE : r === source ? sourceTree : releaseTree,
+    parents: r => r === head ? [source] : r === source ? [a.BASE] : [a.TARGET[0], head],
+    changes: (from = a.BASE, to = head) => (to === source ? a.SOURCE_PATHS : from === source ? [...a.METADATA].sort() : a.PATHS).map(p => [from === a.BASE && a.NEW_PATHS.includes(p) ? "A" : "M", p]), mode: () => "100644",
+    blob: (r, p) => { assert.ok(a.PATHS.includes(p)); reads.push(p); if (r === a.BASE) return baseline[p]; if (r === source) return sourceOverrides[p] ?? (a.METADATA.includes(p) ? baseline[p] : files[p]); return releaseOverrides[p] ?? files[p]; },
+  };
+  return {io, files, reads, sourceOverrides, releaseOverrides};
+}
+function event(manual = false) {
+  const ref = manual ? "refs/heads/" + a.BRANCH : "refs/pull/999/merge";
+  const index = manual ? 1 : 0, sha = manual ? head : merge;
+  return {repo: a.REPOSITORY, attempt: "1", event: manual ? "workflow_dispatch" : "pull_request", workflow: a.WORKFLOW_NAMES[index], workflowRef: a.REPOSITORY + "/" + a.WORKFLOWS[index] + "@" + ref, workflowSha: sha, sha, ref, refType: "branch", input: head, checkout: sha, head, headRepo: a.REPOSITORY, headRef: a.BRANCH, base: a.TARGET[0], target: a.QA_BASE_BRANCH};
+}
+test("DEV564 exact candidate tree and private/public product binding", () => {
+  const p = a.proveTree(head, fixture().io);
+  assert.equal(p.version, "1.0.564"); assert.equal(p.base, a.BASE);
+  assert.equal(p.privateSource.lfSha256, "da6041ac9560668b4e3de0613a79adbdbb7b47bb8cf45b514843cefdc2a80d08");
+  assert.equal(p.reusedFocusedCount, 60); assert.equal(a.PATHS.length, 23);
+});
+test("pinned QA PR merge tree and exact manual SHA both admitted", () => {
+  assert.equal(a.proveEvent(event(), fixture().io).admissionRoute, "dev564-qa-pr");
+  assert.equal(a.proveEvent(event(true), fixture().io).admissionRoute, "dev564-manual");
+});
+for (const [name, patch] of Object.entries({fork: {headRepo: "other/repo"}, production: {target: "main"}, targetDrift: {base: "f".repeat(40)}, branch: {headRef: "codex/other"}, rerun: {attempt: "2"}, workflow: {workflow: "unknown"}, ref: {ref: "refs/heads/main"}, workflowSha: {workflowSha: head}, workflowRef: {workflowRef: "wrong"}, checkout: {checkout: head}})) {
+  test("PR rejects " + name, () => assert.throws(() => a.proveEvent({...event(), ...patch}, fixture().io)));
+}
+for (const [name, patch] of Object.entries({push: {event: "push"}, wrongSha: {input: merge}, tag: {refType: "tag"}, origin: {repo: "other/repo"}, production: {ref: "refs/heads/main"}, rerun: {attempt: "2"}})) {
+  test("manual rejects " + name, () => assert.throws(() => a.proveEvent({...event(true), ...patch}, fixture().io)));
+}
+test("unknown path rejected before any candidate body read", () => {
+  const f = fixture(), original = f.io.changes;
+  f.io.changes = () => [...original(), ["M", "outside-allowed-scope"]];
+  assert.throws(() => a.proveTree(head, f.io), /EXACT_SCOPE/); assert.equal(f.reads.length, 0);
+});
+for (const mode of ["120000", "100755"]) test("reject mode " + mode, () => {
+  const f = fixture(); f.io.mode = () => mode;
+  assert.throws(() => a.proveTree(head, f.io), /FILE_KIND/); assert.equal(f.reads.length, 0);
+});
+test("deleted/missing path and modified-new path rejected", () => {
+  for (const kind of ["D", "M"]) {
+    const f = fixture(), original = f.io.changes;
+    f.io.changes = (from, to) => original(from, to).map(row => row[1] === a.SELF ? [kind, row[1]] : row);
+    assert.throws(() => a.proveTree(head, f.io), /FILE_KIND/);
+  }
+});
+test("source, test, adapter and each product pin cannot be replaced", () => {
+  for (const p of [a.SELF, a.TEST, a.DEV, a.DEV_TEST, ...Object.keys(a.PRODUCTS)]) {
+    const f = fixture(); f.files[p] += "\n";
+    assert.throws(() => a.proveTree(head, f.io));
+  }
+});
+test("old seals/goldens/guards remain outside successor delta", () => {
+  for (const p of ["scripts/check_r3_display_source_admission.mjs", "scripts/check_r3_display_dev_deployment.py", "tests/r3-display-source.test.mjs"])
+    assert.equal(a.PATHS.includes(p), false);
+  assert.equal(a.PATHS.some(p => /projection|manual_ledger/.test(p)), false);
+});
+test("permission, timeout and focused collector drift all fail closed", () => {
+  const edits = [[a.WORKFLOWS[0], "contents: read", "contents: write"], [a.WORKFLOWS[0], "timeout-minutes: 10", "timeout-minutes: 60"], [a.WORKFLOWS[0], a.IDENTITY_TEST, "tests/all.test.js"], [a.WORKFLOWS[1], "environment: development", "environment: production"], [a.WORKFLOWS[1], "timeout-minutes: 10", "timeout-minutes: 60"]];
+  for (const [p, before, after] of edits) {
+    const f = fixture(); assert.ok(f.files[p].includes(before)); f.files[p] = f.files[p].replace(before, after);
+    assert.throws(() => a.proveTree(head, f.io), /WORKFLOW_BYTES/);
+  }
+});
+test("workflow actually collects identity/new guards and never old full verify on successor", () => {
+  const ci = candidate[a.WORKFLOWS[0]], dev = candidate[a.WORKFLOWS[1]];
+  assert.ok(ci.includes("node --test " + a.TEST + " " + a.IDENTITY_TEST));
+  assert.ok(ci.includes("python -B " + a.DEV_TEST));
+  assert.ok(ci.includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.ok(ci.includes("if: steps.display.outputs.display_only == 'true'"));
+  assert.ok(dev.includes("run: node " + a.SELF + " --dev-source"));
+  assert.ok(dev.includes("run: python -B " + a.DEV));
+  assert.equal(dev.includes("--source-only"), false); assert.equal(dev.includes("--live-preflight"), false);
+});
+test("metadata13 is exact official bump shape and native settings unchanged", () => {
+  assert.equal(a.METADATA.length, 13);
+  for (const p of a.METADATA) assert.equal(candidate[p], a.expectedMetadata(p, baseline[p]));
+  assert.deepEqual(JSON.parse(candidate["app/release.json"]).nativePlatforms, JSON.parse(baseline["app/release.json"]).nativePlatforms);
+  const f = fixture(); f.files["app/release.json"] = f.files["app/release.json"].replace('"1.0.564"', '"1.0.565"');
+  assert.throws(() => a.proveTree(head, f.io), /METADATA_BYTES/);
+});
+test("base tree, parent and merge payload drift reject", () => {
+  for (const route of ["base", "parent", "merge"]) {
+    const f = fixture(), tree = f.io.tree;
+    if (route === "parent") f.io.parents = () => [a.BASE, a.BASE];
+    else f.io.tree = r => r === (route === "base" ? a.BASE : merge) ? "wrong" : tree(r);
+    assert.throws(() => a.proveEvent(event(), f.io));
+  }
+});
+test("timeout propagates; no permissive retry/fallback", () => {
+  const f = fixture(); let reads = 0;
+  f.io.blob = () => { reads++; throw Error("ETIMEDOUT"); };
+  assert.throws(() => a.proveTree(head, f.io), /ETIMEDOUT/); assert.equal(reads, 1);
+});
+test("hosted dirty state, on-disk mutation and parent symlink reject", () => {
+  const f = fixture();
+  assert.throws(() => a.verifyCheckout(event(), {status: () => " M other", io: f.io, read: () => { throw Error("unexpected read"); }}), /HOSTED_CLEAN/);
+  assert.equal(f.reads.length, 0);
+  assert.throws(() => a.verifyCheckout(event(), {status: () => "", io: f.io, read: p => f.files[p] + "changed"}), /WORKTREE_BYTES/);
+  assert.throws(() => a.regularPath(a.SELF, () => ({isSymbolicLink: () => true, isFile: () => true})), /SYMLINK/);
+  assert.throws(() => a.regularPath("outside-scope", () => { throw Error("unexpected stat"); }), /READ_OUTSIDE_SCOPE/);
+});
+
+test("DEV564 recovery: private main binding only; public remote plan remains unapproved", () => {
+  assert.deepEqual(a.PRIVATE_SOURCE, {
+    base: "d33a687b120e85f8dbb77d8b28fc4a040a3ea61c", tree: "00cd817ff13642092d92c5562f06b88540d57334",
+    path: "90-Dashboard/tennis-note-prototype/app.js", lfSha256: "da6041ac9560668b4e3de0613a79adbdbb7b47bb8cf45b514843cefdc2a80d08",
+  });
+  assert.equal(a.BASE, "b18de04ee6e883ecf4f530aee678732fb5e0d783");
+  assert.equal(a.BRANCH, "codex/tennisnote-r3-registration-dev564-public-20261028");
+  assert.deepEqual(a.proveTree(head, fixture().io).privateSource, a.PRIVATE_SOURCE);
+  // 명시 승인된 두 층 외의 부모 연결은 계속 차단한다.
+  const f = fixture(); f.io.parents = () => ["3".repeat(40)];
+  assert.throws(() => a.proveEvent(event(), f.io));
+  assert.equal(a.PATHS.length, 23); assert.equal(a.METADATA.length, 13);
+});
+
+test("DEV564 two-layer: source10 then metadata13 and full complement", () => {
+  const f = fixture(), proof = a.proveEvent(event(), f.io);
+  assert.equal(a.SOURCE_PATHS.length, 10); assert.equal(a.METADATA.length, 13);
+  assert.deepEqual([...a.SOURCE_PATHS, ...a.METADATA].sort(), a.PATHS);
+  assert.equal(new Set([...a.SOURCE_PATHS, ...a.METADATA]).size, 23);
+  assert.deepEqual(a.TARGET, [a.BASE, a.BASE_TREE]);
+  assert.equal(a.QA_BASE_BRANCH, "codex/tennisnote-r3-display-dev563-20261028");
+  assert.deepEqual(proof.layers, {count: 2, sourceCommit: source, metadataCommit: head, sourceTree, metadataTree: releaseTree});
+  assert.equal(proof.admissionRoute, "dev564-qa-pr");
+  assert.equal(a.proveEvent(event(true), fixture().io).admissionRoute, "dev564-manual");
+});
+
+test("DEV564 two-layer: combined extra intermediate multi-parent and C-only reject", () => {
+  for (const kind of ["combined", "extra", "multi", "same", "C-only"]) {
+    const f = fixture(), original = f.io.parents;
+    f.io.parents = r => kind === "combined" && r === head ? [a.BASE]
+      : kind === "extra" && r === source ? ["6".repeat(40)]
+      : kind === "multi" && r === head ? [source, a.BASE]
+      : kind === "same" && r === head ? [head] : original(r);
+    assert.throws(() => a.proveTree(kind === "C-only" ? source : head, f.io), /TWO_LAYER_PARENTS/);
+    assert.equal(f.reads.length, 0);
+  }
+});
+
+test("DEV564 two-layer: unknown or misplaced path in any layer rejected before read", () => {
+  for (const layer of [[a.BASE, source], [source, head], [a.BASE, head]]) {
+    for (const kind of ["extra", "missing", "wrong-kind", "rename"]) {
+      const f = fixture(), original = f.io.changes;
+      f.io.changes = (from, to) => {
+        const rows = original(from, to); if (from !== layer[0] || to !== layer[1]) return rows;
+        if (kind === "extra") return [...rows, ["M", "outside-approved-layer"]];
+        if (kind === "missing") return rows.slice(1);
+        return rows.map((r, i) => i ? r : [kind === "rename" ? "R100" : "D", r[1]]);
+      };
+      assert.throws(() => a.proveTree(head, f.io), /EXACT_SCOPE|FILE_KIND/); assert.equal(f.reads.length, 0);
+    }
+  }
+  for (const ref of [source, head]) for (const mode of ["120000", "100755"]) {
+    const f = fixture(); f.io.mode = (r, p) => r === ref && p === a.PATHS[0] ? mode : "100644";
+    assert.throws(() => a.proveTree(head, f.io), /FILE_KIND/); assert.equal(f.reads.length, 0);
+  }
+});
+
+test("DEV564 two-layer: source and metadata drift cannot cross layers", () => {
+  for (const p of a.SOURCE_PATHS) {
+    const f = fixture(); f.sourceOverrides[p] = f.files[p] + "changed";
+    assert.throws(() => a.proveTree(head, f.io));
+    const d = fixture(); d.releaseOverrides[p] = d.files[p] + "changed";
+    assert.throws(() => a.proveTree(head, d.io), /SOURCE_BYTES/);
+  }
+  for (const p of a.METADATA) {
+    const f = fixture(); f.sourceOverrides[p] = f.files[p];
+    assert.throws(() => a.proveTree(head, f.io), /EARLY_METADATA/);
+    const d = fixture(); d.releaseOverrides[p] = d.files[p] + "changed";
+    assert.throws(() => a.proveTree(head, d.io), /METADATA_BYTES/);
+  }
+});
+
+test("DEV564 two-layer: old dev main wrong refs merge and dirty cannot enter", () => {
+  for (const patch of [{target: "dev"}, {target: "main"}, {headRef: a.QA_BASE_BRANCH}, {base: "d1a22ea5faf60b9fb97d10e5029ec6027351b759"}, {attempt: "2"}, {workflowSha: head}, {headRepo: "other/repo"}])
+    assert.throws(() => a.proveEvent({...event(), ...patch}, fixture().io));
+  for (const kind of ["parents", "tree"]) {
+    const f = fixture(), parents = f.io.parents, tree = f.io.tree;
+    if (kind === "parents") f.io.parents = r => r === merge ? [a.BASE, source] : parents(r);
+    else f.io.tree = r => r === merge ? "6".repeat(40) : tree(r);
+    assert.throws(() => a.proveEvent(event(), f.io), /PR_MERGE_PARENTS|MERGE_PAYLOAD/);
+  }
+  const f = fixture();
+  assert.throws(() => a.verifyCheckout(event(), {status: () => " M preserved-other", io: f.io, read: () => { throw Error("UNEXPECTED_READ"); }}), /HOSTED_CLEAN/);
+  assert.equal(f.reads.length, 0);
+  assert.throws(() => a.verifyCheckout(event(), {status: () => "", io: f.io, read: p => f.files[p] + "changed"}), /WORKTREE_BYTES/);
+});
+
+// 실제 CLI 본문은 유지하고 I/O만 메모리 경계로 대체한다. 이전 검사·DB·HTTP 실행 0.
+function runTwoLayerCli(manual, patch = {}) {
+  const f = fixture(), e = {...event(manual), ...patch}, outputs = [], printed = [], errors = [], calls = [];
+  const script = resolve(a.ROOT, a.SELF), eventPath = "synthetic-event", outputPath = "synthetic-output";
+  const payload = manual ? {inputs: {candidate_sha: e.input}} : {pull_request: {head: {sha: e.head, ref: e.headRef, repo: {full_name: e.headRepo}}, base: {sha: e.base, ref: e.target}}};
+  const fakeProcess = {argv: ["node", script, manual ? "--dev-source" : "--ci-route"], exitCode: 0, env: {
+    GITHUB_REPOSITORY: e.repo, GITHUB_RUN_ATTEMPT: e.attempt, GITHUB_EVENT_NAME: e.event,
+    GITHUB_WORKFLOW: e.workflow, GITHUB_WORKFLOW_REF: e.workflowRef, GITHUB_WORKFLOW_SHA: e.workflowSha,
+    GITHUB_SHA: e.sha, GITHUB_REF: e.ref, GITHUB_REF_TYPE: e.refType, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath,
+  }};
+  const git = (bin, args) => {
+    assert.equal(bin, "git"); calls.push(Array.from(args));
+    if (args[0] === "rev-parse") return args[1] === "HEAD" ? e.checkout : f.io.tree(args[1].replace(/\^\{tree\}$/, ""));
+    if (args[0] === "status") return "";
+    if (args[0] === "diff") { assert.ok([[a.BASE, source], [source, head], [a.BASE, head]].some(pair => pair[0] === args[3] && pair[1] === args[4])); return f.io.changes(args[3], args[4]).map(r => r.join("\t")).join("\n"); }
+    if (args[0] === "ls-tree") { assert.ok(a.PATHS.includes(args.at(-1))); return f.io.mode(args[2], args.at(-1)); }
+    if (args[0] === "show" && args[1] === "-s") return f.io.parents(args.at(-1)).join(" ");
+    if (args[0] === "show") { const [ref, p] = args[1].split(":"); return f.io.blob(ref, p); }
+    throw Error("UNEXPECTED_GIT_CALL");
+  };
+  const body = candidate[a.SELF].replace(/^import .*;\n/gm, "").replace(/^export /gm, "").replaceAll("import.meta.url", JSON.stringify(pathToFileURL(script).href));
+  runInNewContext(body, {createHash, fileURLToPath, pathToFileURL, dirname, resolve, process: fakeProcess, execFileSync: git,
+    readFileSync: p => { if (p === eventPath) return JSON.stringify(payload); const key = a.PATHS.find(n => resolve(a.ROOT, n) === p); assert.ok(key); return f.files[key]; },
+    appendFileSync: (p, value) => { assert.equal(p, outputPath); outputs.push(value); },
+    lstatSync: () => ({isSymbolicLink: () => false, isFile: () => true}),
+    console: {log: s => printed.push(JSON.parse(s)), error: s => errors.push(s)},
+    fetch: () => { throw Error("NETWORK_FORBIDDEN"); },
+  }, {timeout: 5000});
+  return {code: fakeProcess.exitCode, outputs, printed, errors, calls};
+}
+
+test("DEV564 two-layer: actual QA CLI collects only successor and preserved identity", () => {
+  const r = runTwoLayerCli(false);
+  assert.equal(r.code, 0); assert.deepEqual(r.outputs, ["scoped=true\npurchase_identity_only=true\n"]);
+  assert.equal(r.printed[0].layers.sourceCommit, source); assert.equal(r.printed[0].layers.metadataCommit, head);
+  assert.equal(r.printed[0].admissionRoute, "dev564-qa-pr");
+  const ci = candidate[a.WORKFLOWS[0]];
+  assert.equal(ci, a.expectedWorkflow(a.WORKFLOWS[0], baseline[a.WORKFLOWS[0]]));
+  assert.ok(ci.includes("run: node " + a.SELF + " --ci-route"));
+  assert.ok(ci.includes("node --test " + a.TEST + " " + a.IDENTITY_TEST));
+  assert.ok(ci.includes("python -B " + a.DEV_TEST));
+  assert.ok(ci.includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.equal(r.calls.filter(c => c[0] === "diff").length, 3);
+  for (const target of ["dev", "main"]) { const bad = runTwoLayerCli(false, {target}); assert.equal(bad.code, 2); assert.deepEqual(bad.outputs, []); assert.deepEqual(bad.errors, ["R3_PURCHASE_IDENTITY_HOLD"]); }
+});
+
+test("DEV564 two-layer: actual manual CLI admits only D on exact future ref", () => {
+  const r = runTwoLayerCli(true); assert.equal(r.code, 0); assert.deepEqual(r.outputs, []);
+  assert.equal(r.printed[0].admissionRoute, "dev564-manual"); assert.equal(r.printed[0].layers.metadataCommit, head);
+  const dev = candidate[a.WORKFLOWS[1]]; assert.equal(dev, a.expectedWorkflow(a.WORKFLOWS[1], baseline[a.WORKFLOWS[1]]));
+  assert.ok(dev.includes("run: node " + a.SELF + " --dev-source")); assert.ok(dev.includes("run: python -B " + a.DEV));
+  for (const patch of [{input: source}, {event: "push"}, {ref: "refs/heads/" + a.QA_BASE_BRANCH}, {attempt: "2"}]) {
+    const bad = runTwoLayerCli(true, patch); assert.equal(bad.code, 2); assert.deepEqual(bad.outputs, []); assert.deepEqual(bad.errors, ["R3_PURCHASE_IDENTITY_HOLD"]);
+  }
+});
+
+// 새 delta만 실행. 실제 고정 DEV564의 원래 proof는 그대로 재사용한다.
+const termFiles=Object.fromEntries(a.TERM_SOURCE_PATHS.map(p=>[p,read(p)]));
+const priorMemo=new Map();
+const prior=(method,...args)=>{
+  const key=JSON.stringify([method,...args]);
+  if(!priorMemo.has(key))priorMemo.set(key,a.IO[method](...args));
+  return priorMemo.get(key);
+};
+const termMetadata=Object.fromEntries(a.METADATA.map(p=>[p,a.expectedTermMetadata(p,prior("blob",a.TERM_BASE,p))]));
+function termFixture(checkout=false){
+  const base=checkout?a.CHECKOUT_BASE:a.TERM_BASE,paths=checkout?a.CHECKOUT_PATHS:a.TERM_PATHS,sourcePaths=checkout?a.CHECKOUT_SOURCE_PATHS:a.TERM_SOURCE_PATHS;
+  const selected=checkout?Object.fromEntries(a.CHECKOUT_PATHS.map(p=>[p,read(p)])):{...termFiles,...termMetadata};
+  const f={files:{...selected},parents:[source],sourceParents:[base],mergeParents:[a.BASE,head],status:"",diskSuffix:"",sourceOverrides:{},rows:{},mergeTree:releaseTree};
+  f.io={tree:r=>r===source?sourceTree:r===head?releaseTree:r===merge?f.mergeTree:prior("tree",r),
+    parents:r=>r===head?f.parents:r===source?f.sourceParents:r===merge?f.mergeParents:prior("parents",r),
+    changes:(from,to)=>Object.hasOwn(f.rows,from+":"+to)?f.rows[from+":"+to]:[source,head].includes(to)?(to===source?sourcePaths:from===source?[...a.METADATA].sort():paths).map(p=>["M",p]):prior("changes",from,to),
+    mode:(r,p)=>[source,head,merge].includes(r)?f.badMode===p?"120000":"100644":prior("mode",r,p),
+    blob:(r,p)=>r===source?f.sourceOverrides[p]??(a.METADATA.includes(p)?prior("blob",base,p):f.files[p]??prior("blob",base,p)):[head,merge].includes(r)?f.files[p]??prior("blob",base,p):prior("blob",r,p)};
+  return f;
+}
+function runTermCli(manual=false,f=termFixture(),patch={},checkout=false){
+  const e={...event(manual),...patch},outputs=[],printed=[],errors=[],calls=[],script=resolve(a.ROOT,a.SELF);
+  const payload=manual?{inputs:{candidate_sha:e.input}}:{pull_request:{head:{sha:e.head,ref:e.headRef,repo:{full_name:e.headRepo}},base:{sha:e.base,ref:e.target}}};
+  const fakeProcess={argv:["node",script,manual?"--dev-source":"--ci-route",checkout?"--checkout-mode":"--term-history"],exitCode:0,env:{
+    GITHUB_REPOSITORY:e.repo,GITHUB_RUN_ATTEMPT:e.attempt,GITHUB_EVENT_NAME:e.event,GITHUB_WORKFLOW:e.workflow,GITHUB_WORKFLOW_REF:e.workflowRef,GITHUB_WORKFLOW_SHA:e.workflowSha,
+    GITHUB_SHA:e.sha,GITHUB_REF:e.ref,GITHUB_REF_TYPE:e.refType,GITHUB_EVENT_PATH:"term-event",GITHUB_OUTPUT:"term-output"}};
+  const exec=(bin,args)=>{
+    assert.equal(bin,"git");calls.push(Array.from(args));
+    if(args[0]==="status")return f.status;
+    if(args[0]==="rev-parse")return args[1]==="HEAD"?e.checkout:f.io.tree(args[1].replace(/\^\{tree\}$/,""));
+    if(args[0]==="show"&&args[1]==="-s")return f.io.parents(args.at(-1)).join(" ");
+    if(args[0]==="show")return f.io.blob(...args[1].split(":"));
+    if(args[0]==="diff")return f.io.changes(args[3],args[4]).map(r=>r.join("\t")).join("\n");
+    if(args[0]==="ls-tree")return f.io.mode(args[2],args.at(-1));
+    throw Error("UNEXPECTED_COMMAND");
+  };
+  const body=f.files[a.SELF].replace(/^import .*;\n/gm,"").replace(/^export /gm,"").replaceAll("import.meta.url",JSON.stringify(pathToFileURL(script).href));
+  runInNewContext(body,{createHash,fileURLToPath,pathToFileURL,dirname,resolve,process:fakeProcess,execFileSync:exec,
+    readFileSync:p=>{if(p==="term-event")return JSON.stringify(payload);const name=(checkout?a.CHECKOUT_READ_PATHS:a.TERM_READ_PATHS).find(n=>resolve(a.ROOT,n)===p);assert.ok(name);return f.io.blob(head,name)+f.diskSuffix;},
+    appendFileSync:(p,s)=>{assert.equal(p,"term-output");outputs.push(s);},lstatSync:()=>({isSymbolicLink:()=>false,isFile:()=>true}),
+    console:{log:s=>printed.push(JSON.parse(s)),error:s=>errors.push(s)},fetch:()=>{throw Error("NETWORK_FORBIDDEN");}}, {timeout:10000});
+  return {exit:fakeProcess.exitCode,outputs,printed,errors,calls};
+}
+const termHeld=r=>{assert.equal(r.exit,2);assert.deepEqual(r.outputs,[]);assert.deepEqual(r.printed,[]);assert.deepEqual(r.errors,["R3_PURCHASE_IDENTITY_HOLD"]);};
+test("DEV565 term-history: inherited actual two-layer proof and new eight plus thirteen",()=>{
+  assert.equal(a.proveTree(a.TERM_BASE).tree,a.TERM_BASE_TREE);
+  const p=a.proveTermTree(head,termFixture().io);
+  assert.equal(p.version,"1.0.565");assert.equal(p.privateSource.lfSha256,"5766160ea0d3ac45ae5b0d09529b74924f7a3547bfb44ba4b59db073f141d508");
+  assert.match(p.privateSource.commit,/^[a-f0-9]{40}$/);assert.equal(a.TERM_SOURCE_PATHS.length,8);assert.equal(a.TERM_PATHS.length,21);
+  assert.equal(a.termSeal(termFiles[a.SELF]),a.TERM_SEAL);assert.equal(p.hostedDb,0);
+});
+test("DEV565 term-history: actual PR CLI only new collector and exact DEV dispatch",()=>{
+  const pr=runTermCli();assert.equal(pr.exit,0);assert.deepEqual(pr.outputs,["scoped=true\nterm_history_only=true\n"]);assert.equal(pr.printed[0].admissionRoute,"dev565-qa-pr");
+  const dev=runTermCli(true);assert.equal(dev.exit,0);assert.deepEqual(dev.outputs,[]);assert.equal(dev.printed[0].admissionRoute,"dev565-manual");
+  for(const r of [pr,dev])assert.equal(r.calls.some(c=>!["status","rev-parse","show","diff","ls-tree"].includes(c[0])),false);
+});
+test("DEV565 term-history: each byte path mode and layer crossing rejected",()=>{
+  for(const p of a.TERM_PATHS){const f=termFixture();f.files[p]+="\n";termHeld(runTermCli(false,f));}
+  for(const pair of [[a.TERM_BASE,source],[source,head],[a.TERM_BASE,head]])for(const mutate of [r=>r.slice(1),r=>[...r,["M","outside"]],r=>r.map((x,i)=>i?x:["A",x[1]])]){
+    const f=termFixture();f.rows[pair.join(":")]=mutate(f.io.changes(...pair));termHeld(runTermCli(false,f));
+  }
+  const f=termFixture();f.badMode=a.DEV;termHeld(runTermCli(false,f));
+  for(const p of a.METADATA){const g=termFixture();g.sourceOverrides[p]=termMetadata[p];termHeld(runTermCli(false,g));}
+});
+test("DEV565 term-history: parents merge drift fork old target rerun and production denied",()=>{
+  for(const parents of [[a.TERM_BASE],[source,a.TERM_BASE],[]]){const f=termFixture();f.parents=parents;termHeld(runTermCli(false,f));}
+  const f=termFixture();f.sourceParents=[a.BASE];termHeld(runTermCli(false,f));
+  const m=termFixture();m.mergeParents=[a.BASE,source];termHeld(runTermCli(false,m));
+  for(const patch of [{attempt:"2"},{target:"main"},{base:a.TERM_BASE},{headRepo:"other/repo"},{workflowSha:head},{checkout:head}])termHeld(runTermCli(false,termFixture(),patch));
+  for(const patch of [{event:"push"},{input:source},{ref:"refs/heads/main"},{refType:"tag"},{attempt:"2"}])termHeld(runTermCli(true,termFixture(),patch));
+});
+test("DEV565 term-history: dirty disk and failed read have no output or retry",()=>{
+  const f=termFixture();f.status=" M unrelated";termHeld(runTermCli(false,f));
+  const d=termFixture();d.diskSuffix="drift";termHeld(runTermCli(false,d));
+  const t=termFixture();let calls=0;t.io.blob=()=>{calls++;throw Error("SYNTHETIC_PRIVATE_ERROR");};termHeld(runTermCli(false,t));assert.equal(calls,1);
+});
+test("DEV565 term-history: workflow permissions target and mechanical metadata parity",()=>{
+  for(const p of a.WORKFLOWS)assert.equal(termFiles[p],a.expectedTermWorkflow(p,prior("blob",a.TERM_BASE,p)));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("--test-name-pattern='"+a.TERM_PATTERN+"'"));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("python -B "+a.DEV_TEST+" TermHistory"));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.ok(termFiles[a.WORKFLOWS[1]].includes("environment: development"));assert.ok(termFiles[a.WORKFLOWS[1]].includes("timeout-minutes: 10"));
+  assert.deepEqual(JSON.parse(termMetadata["app/release.json"]).nativePlatforms,JSON.parse(prior("blob",a.TERM_BASE,"app/release.json")).nativePlatforms);
+  assert.equal(a.TERM_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
+});
+test("DEV565 term-history: actual public matcher and save call use fresh historical and current terms",()=>{
+  const domain=termFiles["app/admin/domain/coaches.js"],action=termFiles["app/admin/actions/coach.js"];
+  const extract=name=>{const tail=domain.slice(domain.indexOf("function "+name+"("));assert.ok(tail.startsWith("function "+name+"("));const end=tail.slice(1).search(/\n(?:async )?function /);assert.ok(end>0);return tail.slice(0,end+1).trim();};
+  const helpers=["coachStaffServerMatches","coachStaffFreshSettlementTermMatches","coachSettlementTermDraft"].map(extract).join("\n");
+  const match=runInNewContext(helpers+"\ncoachStaffServerMatches",{normalizedMemberPhone:v=>String(v||"").replace(/[^0-9]/g,""),normalizeCoachWorkBlocks:v=>v.workBlocks,normalizeCoachBreakBlocks:v=>v.breakBlocks,coachBlockSignature:JSON.stringify,coachSettlementRule:v=>v.settlement,adminLocalDateKey:()=>"2026-10-28"});
+  const saved={name:"synthetic",phone:"",role:"레슨",approvalStatus:"approved",employmentStatus:"active",bio:"",serverRoleId:"synthetic-A",workBlocks:[],breakBlocks:[],settlement:{method:"ratio",ratio:0,cardBase:"cash",substitute:"actualCoach",effectiveFrom:"2026-10-26",calculationMode:"session_progress"}};
+  const draft={...saved,jobTitle:"레슨",coachRoleId:"synthetic-A",settlement:{method:"ratio",ratio:40,basis:"cash_ex_vat",substitute:"actualCoach",effectiveFrom:"2026-09-01",calculationMode:"session_progress"}};
+  const term={coach_role_id:"synthetic-A",effective_from:"2026-09-01",effective_to:"2026-10-25",status:"ended",settlement_type:"ratio",coach_rate:0.4,settlement_basis:"cash_ex_vat",substitute_policy:"actualCoach",settlement_calculation_mode:"session_progress"};
+  const current={...term,effective_from:"2026-10-26",effective_to:null,status:"active",coach_rate:0};
+  const call="coachStaffServerMatches(saved, draft, adminLiveDataState.coachSettlementTerms)";
+  assert.ok(action.includes(call));const actual=terms=>runInNewContext(call,{coachStaffServerMatches:match,saved,draft,adminLiveDataState:{coachSettlementTerms:terms}});
+  assert.equal(actual([term,current]),true);assert.equal(actual([term]),false);assert.equal(actual([term,term,current]),false);
+  saved.settlement.ratio=0.5;assert.equal(actual([term,current]),false);
+});
+
+// 실제 미커밋 원본은 hosted NO-GO. 아래 bound SHA는 메모리 합성 CLI에만 사용한다.
+function boundCheckoutFixture() {
+  const f=termFixture(true);
+  if(a.CHECKOUT_PRIVATE_SOURCE.commit===null) {
+    let s=a.once(f.files[a.SELF],'CHECKOUT_PRIVATE_SOURCE = Object.freeze({commit:null,','CHECKOUT_PRIVATE_SOURCE = Object.freeze({commit:"'+"9".repeat(40)+'",');
+    s=s.replace(/export const CHECKOUT_SEAL = "[^"]+";/,'export const CHECKOUT_SEAL = "PENDING";');
+    f.files[a.SELF]=s.replace('export const CHECKOUT_SEAL = "PENDING";','export const CHECKOUT_SEAL = "'+a.hash(s)+'";');
+  }
+  return f;
+}
+test("DEV566 checkout-mode: exact seven source plus thirteen official release paths",()=>{
+  const f=termFixture(true),p=a.proveCheckoutTree(head,f.io,true);
+  assert.equal(p.version,"1.0.566");assert.equal(p.reusedLocalChecks,101);assert.equal(p.hostedDb,0);
+  assert.equal(a.CHECKOUT_SOURCE_PATHS.length,7);assert.equal(a.CHECKOUT_PATHS.length,20);
+  assert.equal(a.checkoutSeal(f.files[a.SELF]),a.CHECKOUT_SEAL);
+  for(const p of Object.keys(a.CHECKOUT_CONNECTION_PINS))assert.equal(a.hash(f.files[p]),a.CHECKOUT_CONNECTION_PINS[p]);
+});
+test("DEV566 checkout-mode: pending real private commit denies actual PR and DEV CLI",()=>{
+  if(a.CHECKOUT_PRIVATE_SOURCE.commit===null) {
+    for(const manual of [false,true])termHeld(runTermCli(manual,termFixture(true),{},true));
+    assert.throws(()=>a.proveCheckoutTree(head,termFixture(true).io),/PRIVATE_COMMIT_PENDING/);
+  } else assert.match(a.CHECKOUT_PRIVATE_SOURCE.commit,/^[a-f0-9]{40}$/);
+});
+test("DEV566 checkout-mode: synthetic bound actual CLI only admits PR and exact manual DEV",()=>{
+  for(const manual of [false,true]) {
+    const r=runTermCli(manual,boundCheckoutFixture(),{},true);
+    assert.equal(r.exit,0);assert.deepEqual(r.errors,[]);
+    assert.deepEqual(r.outputs,manual?[]:["scoped=true\ncheckout_mode_only=true\n"]);
+    assert.equal(r.printed[0].admissionRoute,manual?"dev566-manual":"dev566-qa-pr");
+    assert.equal(r.calls.some(c=>!["status","rev-parse","show","diff","ls-tree"].includes(c[0])),false);
+  }
+});
+test("DEV566 checkout-mode: wrong bytes paths layers and source commit binding fail closed",()=>{
+  for(const p of a.CHECKOUT_PATHS){const f=boundCheckoutFixture();f.files[p]+="\n";termHeld(runTermCli(false,f,{},true));}
+  for(const pair of [[a.CHECKOUT_BASE,source],[source,head],[a.CHECKOUT_BASE,head]]) {
+    const f=boundCheckoutFixture();f.rows[pair.join(":")]=[...f.io.changes(...pair),["M","outside"]];termHeld(runTermCli(false,f,{},true));
+  }
+  const mode=boundCheckoutFixture();mode.badMode=a.DEV;termHeld(runTermCli(false,mode,{},true));
+  for(const p of a.METADATA){const f=boundCheckoutFixture();f.sourceOverrides[p]=f.files[p];termHeld(runTermCli(false,f,{},true));}
+  for(const parents of [[a.TERM_BASE],[source,a.CHECKOUT_BASE],[]]){const f=boundCheckoutFixture();f.parents=parents;termHeld(runTermCli(false,f,{},true));}
+});
+test("DEV566 checkout-mode: fork production rerun dirty and merge drift blocked",()=>{
+  for(const patch of [{attempt:"2"},{target:"main"},{base:a.CHECKOUT_BASE},{headRepo:"other/repo"},{workflowSha:head},{checkout:head}])termHeld(runTermCli(false,boundCheckoutFixture(),patch,true));
+  for(const patch of [{event:"push"},{input:source},{ref:"refs/heads/main"},{refType:"tag"}])termHeld(runTermCli(true,boundCheckoutFixture(),patch,true));
+  const f=boundCheckoutFixture();f.status=" M unrelated";termHeld(runTermCli(false,f,{},true));
+  const m=boundCheckoutFixture();m.mergeTree="8".repeat(40);termHeld(runTermCli(false,m,{},true));
+});
+test("DEV566 checkout-mode: official generated metadata and workflow guards match",()=>{
+  const f=termFixture(true);
+  for(const p of a.WORKFLOWS)assert.equal(f.files[p],a.expectedCheckoutWorkflow(p,prior("blob",a.CHECKOUT_BASE,p)));
+  for(const p of a.METADATA)assert.equal(read(p),a.expectedCheckoutMetadata(p,prior("blob",a.CHECKOUT_BASE,p)));
+  assert.deepEqual(JSON.parse(read("app/release.json")).nativePlatforms,JSON.parse(prior("blob",a.CHECKOUT_BASE,"app/release.json")).nativePlatforms);
+  assert.ok(f.files[a.WORKFLOWS[0]].includes("python -B "+a.DEV_TEST+" CheckoutMode"));
+  assert.ok(f.files[a.WORKFLOWS[0]].includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.ok(f.files[a.WORKFLOWS[1]].includes("environment: development"));
+  assert.equal(a.CHECKOUT_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
+});
