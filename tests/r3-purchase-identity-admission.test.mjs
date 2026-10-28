@@ -260,3 +260,101 @@ test("DEV564 two-layer: actual manual CLI admits only D on exact future ref", ()
     const bad = runTwoLayerCli(true, patch); assert.equal(bad.code, 2); assert.deepEqual(bad.outputs, []); assert.deepEqual(bad.errors, ["R3_PURCHASE_IDENTITY_HOLD"]);
   }
 });
+
+// 새 delta만 실행. 실제 고정 DEV564의 원래 proof는 그대로 재사용한다.
+const termFiles=Object.fromEntries(a.TERM_SOURCE_PATHS.map(p=>[p,read(p)]));
+const priorMemo=new Map();
+const prior=(method,...args)=>{
+  const key=JSON.stringify([method,...args]);
+  if(!priorMemo.has(key))priorMemo.set(key,a.IO[method](...args));
+  return priorMemo.get(key);
+};
+const termMetadata=Object.fromEntries(a.METADATA.map(p=>[p,a.expectedTermMetadata(p,prior("blob",a.TERM_BASE,p))]));
+function termFixture(){
+  const f={files:{...termFiles,...termMetadata},parents:[source],sourceParents:[a.TERM_BASE],mergeParents:[a.BASE,head],status:"",diskSuffix:"",sourceOverrides:{},rows:{},mergeTree:releaseTree};
+  f.io={tree:r=>r===source?sourceTree:r===head?releaseTree:r===merge?f.mergeTree:prior("tree",r),
+    parents:r=>r===head?f.parents:r===source?f.sourceParents:r===merge?f.mergeParents:prior("parents",r),
+    changes:(from,to)=>Object.hasOwn(f.rows,from+":"+to)?f.rows[from+":"+to]:[source,head].includes(to)?(to===source?a.TERM_SOURCE_PATHS:from===source?[...a.METADATA].sort():a.TERM_PATHS).map(p=>["M",p]):prior("changes",from,to),
+    mode:(r,p)=>[source,head,merge].includes(r)?f.badMode===p?"120000":"100644":prior("mode",r,p),
+    blob:(r,p)=>r===source?f.sourceOverrides[p]??(a.METADATA.includes(p)?prior("blob",a.TERM_BASE,p):f.files[p]??prior("blob",a.TERM_BASE,p)):[head,merge].includes(r)?f.files[p]??prior("blob",a.TERM_BASE,p):prior("blob",r,p)};
+  return f;
+}
+function runTermCli(manual=false,f=termFixture(),patch={}){
+  const e={...event(manual),...patch},outputs=[],printed=[],errors=[],calls=[],script=resolve(a.ROOT,a.SELF);
+  const payload=manual?{inputs:{candidate_sha:e.input}}:{pull_request:{head:{sha:e.head,ref:e.headRef,repo:{full_name:e.headRepo}},base:{sha:e.base,ref:e.target}}};
+  const fakeProcess={argv:["node",script,manual?"--dev-source":"--ci-route","--term-history"],exitCode:0,env:{
+    GITHUB_REPOSITORY:e.repo,GITHUB_RUN_ATTEMPT:e.attempt,GITHUB_EVENT_NAME:e.event,GITHUB_WORKFLOW:e.workflow,GITHUB_WORKFLOW_REF:e.workflowRef,GITHUB_WORKFLOW_SHA:e.workflowSha,
+    GITHUB_SHA:e.sha,GITHUB_REF:e.ref,GITHUB_REF_TYPE:e.refType,GITHUB_EVENT_PATH:"term-event",GITHUB_OUTPUT:"term-output"}};
+  const exec=(bin,args)=>{
+    assert.equal(bin,"git");calls.push(Array.from(args));
+    if(args[0]==="status")return f.status;
+    if(args[0]==="rev-parse")return args[1]==="HEAD"?e.checkout:f.io.tree(args[1].replace(/\^\{tree\}$/,""));
+    if(args[0]==="show"&&args[1]==="-s")return f.io.parents(args.at(-1)).join(" ");
+    if(args[0]==="show")return f.io.blob(...args[1].split(":"));
+    if(args[0]==="diff")return f.io.changes(args[3],args[4]).map(r=>r.join("\t")).join("\n");
+    if(args[0]==="ls-tree")return f.io.mode(args[2],args.at(-1));
+    throw Error("UNEXPECTED_COMMAND");
+  };
+  const body=termFiles[a.SELF].replace(/^import .*;\n/gm,"").replace(/^export /gm,"").replaceAll("import.meta.url",JSON.stringify(pathToFileURL(script).href));
+  runInNewContext(body,{createHash,fileURLToPath,pathToFileURL,dirname,resolve,process:fakeProcess,execFileSync:exec,
+    readFileSync:p=>{if(p==="term-event")return JSON.stringify(payload);const name=a.TERM_READ_PATHS.find(n=>resolve(a.ROOT,n)===p);assert.ok(name);return f.io.blob(head,name)+f.diskSuffix;},
+    appendFileSync:(p,s)=>{assert.equal(p,"term-output");outputs.push(s);},lstatSync:()=>({isSymbolicLink:()=>false,isFile:()=>true}),
+    console:{log:s=>printed.push(JSON.parse(s)),error:s=>errors.push(s)},fetch:()=>{throw Error("NETWORK_FORBIDDEN");}}, {timeout:10000});
+  return {exit:fakeProcess.exitCode,outputs,printed,errors,calls};
+}
+const termHeld=r=>{assert.equal(r.exit,2);assert.deepEqual(r.outputs,[]);assert.deepEqual(r.printed,[]);assert.deepEqual(r.errors,["R3_PURCHASE_IDENTITY_HOLD"]);};
+test("DEV565 term-history: inherited actual two-layer proof and new eight plus thirteen",()=>{
+  assert.equal(a.proveTree(a.TERM_BASE).tree,a.TERM_BASE_TREE);
+  const p=a.proveTermTree(head,termFixture().io);
+  assert.equal(p.version,"1.0.565");assert.equal(p.privateSource.lfSha256,"5766160ea0d3ac45ae5b0d09529b74924f7a3547bfb44ba4b59db073f141d508");
+  assert.match(p.privateSource.commit,/^[a-f0-9]{40}$/);assert.equal(a.TERM_SOURCE_PATHS.length,8);assert.equal(a.TERM_PATHS.length,21);
+  assert.equal(a.termSeal(termFiles[a.SELF]),a.TERM_SEAL);assert.equal(p.hostedDb,0);
+});
+test("DEV565 term-history: actual PR CLI only new collector and exact DEV dispatch",()=>{
+  const pr=runTermCli();assert.equal(pr.exit,0);assert.deepEqual(pr.outputs,["scoped=true\nterm_history_only=true\n"]);assert.equal(pr.printed[0].admissionRoute,"dev565-qa-pr");
+  const dev=runTermCli(true);assert.equal(dev.exit,0);assert.deepEqual(dev.outputs,[]);assert.equal(dev.printed[0].admissionRoute,"dev565-manual");
+  for(const r of [pr,dev])assert.equal(r.calls.some(c=>!["status","rev-parse","show","diff","ls-tree"].includes(c[0])),false);
+});
+test("DEV565 term-history: each byte path mode and layer crossing rejected",()=>{
+  for(const p of a.TERM_PATHS){const f=termFixture();f.files[p]+="\n";termHeld(runTermCli(false,f));}
+  for(const pair of [[a.TERM_BASE,source],[source,head],[a.TERM_BASE,head]])for(const mutate of [r=>r.slice(1),r=>[...r,["M","outside"]],r=>r.map((x,i)=>i?x:["A",x[1]])]){
+    const f=termFixture();f.rows[pair.join(":")]=mutate(f.io.changes(...pair));termHeld(runTermCli(false,f));
+  }
+  const f=termFixture();f.badMode=a.DEV;termHeld(runTermCli(false,f));
+  for(const p of a.METADATA){const g=termFixture();g.sourceOverrides[p]=termMetadata[p];termHeld(runTermCli(false,g));}
+});
+test("DEV565 term-history: parents merge drift fork old target rerun and production denied",()=>{
+  for(const parents of [[a.TERM_BASE],[source,a.TERM_BASE],[]]){const f=termFixture();f.parents=parents;termHeld(runTermCli(false,f));}
+  const f=termFixture();f.sourceParents=[a.BASE];termHeld(runTermCli(false,f));
+  const m=termFixture();m.mergeParents=[a.BASE,source];termHeld(runTermCli(false,m));
+  for(const patch of [{attempt:"2"},{target:"main"},{base:a.TERM_BASE},{headRepo:"other/repo"},{workflowSha:head},{checkout:head}])termHeld(runTermCli(false,termFixture(),patch));
+  for(const patch of [{event:"push"},{input:source},{ref:"refs/heads/main"},{refType:"tag"},{attempt:"2"}])termHeld(runTermCli(true,termFixture(),patch));
+});
+test("DEV565 term-history: dirty disk and failed read have no output or retry",()=>{
+  const f=termFixture();f.status=" M unrelated";termHeld(runTermCli(false,f));
+  const d=termFixture();d.diskSuffix="drift";termHeld(runTermCli(false,d));
+  const t=termFixture();let calls=0;t.io.blob=()=>{calls++;throw Error("SYNTHETIC_PRIVATE_ERROR");};termHeld(runTermCli(false,t));assert.equal(calls,1);
+});
+test("DEV565 term-history: workflow permissions target and mechanical metadata parity",()=>{
+  for(const p of a.WORKFLOWS)assert.equal(termFiles[p],a.expectedTermWorkflow(p,prior("blob",a.TERM_BASE,p)));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("--test-name-pattern='"+a.TERM_PATTERN+"'"));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("python -B "+a.DEV_TEST+" TermHistory"));
+  assert.ok(termFiles[a.WORKFLOWS[0]].includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
+  assert.ok(termFiles[a.WORKFLOWS[1]].includes("environment: development"));assert.ok(termFiles[a.WORKFLOWS[1]].includes("timeout-minutes: 10"));
+  assert.deepEqual(JSON.parse(termMetadata["app/release.json"]).nativePlatforms,JSON.parse(prior("blob",a.TERM_BASE,"app/release.json")).nativePlatforms);
+  assert.equal(a.TERM_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
+});
+test("DEV565 term-history: actual public matcher and save call use fresh historical and current terms",()=>{
+  const domain=termFiles["app/admin/domain/coaches.js"],action=termFiles["app/admin/actions/coach.js"];
+  const extract=name=>{const tail=domain.slice(domain.indexOf("function "+name+"("));assert.ok(tail.startsWith("function "+name+"("));const end=tail.slice(1).search(/\n(?:async )?function /);assert.ok(end>0);return tail.slice(0,end+1).trim();};
+  const helpers=["coachStaffServerMatches","coachStaffFreshSettlementTermMatches","coachSettlementTermDraft"].map(extract).join("\n");
+  const match=runInNewContext(helpers+"\ncoachStaffServerMatches",{normalizedMemberPhone:v=>String(v||"").replace(/[^0-9]/g,""),normalizeCoachWorkBlocks:v=>v.workBlocks,normalizeCoachBreakBlocks:v=>v.breakBlocks,coachBlockSignature:JSON.stringify,coachSettlementRule:v=>v.settlement,adminLocalDateKey:()=>"2026-10-28"});
+  const saved={name:"synthetic",phone:"",role:"레슨",approvalStatus:"approved",employmentStatus:"active",bio:"",serverRoleId:"synthetic-A",workBlocks:[],breakBlocks:[],settlement:{method:"ratio",ratio:0,cardBase:"cash",substitute:"actualCoach",effectiveFrom:"2026-10-26",calculationMode:"session_progress"}};
+  const draft={...saved,jobTitle:"레슨",coachRoleId:"synthetic-A",settlement:{method:"ratio",ratio:40,basis:"cash_ex_vat",substitute:"actualCoach",effectiveFrom:"2026-09-01",calculationMode:"session_progress"}};
+  const term={coach_role_id:"synthetic-A",effective_from:"2026-09-01",effective_to:"2026-10-25",status:"ended",settlement_type:"ratio",coach_rate:0.4,settlement_basis:"cash_ex_vat",substitute_policy:"actualCoach",settlement_calculation_mode:"session_progress"};
+  const current={...term,effective_from:"2026-10-26",effective_to:null,status:"active",coach_rate:0};
+  const call="coachStaffServerMatches(saved, draft, adminLiveDataState.coachSettlementTerms)";
+  assert.ok(action.includes(call));const actual=terms=>runInNewContext(call,{coachStaffServerMatches:match,saved,draft,adminLiveDataState:{coachSettlementTerms:terms}});
+  assert.equal(actual([term,current]),true);assert.equal(actual([term]),false);assert.equal(actual([term,term,current]),false);
+  saved.settlement.ratio=0.5;assert.equal(actual([term,current]),false);
+});

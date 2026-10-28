@@ -922,7 +922,7 @@ function beginCoachStaffBlockEdit(type, blockId) {
   renderCoachStaffModal();
 }
 
-function coachStaffServerMatches(saved, draft) {
+function coachStaffServerMatches(saved, draft, freshTerms = null) {
   if (!saved || saved.name !== draft.name || saved.approvalStatus !== draft.approvalStatus) return false;
   if (normalizedMemberPhone(saved.phone) !== normalizedMemberPhone(draft.phone)) return false;
   if ((saved.role || "레슨") !== (draft.jobTitle || "레슨")) return false;
@@ -930,6 +930,22 @@ function coachStaffServerMatches(saved, draft) {
   if ((saved.employmentStatus || "active") !== (draft.employmentStatus || "active")) return false;
   if (coachBlockSignature(normalizeCoachWorkBlocks(saved)) !== coachBlockSignature(draft.workBlocks)) return false;
   if (coachBlockSignature(normalizeCoachBreakBlocks(saved)) !== coachBlockSignature(draft.breakBlocks)) return false;
+  // An ended/future term is verified against that exact freshly read period,
+  // not against the coach's currently applicable settlement summary.
+  if (freshTerms !== null) {
+    if (draft.coachRoleId && draft.coachRoleId !== saved.serverRoleId) return false;
+    if (!coachStaffFreshSettlementTermMatches(freshTerms, saved.serverRoleId, draft.settlement)) return false;
+    const today = adminLocalDateKey(new Date());
+    const targetTerm = freshTerms.find((term) => term.coach_role_id === saved.serverRoleId
+      && term.effective_from === draft.settlement.effectiveFrom);
+    if (targetTerm.effective_from > today || (targetTerm.effective_to && targetTerm.effective_to < today)) {
+      const currentTerms = freshTerms.filter((term) => term.coach_role_id === saved.serverRoleId
+        && ["active", "scheduled", "ended"].includes(term.status)
+        && term.effective_from <= today && (!term.effective_to || term.effective_to >= today));
+      if (currentTerms.length !== 1) return false;
+      return coachStaffServerMatches(saved, { ...draft, settlement: coachSettlementTermDraft(currentTerms[0]) });
+    }
+  }
   const settlement = coachSettlementRule(saved);
   if (settlement.method !== draft.settlement.method) return false;
   const settlementBasisToCardBase = { cash_ex_vat: "cash", actual_paid_inc_vat: "paid" };

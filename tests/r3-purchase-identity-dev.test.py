@@ -208,5 +208,77 @@ class TwoLayer(unittest.TestCase):
         self.assertEqual([c[0] for c in self.guard.calls], ["runtime"])
 
 
+class TermHistory(unittest.TestCase):
+    read = Successor.read
+
+    def setUp(self):
+        Successor.setUp(self)
+        self.proof.update(contract="r3-term-history-source/1", base=m.TERM_BASE,
+                          admissionRoute="dev565-manual", release=dict(m.TERM_RELEASE),
+                          version=m.TERM_RELEASE["version"], productHashes=dict(m.TERM_PRODUCTS))
+        for path in m.TERM_PRODUCTS:
+            value = (ROOT / path).read_bytes()
+            self.assets[path] = value
+            self.assets["dist/admin-dev/" + path.removeprefix("app/admin/")] = value
+
+    def run_preflight(self):
+        return m.preflight(self.env, self.proof, self.guard, self.read, True)
+
+    def test_new_exact_five_products_two_artifacts_then_runtime_and_rollback(self):
+        self.assertEqual(self.run_preflight(), "synthetic-rollback-proof")
+        self.assertEqual(len(self.reads), 13)
+        self.assertEqual([c[0] for c in self.guard.calls], ["runtime", "rollback"])
+        contract = self.guard.calls[0][1]
+        self.assertEqual(contract["release"], m.TERM_RELEASE)
+        self.assertEqual(contract["successorBase"], m.TERM_BASE)
+        self.assertEqual(contract["floors"]["development"]["source"], m.TERM_BASE)
+
+    def test_each_new_asset_or_receipt_drift_denied_before_effect(self):
+        import copy
+        for path in self.assets:
+            value = self.assets[path]
+            self.assets[path] += b"drift"
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+            self.assets[path] = value
+        baseline = copy.deepcopy(self.proof)
+        for key in baseline:
+            self.proof = copy.deepcopy(baseline)
+            self.proof.pop(key)
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+        self.assertEqual(self.guard.calls, [])
+
+    def test_old_receipt_unknown_mode_wrong_context_and_timeout_never_retry(self):
+        for key, value in [("base", m.BASE), ("release", m.RELEASE), ("admissionRoute", "dev564-manual")]:
+            old = self.proof[key]
+            self.proof[key] = value
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+            self.proof[key] = old
+        for key, value in [("TENNISNOTE_ENVIRONMENT", "production"), ("TENNISNOTE_PAYMENTS_ENABLED", "true"), ("GITHUB_RUN_ATTEMPT", "2"), ("GITHUB_REF", "refs/heads/dev")]:
+            old = self.env[key]
+            self.env[key] = value
+            with self.assertRaises(RuntimeError):
+                self.run_preflight()
+            self.env[key] = old
+        self.assertEqual(self.reads, [])
+        with patch.object(m.subprocess, "check_output", side_effect=AssertionError("CLI_FORBIDDEN")) as cli, redirect_stdout(io.StringIO()):
+            self.assertEqual(m.main(["--unknown"]), 2)
+            self.assertEqual(cli.call_count, 0)
+        with patch.object(m.subprocess, "check_output", side_effect=subprocess.TimeoutExpired("synthetic", 60)) as cli, redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(m.main(["--term-history"]), 2)
+            self.assertEqual(cli.call_count, 1)
+            self.assertEqual(cli.call_args.args[0], ["node", m.SOURCE, "--dev-source", "--term-history"])
+            self.assertEqual(output.getvalue(), "R3_PURCHASE_IDENTITY_DEV_PREFLIGHT_HOLD\n")
+
+    def test_runtime_fail_blocks_target_without_retry(self):
+        with patch.object(self.guard, "verify_current_live_candidate", side_effect=TimeoutError("synthetic")) as call:
+            with self.assertRaises(TimeoutError):
+                self.run_preflight()
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(self.guard.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -55,7 +55,7 @@ jobs:
           node-version: '22'
 
       - name: Admit exact DEV564 manual successor only
-        run: node scripts/check_r3_purchase_identity_admission.mjs --dev-source
+        run: node scripts/check_r3_purchase_identity_admission.mjs --dev-source --term-history
 
       - name: Build isolated development sites
         run: |
@@ -72,7 +72,7 @@ jobs:
           grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html
 
       - name: Verify DEV564 runtime assets and exact rollback target
-        run: python -B scripts/check_r3_purchase_identity_dev.py
+        run: python -B scripts/check_r3_purchase_identity_dev.py --term-history
 
       - name: Deploy member development PWA
         run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev

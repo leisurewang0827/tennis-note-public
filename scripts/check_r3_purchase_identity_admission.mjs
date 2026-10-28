@@ -32,6 +32,21 @@ export const RELEASE = Object.freeze({version: "1.0.564", appSurfaceVersion: "1.
 export const NEW_PATHS = [SELF, TEST, DEV, DEV_TEST, IDENTITY_TEST];
 export const PATHS = [...Object.keys(PRODUCTS), ...METADATA, SELF, TEST, DEV, DEV_TEST, ...WORKFLOWS].sort();
 export const SOURCE_PATHS = PATHS.filter(p => !METADATA.includes(p));
+// 기존 DEV564 두 층은 변경하지 않고 exact 후속 두 층만 별도로 검증한다.
+export const TERM_BASE = "80147fb6c0ae1de7fb539587a6370fdbf7af67f5";
+export const TERM_BASE_TREE = "adc8ceb8aaccca0720d74de4aa97b019f991e272";
+export const TERM_PRODUCTS = Object.freeze({
+  "app/admin/actions/coach.js": "48a36468df968686b913051dab2346318100571462814f40ae4d1b5fe89298bf",
+  "app/admin/domain/coaches.js": "2380cd04d5c31107482d04e02647ed2901b50a197d2bf5051339d152c4cf37bc",
+});
+export const TERM_PRIVATE_SOURCE = Object.freeze({commit:"c0ab08ef6c654964bc0b3d151341ec16c576022f",parent:"856ae3bd5c32888716f245e17c1e6d92cc3b27ff",path:PRIVATE_SOURCE.path,lfSha256:"5766160ea0d3ac45ae5b0d09529b74924f7a3547bfb44ba4b59db073f141d508"});
+export const TERM_SOURCE_PATHS = [...Object.keys(TERM_PRODUCTS),SELF,TEST,DEV,DEV_TEST,...WORKFLOWS].sort();
+export const TERM_PATHS = [...TERM_SOURCE_PATHS,...METADATA].sort();
+export const TERM_READ_PATHS = [...new Set([...PATHS,...TERM_PATHS])].sort();
+export const TERM_PATTERN = "^DEV565 term-history:";
+export const TERM_RELEASE = Object.freeze({version:"1.0.565",appSurfaceVersion:"1.0.565",releaseId:"2026.10.28.04",deployedAt:"2026-10-28T18:49:26+09:00",memberCache:"tennis-note-member-pwa-v598",coachCache:"tennis-note-coach-mode-v571"});
+export const TERM_CONNECTION_PINS = {[TEST]:"819d2c7a86e094f4035a50f9b8b37f0ecbf74c5084baafbf22544914b97810f0",[DEV]:"0ec8813b7d294944a95ef59704132e5581050700687e3fbecd22ee6c40d08e03",[DEV_TEST]:"b2afcbda854f66f886620ab345bedd2a0a883bb13a04984a139f1236f885d789"};
+export const TERM_SEAL = "904fd4e9e0e1c78c46c383ee03bda6969abc47e7351653988f1c713312ef2443";
 export const PRESERVED = {
   "app/admin/actions/billing.js": "b9552a836fcedfe904ec08b364c04a3afc722cdb1c423619df3fa53f18b33d47",
   "tests/r3-settlement-preview-errors.test.js": "cee1a42b2885363aea120fa443295f7fb2580c2e6da1c08d83d86e786b782fc1",
@@ -42,24 +57,24 @@ export const need = (ok, code) => { if (!ok) throw Error(code); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export const once = (s, a, b) => { need(s.split(a).length === 2, "ANCHOR"); return s.replace(a, b); };
 export const seal = s => hash(lf(s).replace(/export const SOURCE_SEAL = "[^"]+";/, 'export const SOURCE_SEAL = "PENDING";'));
-export function expectedMetadata(name, source) {
+export function expectedMetadata(name, source, release = RELEASE, previous = "1.0.563") {
   let s = lf(source);
   if (name === "app/release.json" || name === "app/shared/tennisnote-release.js") {
     for (const k of ["version", "appSurfaceVersion", "releaseId", "deployedAt"]) {
       const re = name.endsWith(".json") ? new RegExp('("'+k+'":\\s*")[^"]+(")', "g") : new RegExp('^(    '+k+': ")[^"]+(")', "gm");
       need([...s.matchAll(re)].length === 1, "RELEASE_ANCHOR");
-      s = s.replace(re, (_, a, b) => a + RELEASE[k] + b);
+      s = s.replace(re, (_, a, b) => a + release[k] + b);
     }
   } else {
     s = s.replace(/([^"'\s()]*)\?v=(\d+\.\d+\.\d+)/g, (m, url, v) => {
       if (url.includes("://") || url.includes("/vendor/")) return m;
-      need(v === "1.0.563", "STALE_QUERY"); return url + "?v=" + RELEASE.version;
+      need(v === previous, "STALE_QUERY"); return url + "?v=" + release.version;
     });
-    if (name.endsWith(".js")) s = s.replace(/(\bv:\s*"|\|\|\s*")1\.0\.563(")/g, (_, a, b) => a + RELEASE.version + b);
+    if (name.endsWith(".js")) s = s.replace(new RegExp('(\\bv:\\s*"|\\|\\|\\s*")' + previous.replaceAll(".","\\.") + '(")',"g"), (_, a, b) => a + release.version + b);
     if (name.endsWith("/service-worker.js")) {
       const re = /const CACHE_NAME = "[a-z-]+-v\d+";/g;
       need([...s.matchAll(re)].length === 1, "CACHE_ANCHOR");
-      s = s.replace(re, 'const CACHE_NAME = "' + RELEASE[name.includes("member-app") ? "memberCache" : "coachCache"] + '";');
+      s = s.replace(re, 'const CACHE_NAME = "' + release[name.includes("member-app") ? "memberCache" : "coachCache"] + '";');
     }
   }
   need(s !== lf(source), "EMPTY_METADATA"); return s;
@@ -86,7 +101,7 @@ export function expectedWorkflow(name, source) {
   return s;
 }
 export const git = (...args) => execFileSync("git", args, {cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 8 * 1024 * 1024}).trimEnd();
-const allowed = name => need(PATHS.includes(name), "READ_OUTSIDE_SCOPE");
+const allowed = name => need(TERM_READ_PATHS.includes(name), "READ_OUTSIDE_SCOPE");
 export const IO = {
   tree: ref => git("rev-parse", ref + "^{tree}"),
   parents: ref => git("show", "-s", "--format=%P", ref).split(" ").filter(Boolean),
@@ -123,7 +138,50 @@ export function proveTree(ref, io = IO) {
   need(/^[a-f0-9]{40}$/.test(sourceTree) && /^[a-f0-9]{40}$/.test(metadataTree) && sourceTree !== metadataTree && sourceTree !== BASE_TREE && metadataTree !== BASE_TREE, "LAYER_TREES");
   return {contract: "r3-purchase-identity-source/1", tree: metadataTree, base: BASE, layers: {count: 2, sourceCommit: source, metadataCommit: ref, sourceTree, metadataTree}, version: RELEASE.version, release: RELEASE, privateSource: PRIVATE_SOURCE, productHashes: PRODUCTS, environment: "development", reusedFocusedCount: 60, databaseRuns: 0};
 }
-export function proveEvent(c, io = IO) {
+export const termSeal = s => hash(lf(s).replace(/export const TERM_SEAL = "[^"]+";/, 'export const TERM_SEAL = "PENDING";'));
+export const expectedTermMetadata = (name,source) => expectedMetadata(name,source,TERM_RELEASE,RELEASE.version);
+export function expectedTermWorkflow(name,source) {
+  let s=lf(source);
+  if(name===WORKFLOWS[0]) {
+    s=once(s,"node "+SELF+" --ci-route\n","node "+SELF+" --ci-route --term-history\n");
+    return once(s,"      # 고정 운영 기준 blob", "      - name: DEV565 term history public functions and admission delta only\n        if: steps.display.outputs.term_history_only == 'true'\n        run: |\n          node --test --test-name-pattern='"+TERM_PATTERN+"' "+TEST+"\n          python -B "+DEV_TEST+" TermHistory\n      # 고정 운영 기준 blob");
+  }
+  need(name===WORKFLOWS[1],"WORKFLOW");
+  s=once(s,"node "+SELF+" --dev-source\n","node "+SELF+" --dev-source --term-history\n");
+  return once(s,"python -B "+DEV+"\n","python -B "+DEV+" --term-history\n");
+}
+function termDelta(io,from,to,paths) {
+  const rows=io.changes(from,to);
+  need(same(rows.map(r=>r[1]).sort(),paths),"EXACT_SCOPE");
+  for(const [kind,p] of rows)need(kind==="M"&&io.mode(to,p)==="100644","FILE_KIND");
+}
+export function proveTermTree(ref,io=IO) {
+  need(io.tree(TERM_BASE)===TERM_BASE_TREE,"BASE_TREE");
+  const parents=io.parents(ref),source=parents[0];
+  need(/^[a-f0-9]{40}$/.test(ref)&&parents.length===1&&/^[a-f0-9]{40}$/.test(source||"")&&source!==ref&&source!==TERM_BASE&&same(io.parents(source),[TERM_BASE]),"TWO_LAYER_PARENTS");
+  termDelta(io,TERM_BASE,source,TERM_SOURCE_PATHS);
+  termDelta(io,source,ref,[...METADATA].sort());
+  termDelta(io,TERM_BASE,ref,TERM_PATHS);
+  const inherited=proveTree(TERM_BASE,io);
+  need(inherited.tree===TERM_BASE_TREE,"BASE_TREE");
+  for(const p of TERM_SOURCE_PATHS) {
+    const value=io.blob(source,p);
+    if(p===SELF)need(termSeal(value)===TERM_SEAL,"SOURCE_SEAL");
+    else if(TERM_PRODUCTS[p]||TERM_CONNECTION_PINS[p])need(hash(value)===(TERM_PRODUCTS[p]||TERM_CONNECTION_PINS[p]),"CONTENT_PIN");
+    else need(value===expectedTermWorkflow(p,io.blob(TERM_BASE,p)),"WORKFLOW_BYTES");
+    need(io.blob(ref,p)===value,"SOURCE_BYTES");
+  }
+  for(const p of METADATA) {
+    const previous=io.blob(TERM_BASE,p);
+    need(io.mode(source,p)==="100644"&&io.blob(source,p)===previous,"EARLY_METADATA");
+    need(io.blob(ref,p)===expectedTermMetadata(p,previous),"METADATA_BYTES");
+  }
+  need(/^[a-f0-9]{40}$/.test(TERM_PRIVATE_SOURCE.commit),"PRIVATE_COMMIT_PENDING");
+  const sourceTree=io.tree(source),metadataTree=io.tree(ref);
+  need(/^[a-f0-9]{40}$/.test(sourceTree)&&/^[a-f0-9]{40}$/.test(metadataTree)&&sourceTree!==metadataTree&&sourceTree!==TERM_BASE_TREE&&metadataTree!==TERM_BASE_TREE,"LAYER_TREES");
+  return {contract:"r3-term-history-source/1",base:TERM_BASE,priorBase:BASE,tree:metadataTree,layers:{count:2,sourceCommit:source,metadataCommit:ref,sourceTree,metadataTree},release:TERM_RELEASE,version:TERM_RELEASE.version,privateSource:TERM_PRIVATE_SOURCE,productHashes:{...PRODUCTS,...TERM_PRODUCTS},environment:"development",reusedLocalChecks:59,hostedDb:0};
+}
+export function proveEvent(c, io = IO, term = false) {
   need(c.repo === REPOSITORY && c.attempt === "1" && /^[a-f0-9]{40}$/.test(c.head || ""), "EVENT_IDENTITY");
   need(WORKFLOW_NAMES.includes(c.workflow), "WORKFLOW_NAME");
   const file = WORKFLOWS[WORKFLOW_NAMES.indexOf(c.workflow)];
@@ -134,9 +192,9 @@ export function proveEvent(c, io = IO) {
   } else {
     need(c.event === "workflow_dispatch" && c.workflow === WORKFLOW_NAMES[1] && c.ref === "refs/heads/" + BRANCH && c.refType === "branch" && c.input === c.head && c.sha === c.head && c.checkout === c.head, "MANUAL_DEV_ONLY");
   }
-  const proof = proveTree(c.head, io);
+  const proof = term ? proveTermTree(c.head,io) : proveTree(c.head, io);
   need(io.tree(c.checkout) === proof.tree, "MERGE_PAYLOAD");
-  return {...proof, head: c.head, checkout: c.checkout, event: c.event, ref: c.ref, admissionRoute: c.event === "workflow_dispatch" ? "dev564-manual" : "dev564-qa-pr"};
+  return {...proof, head: c.head, checkout: c.checkout, event: c.event, ref: c.ref, admissionRoute: (term?"dev565-":"dev564-")+(c.event === "workflow_dispatch" ? "manual" : "qa-pr")};
 }
 export function context(env, event, checkout) {
   const pr = event.pull_request;
@@ -150,10 +208,10 @@ export function regularPath(name, stat = lstatSync) {
   return path;
 }
 function disk(name) { return lf(readFileSync(regularPath(name), "utf8")); }
-export function verifyCheckout(c, host = {status: () => git("status", "--porcelain", "--untracked-files=all"), io: IO, read: disk}) {
+export function verifyCheckout(c, host = {status: () => git("status", "--porcelain", "--untracked-files=all"), io: IO, read: disk}, term = false) {
   need(host.status() === "", "HOSTED_CLEAN");
-  const proof = proveEvent(c, host.io);
-  for (const p of PATHS) need(host.read(p) === host.io.blob(c.checkout, p), "WORKTREE_BYTES");
+  const proof = proveEvent(c, host.io,term);
+  for (const p of term?TERM_READ_PATHS:PATHS) need(host.read(p) === host.io.blob(c.checkout, p), "WORKTREE_BYTES");
   return proof;
 }
 export function localOverlay() {
@@ -167,12 +225,24 @@ export function localOverlay() {
     mode: () => "100644", blob: (ref, p) => ref === release || (ref === source && SOURCE_PATHS.includes(p)) ? disk(p) : IO.blob(BASE, p)};
   return {...proveTree(release, io), tree: "UNCOMMITTED", layers: {count: 2, sourceCommit: null, metadataCommit: null, sourceTree: null, metadataTree: null}, candidateCommit: null, status: "LOCAL_ONLY"};
 }
+export function localTermOverlay() {
+  need(git("rev-parse","HEAD")===TERM_BASE&&git("diff","--cached","--name-only")==="","LOCAL_BASE_INDEX");
+  const dirty=[...git("diff","--name-only").split("\n"),...git("ls-files","--others","--exclude-standard").split("\n")].filter(Boolean);
+  need(same(dirty.filter(p=>!Object.hasOwn(PRESERVED,p)).sort(),TERM_SOURCE_PATHS),"LOCAL_SOURCE_SCOPE");
+  for(const [p,h]of Object.entries(PRESERVED))need(hash(readFileSync(resolve(ROOT,p)))===h,"PRESERVED_DIRTY");
+  const source="c".repeat(40),release="d".repeat(40);
+  const io={...IO,tree:r=>r===source?"e".repeat(40):r===release?"f".repeat(40):IO.tree(r),parents:r=>r===release?[source]:r===source?[TERM_BASE]:IO.parents(r),
+    changes:(f,t)=>[source,release].includes(t)?(t===source?TERM_SOURCE_PATHS:f===source?[...METADATA].sort():TERM_PATHS).map(p=>["M",p]):IO.changes(f,t),
+    mode:(r,p)=>[source,release].includes(r)?"100644":IO.mode(r,p),blob:(r,p)=>[source,release].includes(r)?METADATA.includes(p)?r===release?expectedTermMetadata(p,IO.blob(TERM_BASE,p)):IO.blob(TERM_BASE,p):TERM_SOURCE_PATHS.includes(p)?disk(p):IO.blob(TERM_BASE,p):IO.blob(r,p)};
+  return {...proveTermTree(release,io),head:null,tree:null,layers:{count:2,sourceCommit:null,metadataCommit:null,sourceTree:null,metadataTree:null},status:"LOCAL_SOURCE_ONLY_METADATA_PLANNED_NOT_APPLIED"};
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const mode = process.argv[2]; need(["--local", "--ci-route", "--dev-source"].includes(mode), "MODE");
-    const proof = mode === "--local" ? localOverlay() : verifyCheckout(context(process.env, JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")), git("rev-parse", "HEAD")));
-    if (mode === "--dev-source") need(proof.admissionRoute === "dev564-manual", "DEV_ONLY");
-    if (mode === "--ci-route") { need(proof.event === "pull_request", "CI_PR_ONLY"); appendFileSync(process.env.GITHUB_OUTPUT, "scoped=true\npurchase_identity_only=true\n"); }
+    const mode=process.argv[2],term=process.argv[3]==="--term-history";
+    need(["--local","--ci-route","--dev-source"].includes(mode)&&process.argv.length===(term?4:3),"MODE");
+    const proof=mode==="--local"?(term?localTermOverlay():localOverlay()):verifyCheckout(context(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,"utf8")),git("rev-parse","HEAD")),undefined,term);
+    if(mode==="--dev-source")need(proof.admissionRoute===(term?"dev565-manual":"dev564-manual"),"DEV_ONLY");
+    if(mode==="--ci-route"){need(proof.event==="pull_request","CI_PR_ONLY");appendFileSync(process.env.GITHUB_OUTPUT,term?"scoped=true\nterm_history_only=true\n":"scoped=true\npurchase_identity_only=true\n");}
     console.log(JSON.stringify(proof));
   } catch { console.error("R3_PURCHASE_IDENTITY_HOLD"); process.exitCode = 2; }
 }
