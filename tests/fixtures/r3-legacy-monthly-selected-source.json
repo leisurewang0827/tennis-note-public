@@ -1,0 +1,94 @@
+{
+  "contract": "r3-legacy-monthly-selected-source/1",
+  "status": "BOUND_PRIVATE_SOURCE",
+  "base": "8cef5b40228c929693c31aaa8af2a089cb0262f4",
+  "baseTree": "d912835abe666f1ce6d83f88c5cd74e52f1bb767",
+  "branch": "codex/tennisnote-r3-legacy-monthly-public-20261029",
+  "candidateCommit": null,
+  "privateSource": {
+    "commit": "4d9e9aeaab972609f7260b3d7db068ce5708d7b9",
+    "tree": "0911d86a5b424c3037ec015e430ffdc04e14be95",
+    "base": "32bf1d3741f6ed02374d0294af7c9c4a7efb6c98",
+    "baseTree": "a2129b8834febb771902b39a333f43a972ca0a7c",
+    "reviewedLocalHandoffSha256": "6cb024d224d7878e7e22a5f620d687e2ab4ed21640f89bcbde0708dad93b3f16",
+    "migration": "supabase/supabase/migrations/20261029004000_tennisnote_r3_legacy_monthly_reader.sql",
+    "migrationSha256": "dcf5e719a2b9726686ebf95f63df32e513c2f36d437f0cb60d1298ac854e4e57",
+    "productPins": {
+      "90-Dashboard/shared/tennisnote-settlement-adjustment.js": "d55ca914171ce380eed3e3b35d7d363428170530518e2824175cce2d3e33deb2",
+      "90-Dashboard/tennis-note-coach-app/app.js": "99f63e7d4761a6dab35a4ca29ad88d97d871a732f4db099049159d76f35e78f9",
+      "90-Dashboard/tennis-note-prototype/app.js": "db67b05b7c0aa1c068435df021ca5f2c88c2de099b62c459b5d2dd63922e1a7f"
+    }
+  },
+  "productPaths": [
+    "app/admin/actions/billing.js",
+    "app/admin/views/billing.js",
+    "app/shared/tennisnote-settlement-adjustment.js",
+    "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/views/settlement.js"
+  ],
+  "connectionPaths": [
+    ".github/workflows/tennisnote-public-ci.yml",
+    "scripts/check_r3_dev_deployment.py",
+    "scripts/check_r3_purchase_identity_admission.mjs",
+    "scripts/verify.sh",
+    "tests/fixtures/r3-legacy-monthly-selected-source.json",
+    "tests/r3-purchase-identity-admission.test.mjs"
+  ],
+  "releaseLayer": {
+    "status": "PREPARED_LOCAL_NOT_DEPLOY_ADMITTED",
+    "changedPaths": [
+      "app/admin/index.html",
+      "app/release.json",
+      "app/shared/tennisnote-release.js",
+      "app/tennis-note-coach-app/app.js",
+      "app/tennis-note-coach-app/domain/coaches.js",
+      "app/tennis-note-coach-app/forms/common.js",
+      "app/tennis-note-coach-app/index.html",
+      "app/tennis-note-coach-app/service-worker.js",
+      "app/tennis-note-member-app/app.js",
+      "app/tennis-note-member-app/forms/common.js",
+      "app/tennis-note-member-app/index.html",
+      "app/tennis-note-member-app/service-worker.js",
+      "app/tennis-note-member-app/ui/screens.js"
+    ],
+    "version": "1.0.567",
+    "releaseId": "2026.10.29.01",
+    "memberCache": "tennis-note-member-pwa-v600",
+    "coachCache": "tennis-note-coach-mode-v573",
+    "preservedDeployedDevSource": "2c6eba698c3eaf0bced8352d0b234d463e4689e6",
+    "deployedDevVersion": "1.0.566",
+    "remoteDevNotDeploymentSource": "d1a22ea5faf60b9fb97d10e5029ec6027351b759"
+  },
+  "reusedEvidence": "Reviewed local database/client/UI deltas only; new CI linkage negatives do not rerun them.",
+  "developmentConsumer": {
+    "contract": "legacy-monthly-dev567/1",
+    "guard": "scripts/check_r3_dev_deployment.py",
+    "immutableReadOnlyDependency": {
+      "path": "tests/fixtures/r3-dev-cache-floors.json",
+      "lfSha256": "a43b36b47a2c249d4e5a1cebe4ad403d95c66e63c950c5dbb7afbdb4eb6cc0b8",
+      "changed": false
+    },
+    "route": "legacy-monthly-dev567-manual",
+    "oldGuardBytes": "Exact base8cef after removing only named block and entry hook",
+    "workflowChanged": false,
+    "sourceCommits": 2,
+    "sourcePaths": 11,
+    "metadataPaths": 13,
+    "projectFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "rollbackSource": "2c6eba698c3eaf0bced8352d0b234d463e4689e6",
+    "baselineDevelopment": {"version": "1.0.566", "releaseId": "2026.10.28.05", "member": 599, "coach": 572},
+    "baselineProduction": {"version": "1.0.559", "releaseId": "2026.10.29.01", "member": 592, "coach": 565}
+  },
+  "baselineFlags": {
+    "development": "compatibility ON; other five OFF",
+    "production": "all six OFF"
+  },
+  "rollback": "Preserve environment-specific baseline; never reinterpret DEV as all OFF. No destructive migration/data change.",
+  "actions": {
+    "database": 0,
+    "flags": 0,
+    "deploy": 0,
+    "native": 0,
+    "store": 0
+  }
+}

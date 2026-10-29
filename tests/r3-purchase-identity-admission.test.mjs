@@ -6,13 +6,14 @@ import { dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
+import { spawnSync } from "node:child_process";
 import * as a from "../scripts/check_r3_purchase_identity_admission.mjs";
 
 // 새 후속 경계만 검사한다. 과거60/DB/역사적 검사/전체 파일 스캔은 실행하지 않는다.
 const head = "1".repeat(40), merge = "2".repeat(40), source = "3".repeat(40);
 const sourceTree = "4".repeat(40), releaseTree = "5".repeat(40);
 const read = p => a.lf(readFileSync(resolve(a.ROOT, p), "utf8"));
-const productionOnly=process.env.R3_PRODUCTION_SELECTED==='1';
+const productionOnly=process.env.R3_PRODUCTION_SELECTED==='1' || process.env.R3_LEGACY_MONTHLY_SELECTED==='1';
 function productionFixture(){
  const f=a.productionFixture(),real=a.productionIO(f),toolPaths=[a.SELF,...Object.keys(a.PRODUCTION_TOOL_PINS)];
  const paths=[...f.rows.map(r=>r.path),...toolPaths].sort(),bodies={};
@@ -482,4 +483,371 @@ test("DEV566 checkout-mode: official generated metadata and workflow guards matc
   assert.ok(f.files[a.WORKFLOWS[0]].includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));
   assert.ok(f.files[a.WORKFLOWS[1]].includes("environment: development"));
   assert.equal(a.CHECKOUT_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
+});
+
+
+// 실제 private main 연결과 새 release 층만 검사합니다. 과거 업무·DB 검사는 반복하지 않습니다.
+function legacyMonthlyFixture(twoLayers=false) {
+  const texts=Object.fromEntries([...a.LEGACY_PATHS,...Object.keys(a.LEGACY_READONLY)].map(p=>[p,read(p)])),baseTexts={};
+  const selected=a.legacyMonthlyIO();
+  for(const p of [...a.METADATA,a.LEGACY_GUARD,...Object.keys(a.LEGACY_READONLY)])baseTexts[p]=selected.blob(a.LEGACY_BASE,p);
+  const reads=[],h="a".repeat(40),m="b".repeat(40),s="e".repeat(40),tree="c".repeat(40);
+  const sourceTexts={...texts,...Object.fromEntries(a.METADATA.map(p=>[p,baseTexts[p]]))};
+  const changes=paths=>paths.map(p=>[p===a.LEGACY_META?"A":"M",p]);
+  const io={
+    tree:r=>r===a.LEGACY_BASE?a.LEGACY_BASE_TREE:tree,
+    parents:r=>r===m?[a.LEGACY_BASE,h]:r===h&&twoLayers?[s]:[a.LEGACY_BASE],
+    changes:(b,r)=>twoLayers&&r===s?changes(a.LEGACY_SOURCE_PATHS):twoLayers&&b===s?changes(a.METADATA):changes(a.LEGACY_PATHS),
+    mode:(r,p)=>r===a.LEGACY_BASE&&p===a.LEGACY_META?"":a.LEGACY_MODE_MAP[p]||"100644",
+    blob:(r,p)=>{assert.ok(a.LEGACY_PATHS.includes(p)||Object.hasOwn(a.LEGACY_READONLY,p));reads.push(p);return r===a.LEGACY_BASE?baseTexts[p]:r===s?sourceTexts[p]:texts[p];},
+    read:p=>{assert.ok(a.LEGACY_PATHS.includes(p)||Object.hasOwn(a.LEGACY_READONLY,p));return texts[p];}
+  };
+  const env={GITHUB_REPOSITORY:a.REPOSITORY,GITHUB_RUN_ATTEMPT:"1",GITHUB_EVENT_NAME:"pull_request",
+    GITHUB_WORKFLOW:"Tennis Note Public PWA CI",GITHUB_REF:"refs/pull/999/merge",GITHUB_REF_TYPE:"branch",
+    GITHUB_SHA:m,GITHUB_WORKFLOW_SHA:m,
+    GITHUB_WORKFLOW_REF:a.REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@refs/pull/999/merge"};
+  const event={number:999,pull_request:{number:999,
+    base:{sha:a.LEGACY_BASE,ref:"main",repo:{full_name:a.REPOSITORY}},
+    head:{sha:h,ref:a.LEGACY_BRANCH,repo:{full_name:a.REPOSITORY}}}};
+  return {texts,baseTexts,reads,h,m,s,io,env,event,c:a.legacyMonthlyContext(env,event,m)};
+}
+test("LEGACY-MONTHLY-BIND: real merged private source and LF pins admit exact public23 only",()=>{
+  const f=legacyMonthlyFixture(),p=a.proveLegacyMonthlySource(f.c,f.io),meta=JSON.parse(f.texts[a.LEGACY_META]);
+  assert.equal(p.files,24);assert.equal(p.status,"SOURCE_PROVEN");assert.equal(p.privateSourceBound,true);
+  assert.equal(p.privateSource.commit,"4d9e9aeaab972609f7260b3d7db068ce5708d7b9");
+  assert.equal(p.privateSource.tree,"0911d86a5b424c3037ec015e430ffdc04e14be95");
+  assert.equal(meta.privateSource.productPins["90-Dashboard/tennis-note-coach-app/app.js"],"99f63e7d4761a6dab35a4ca29ad88d97d871a732f4db099049159d76f35e78f9");
+  assert.equal(meta.candidateCommit,null);assert.equal(p.deploymentAdmitted,false);assert.equal(p.databaseActions,0);assert.equal(p.oldChecksRepeated,0);
+  assert.equal(meta.baselineFlags.development,"compatibility ON; other five OFF");assert.equal(meta.baselineFlags.production,"all six OFF");
+});
+test("LEGACY-MONTHLY-BIND: scoped actual route emits source-only outputs and rejects dirty or pending bytes",()=>{
+  const f=legacyMonthlyFixture(),outputs=[];
+  assert.equal(a.runLegacyMonthlyCi(f.env,f.event,{status:()=>"",checkout:()=>f.m,io:f.io},s=>outputs.push(s)).files,24);
+  assert.deepEqual(outputs,["scoped=true\nlegacy_monthly_only=true\n"]);
+  const before=outputs.length;
+  assert.throws(()=>a.runLegacyMonthlyCi(f.env,f.event,{status:()=>" M synthetic",checkout:()=>f.m,io:f.io},s=>outputs.push(s)),/LEGACY_DIRTY/);
+  f.texts[a.LEGACY_META]=f.texts[a.LEGACY_META].replace(a.LEGACY_PRIVATE_SOURCE.commit,"0".repeat(40));
+  assert.throws(()=>a.runLegacyMonthlyCi(f.env,f.event,{status:()=>"",checkout:()=>f.m,io:f.io},s=>outputs.push(s)),/LEGACY_CONTENT_PIN/);
+  assert.equal(outputs.length,before);
+});
+test("LEGACY-MONTHLY-BIND: unknown duplicate missing release paths reject before body reads",()=>{
+  const f=legacyMonthlyFixture();
+  assert.equal(a.legacyMonthlyClaimed({},{}),false);
+  for(const ps of [a.LEGACY_PATHS.slice(1),[...a.LEGACY_PATHS,"unexpected"],[...a.LEGACY_PATHS,a.METADATA[0]],a.LEGACY_SOURCE_PATHS]){
+    f.reads.length=0;assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,changes:()=>ps.map(p=>[p===a.LEGACY_META?"A":"M",p])}),/LEGACY_EXACT_PATHS/);assert.deepEqual(f.reads,[]);
+  }
+  const drift=structuredClone(f.event);drift.pull_request.head.ref+="-drift";
+  assert.equal(a.legacyMonthlyClaimed(f.env,drift),true);
+  assert.throws(()=>a.proveLegacyMonthlySource(a.legacyMonthlyContext(f.env,drift,f.m),f.io),/LEGACY_PR/);
+});
+test("LEGACY-MONTHLY-BIND: two ordinary commits require exact source10 then official metadata13",()=>{
+  const f=legacyMonthlyFixture(true),p=a.proveLegacyMonthlySource(f.c,f.io);assert.equal(p.layers,2);assert.equal(p.sourceCommit,f.s);
+  assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,changes:(b,r)=>r===f.s?f.io.changes(a.LEGACY_BASE,f.h):f.io.changes(b,r)}),/LEGACY_LAYER_PATHS/);
+  assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,parents:r=>r===f.s?[f.h]:f.io.parents(r)}),/LEGACY_TWO_LAYERS/);
+  const pth=a.METADATA[0];assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,blob:(r,p)=>r===f.s&&p===pth?f.texts[p]:f.io.blob(r,p)}),/LEGACY_LAYER_BYTES/);
+});
+test("LEGACY-MONTHLY-BIND: official metadata preserves native content and exceeds both live cache floors",()=>{
+  const f=legacyMonthlyFixture();assert.equal(Object.keys(a.LEGACY_RELEASE_PINS).length,13);
+  for(const p of a.METADATA)assert.equal(f.texts[p],a.expectedMetadata(p,f.baseTexts[p],a.LEGACY_RELEASE,"1.0.559"));
+  assert.deepEqual(JSON.parse(f.texts["app/release.json"]).nativePlatforms,JSON.parse(f.baseTexts["app/release.json"]).nativePlatforms);
+  const meta=JSON.parse(f.texts[a.LEGACY_META]);assert.equal(meta.releaseLayer.preservedDeployedDevSource,"2c6eba698c3eaf0bced8352d0b234d463e4689e6");
+  assert.equal(a.LEGACY_RELEASE.version,"1.0.567");assert.equal(a.LEGACY_RELEASE.memberCache,"tennis-note-member-pwa-v600");assert.equal(a.LEGACY_RELEASE.coachCache,"tennis-note-coach-mode-v573");
+});
+test("LEGACY-MONTHLY-BIND: changed bytes modes contexts and extra parent never admit",()=>{
+  const f=legacyMonthlyFixture();
+  for(const patch of [{attempt:"2"},{repo:"untrusted/repo"},{workflowSha:f.h},{workflowRef:"wrong"},{base:a.BASE},{headRepo:"untrusted/repo"},{baseRepo:"untrusted/repo"},{target:"dev"},{event:"workflow_dispatch"}])
+    assert.throws(()=>a.proveLegacyMonthlySource({...f.c,...patch},f.io));
+  assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,mode:()=>"120000"}));
+  assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,parents:()=>[a.LEGACY_BASE,"d".repeat(40)]}));
+  for(const p of a.LEGACY_PATHS){
+    assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,blob:(r,q)=>f.io.blob(r,q)+(r!==a.LEGACY_BASE&&q===p?"x":"")}),/LEGACY_CONTENT_PIN/);
+    assert.throws(()=>a.proveLegacyMonthlySource(f.c,{...f.io,read:q=>f.texts[q]+(q===p?"x":"")}),/LEGACY_WORKTREE_BYTES/);
+  }
+});
+test("LEGACY-MONTHLY-BIND: main proof is source-only while dispatch and dev push stay denied",()=>{
+  const f=legacyMonthlyFixture(),c={...f.c,event:"push",ref:"refs/heads/main",refType:"branch",sha:f.h,head:f.h,checkout:f.h,workflowSha:f.h,workflowRef:a.REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@refs/heads/main"};
+  const p=a.proveLegacyMonthlySource(c,f.io);assert.equal(p.status,"SOURCE_PROVEN");assert.equal(p.deploymentAdmitted,false);
+  assert.throws(()=>a.proveLegacyMonthlySource({...c,event:"workflow_dispatch"},f.io),/LEGACY_MAIN/);
+  assert.throws(()=>a.proveLegacyMonthlySource({...c,ref:"refs/heads/dev"},f.io),/LEGACY_WORKFLOW|LEGACY_MAIN/);
+});
+test("LEGACY-MONTHLY-BIND: source23 sparse selection and scoped verify do not invoke old suites or deploy",()=>{
+  const f=legacyMonthlyFixture(),workflow=f.texts[".github/workflows/tennisnote-public-ci.yml"],verify=f.texts["scripts/verify.sh"];
+  for(const p of a.LEGACY_PATHS)assert.equal(workflow.split("            /"+p+"\n").length-1,1);
+  assert.ok(workflow.indexOf("sparse-checkout: |")<workflow.indexOf("--ci-route --legacy-monthly"));
+  assert.ok(workflow.includes("run: ./scripts/verify.sh --r3-legacy-monthly"));
+  const start=verify.indexOf('if [[ "'),end=verify.indexOf("\nfi",start),selected=verify.slice(start,end);
+  assert.ok(selected.includes('R3_LEGACY_MONTHLY_SELECTED=1 node --test --test-name-pattern="'+a.LEGACY_PATTERN+'"'));
+  assert.ok(!selected.includes("build_cloudflare")&&!selected.includes("python")&&!selected.includes("tests/**/*.test.js"));
+  assert.ok(end<verify.indexOf('step "테스트"'));
+});
+
+
+function legacyDevFixture() {
+  const f=legacyMonthlyFixture(true),ref="refs/heads/"+a.LEGACY_BRANCH;
+  const env={...f.env,GITHUB_EVENT_NAME:"workflow_dispatch",GITHUB_WORKFLOW:"Deploy Tennis Note development sites",
+    GITHUB_REF:ref,GITHUB_SHA:f.h,GITHUB_WORKFLOW_SHA:f.h,
+    GITHUB_WORKFLOW_REF:a.REPOSITORY+"/.github/workflows/deploy-cloudflare-pages-dev.yml@"+ref};
+  const event={inputs:{candidate_sha:f.h}};
+  return {...f,env,event,c:a.legacyMonthlyContext(env,event,f.h)};
+}
+const LEGACY_GUARD_PY=String.raw`
+import contextlib, copy, io, json, os, pathlib, runpy, subprocess, sys, types
+from unittest.mock import patch
+data=json.load(sys.stdin)
+loaded=runpy.run_path(data["guard"], run_name="legacy_guard_test")
+g=loaded["legacy_monthly_source"].__globals__
+checks=0
+def ok(v):
+    global checks
+    assert v
+    checks+=1
+def hold(call,code="LEGACY_MONTHLY_"):
+    global checks
+    try:
+        call()
+    except RuntimeError as exc:
+        assert str(exc).startswith(code), str(exc)
+        checks+=1
+    else:
+        raise AssertionError("expected fail-closed")
+proof=data["proof"]
+env={**data["env"],"TENNISNOTE_WORKFLOW_REF":data["env"]["GITHUB_WORKFLOW_REF"],
+     "TENNISNOTE_CANDIDATE_SHA":proof["head"],"TENNISNOTE_ENVIRONMENT":"development",
+     "TENNISNOTE_SUPABASE_URL":"https://syntheticdev.supabase.co","TENNISNOTE_SUPABASE_PUBLISHABLE_KEY":"synthetic-public",
+     "TENNISNOTE_PAYMENTS_ENABLED":"false","TENNISNOTE_PAYMENT_MODE":"disabled",
+     "TENNISNOTE_ALLOWED_PAYMENT_METHODS":"","TENNISNOTE_BANK_TRANSFER_ENABLED":"false"}
+fp=g["EXPECTED_DEV_PROJECT_FINGERPRINT"]
+g["project_fingerprint"]=lambda u: fp if u=="https://syntheticdev.supabase.co" else "mismatch"
+group=data["group"]
+if group=="loader-source":
+    ok(g["EXPECTED_VERSION"]=="1.0.553")
+    ok(g["CACHE_FLOOR_CONTRACT"]==data["readonly"])
+    original=pathlib.Path.read_text
+    def missing(p,*a,**k):
+        if p.name=="r3-dev-cache-floors.json":
+            raise FileNotFoundError("synthetic_dependency_missing")
+        return original(p,*a,**k)
+    with patch.object(pathlib.Path,"read_text",missing):
+        try:
+            runpy.run_path(data["guard"],run_name="legacy_missing_test")
+        except FileNotFoundError:
+            checks+=1
+        else:
+            raise AssertionError("dependency fallback forbidden")
+    calls=[]
+    def runner(argv,**kwargs):
+        calls.append((argv,kwargs))
+        return types.SimpleNamespace(returncode=0,stdout=json.dumps(proof))
+    g["run_git"]=lambda *a: proof["head"]
+    with patch.dict(os.environ,env,clear=True),patch.object(subprocess,"run",runner):
+        ok(g["legacy_monthly_source"]()["tree"]==proof["tree"])
+        ok(len(calls)==1 and calls[0][0]==["node","scripts/check_r3_purchase_identity_admission.mjs","--dev-source","--legacy-monthly"])
+        ok(calls[0][1]["timeout"]==30 and calls[0][1]["capture_output"] is True)
+        g["validate_dispatch_context"]=lambda **k: (_ for _ in ()).throw(AssertionError("old route"))
+        with patch.object(sys,"argv",["guard","--source-only"]),contextlib.redirect_stdout(io.StringIO()):
+            ok(g["main"]()==0)
+        ok(len(calls)==2)
+        for value in (types.SimpleNamespace(returncode=2,stdout=""),types.SimpleNamespace(returncode=0,stdout="invalid")):
+            with patch.object(subprocess,"run",return_value=value):
+                hold(g["legacy_monthly_source"])
+        with patch.object(subprocess,"run",side_effect=subprocess.TimeoutExpired("synthetic",30)):
+            hold(g["legacy_monthly_source"])
+    for changes in ({"GITHUB_RUN_ATTEMPT":"2"},{"GITHUB_REPOSITORY":"untrusted/repo"},
+                    {"GITHUB_EVENT_NAME":"push"},{"GITHUB_REF":"refs/heads/main"},{"GITHUB_REF_TYPE":"tag"},
+                    {"GITHUB_WORKFLOW_SHA":"0"*40},{"TENNISNOTE_CANDIDATE_SHA":"0"*40},
+                    {"TENNISNOTE_WORKFLOW_REF":"wrong"},{"TENNISNOTE_ENVIRONMENT":"production"},
+                    {"TENNISNOTE_SUPABASE_URL":"http://syntheticdev.supabase.co"},
+                    {"TENNISNOTE_SUPABASE_URL":"https://wrong.supabase.co"},
+                    {"TENNISNOTE_SUPABASE_PUBLISHABLE_KEY":""},{"TENNISNOTE_PAYMENTS_ENABLED":"true"},
+                    {"TENNISNOTE_PAYMENT_MODE":"multi"},{"TENNISNOTE_ALLOWED_PAYMENT_METHODS":"card"},
+                    {"TENNISNOTE_BANK_TRANSFER_ENABLED":"true"}):
+        before=len(calls)
+        with patch.dict(os.environ,{**env,**changes},clear=True),patch.object(subprocess,"run",runner):
+            hold(g["legacy_monthly_source"])
+        ok(len(calls)==before)
+    for changes in ({"layers":1},{"files":23},{"immutableDependencies":0},{"tree":"invalid"},
+                    {"privateSource":{}},{"privateSource":[]},{"release":{}},{"head":"0"*40},
+                    {"admissionRoute":"old566"}):
+        hold(lambda c=changes:g["legacy_monthly_proof"]({**proof,**c},proof["head"]))
+elif group=="runtime":
+    files={}
+    class MemPath:
+        def __init__(self,s): self.s=s
+        def __truediv__(self,k): return MemPath(self.s+"/"+k)
+        def read_text(self,**k): return files[self.s]
+        def read_bytes(self): return files[self.s].encode()
+    g["ROOT"]=MemPath("repo")
+    release={"version":"1.0.567","releaseId":"2026.10.29.01","nativePlatforms":{"synthetic":"preserved"}}
+    browser={"environment":"development","supabaseUrl":"https://syntheticdev.supabase.co",
+             "projectFingerprint":fp,"supabasePublishableKey":"synthetic-public"}
+    payment={"enabled":False,"mode":"disabled","allowedMethods":[],"bankTransfer":{"enabled":False},"channels":{}}
+    def config(b,p):
+        return "window.TENNISNOTE_CONFIG = "+json.dumps(b)+";\n\nwindow.TENNIS_NOTE_PAYMENT_CONFIG = "+json.dumps(p)+";\n"
+    files["repo/app/release.json"]=json.dumps(release)
+    for root in ("member","admin"):
+        files[root+"/release.json"]=json.dumps(release)
+        files[root+"/shared/config.local.js"]=config(browser,payment)
+        files[root+"/index.html"]="개발계 · 실제 결제·푸시 차단"
+    for path,source,cache in (("service-worker.js","app/tennis-note-member-app/service-worker.js","tennis-note-member-pwa-v600"),
+                              ("tennis-note-coach-app/service-worker.js","app/tennis-note-coach-app/service-worker.js","tennis-note-coach-mode-v573")):
+        files["member/"+path]=files["repo/"+source]='const CACHE_NAME = "'+cache+'";'
+    call=lambda:g["legacy_monthly_artifacts"](proof,MemPath("member"),MemPath("admin"))
+    call();checks+=1
+    original=copy.deepcopy(files)
+    for key,value in (("environment","production"),("projectFingerprint","wrong"),("supabaseUrl","https://wrong.supabase.co"),
+                      ("supabasePublishableKey",""),("pushEnabled",True)):
+        files["admin/shared/config.local.js"]=config({**browser,key:value},payment);hold(call)
+        files.clear();files.update(original)
+    for key,value in (("enabled",True),("mode","multi"),("allowedMethods",["card"]),("bankTransfer",{"enabled":True}),
+                      ("channels",{"card":"synthetic"}),("channelKey","synthetic"),("storeId","synthetic")):
+        files["member/shared/config.local.js"]=config(browser,{**payment,key:value});hold(call)
+        files.clear();files.update(original)
+    for name in ("admin/index.html","member/release.json","member/service-worker.js"):
+        files[name]="missing" if name.endswith(".html") else files[name]+"drift"
+        hold(call) if not name.endswith(".json") else None
+        if name.endswith(".json"):
+            try: call()
+            except ValueError: checks+=1
+            else: raise AssertionError("release JSON drift")
+        files.clear();files.update(original)
+elif group=="live":
+    states=[{"release":{"version":"1.0.566","releaseId":"2026.10.28.05"},"member_cache":599,"coach_cache":572} for _ in range(2)]
+    production={"version":"1.0.559","releaseId":"2026.10.29.01"}
+    reads=[]
+    g["read_live_dev_states"]=lambda candidate:copy.deepcopy(states)
+    g["_http_read"]=lambda role,candidate:reads.append((role,candidate)) or copy.deepcopy(production)
+    g["legacy_monthly_live"](proof);ok(len(reads)==3)
+    original=copy.deepcopy(states)
+    for key,value in (("member_cache",600),("coach_cache",571),("release",{"version":"1.0.567","releaseId":"2026.10.29.01"})):
+        states[0][key]=value;before=len(reads);hold(lambda:g["legacy_monthly_live"](proof));ok(len(reads)==before)
+        states[:]=copy.deepcopy(original)
+    for key,value in (("version","1.0.560"),("releaseId","2026.10.29.02")):
+        old=production[key];production[key]=value;hold(lambda:g["legacy_monthly_live"](proof));production[key]=old
+elif group in ("target","target-domain-shape"):
+    account="a"*32
+    target={**env,"CLOUDFLARE_ACCOUNT_ID":account,"CLOUDFLARE_API_TOKEN":"synthetic-readonly",
+            "EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT":g["sha256"](account.encode())}
+    calls=[];mode="valid"
+    def get(a,t,path):
+        calls.append(path)
+        name=path.split("/")[2]
+        domain=g["EXPECTED_PROJECT_DOMAINS"][name]
+        if "/deployments?" not in path:
+            item={"name":name,"production_branch":"dev","subdomain":domain,"domains":[domain]}
+            if mode=="wrong-branch": item["production_branch"]="main"
+            if mode=="prod-domain": item["domains"].append("tennisnote-app.pages.dev")
+            if mode=="wrong-domain": item["subdomain"]="wrong.pages.dev"
+            if mode=="domains-string": item["domains"]=domain
+            if mode=="domains-dict": item["domains"]=[domain,{"synthetic":"invalid"}]
+            if mode=="domains-null": item["domains"]=None
+            return {"result":item}
+        row={"id":"-".join(("00000000","0000","4000","8000","000000000001")),
+             "environment":"production","url":"https://synthetic."+domain,"created_on":"synthetic",
+             "latest_stage":{"status":"success"},"deployment_trigger":{"metadata":{"branch":"dev","commit_hash":"2c6eba698c3eaf0bced8352d0b234d463e4689e6"}}}
+        if mode=="wrong-source": row["deployment_trigger"]["metadata"]["commit_hash"]="0"*40
+        if mode=="failed": row["latest_stage"]["status"]="failure"
+        return {"result":[row]}
+    if group=="target":
+        ok(len(g["legacy_monthly_target"](target,get))==64);ok(len(calls)==4)
+        for patcher in ({"EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT":"0"*64},{"CLOUDFLARE_ACCOUNT_ID":"invalid"},{"CLOUDFLARE_API_TOKEN":""}):
+            calls.clear();hold(lambda p=patcher:g["legacy_monthly_target"]({**target,**p},get));ok(not calls)
+        for mode in ("wrong-branch","prod-domain","wrong-domain","wrong-source","failed"):
+            hold(lambda:g["legacy_monthly_target"](target,get),"" if mode=="failed" else "LEGACY_MONTHLY_")
+    else:
+        for mode in ("domains-string","domains-dict","domains-null"):
+            hold(lambda:g["legacy_monthly_target"](target,get),"LEGACY_MONTHLY_TARGET_PROJECT")
+elif group=="transport":
+    ok(any(isinstance(h,g["_NoRedirectHandler"]) for h in g["_LIVE_READ_OPENER"].handlers))
+    ok(g["_NoRedirectHandler"]().redirect_request(None,None,302,"",{},"https://wrong.invalid") is None)
+    calls=[]
+    class Response:
+        raw=b'{"success":true,"result":{}}'
+        def __enter__(self): return self
+        def __exit__(self,*a): pass
+        def read(self,limit): ok(limit==2000001);return self.raw
+    response=Response()
+    class Opener:
+        def open(self,request,timeout):
+            calls.append((request,timeout));return response
+    g["_LIVE_READ_OPENER"]=Opener()
+    p="pages/projects/tennisnote-app-dev"
+    g["legacy_monthly_cloudflare_get"]("a"*32,"synthetic",p)
+    ok(len(calls)==1 and calls[0][1]==20 and calls[0][0].get_method()=="GET")
+    ok(calls[0][0].full_url.startswith("https://api.cloudflare.com/client/v4/accounts/"))
+    before=len(calls)
+    hold(lambda:g["legacy_monthly_cloudflare_get"]("a"*32,"synthetic","pages/projects/tennisnote-app"));ok(len(calls)==before)
+    response.raw=b"x"*2000001;hold(lambda:g["legacy_monthly_cloudflare_get"]("a"*32,"synthetic",p))
+    response.raw=b"invalid";hold(lambda:g["legacy_monthly_cloudflare_get"]("a"*32,"synthetic",p))
+elif group=="dispatch":
+    order=[]
+    g["legacy_monthly_source"]=lambda:order.append("source") or proof
+    g["legacy_monthly_artifacts"]=lambda *a:order.append("artifact")
+    g["legacy_monthly_live"]=lambda *a:order.append("live")
+    g["legacy_monthly_target"]=lambda *a:order.append("target") or "0"*64
+    with contextlib.redirect_stdout(io.StringIO()):
+        g["legacy_monthly_dispatch"](types.SimpleNamespace(source_only=False,live_preflight=True,branch_preflight=False))
+    ok(order==["source","artifact","live","target"])
+    for flags in ((False,False,True),(True,True,False),(False,False,False)):
+        before=len(order);hold(lambda f=flags:g["legacy_monthly_dispatch"](types.SimpleNamespace(source_only=f[0],live_preflight=f[1],branch_preflight=f[2])));ok(len(order)==before)
+    def blocked(*args): order.append("artifact-hold");raise RuntimeError("LEGACY_MONTHLY_ARTIFACT_RUNTIME")
+    g["legacy_monthly_artifacts"]=blocked
+    before=len(order);hold(lambda:g["legacy_monthly_dispatch"](types.SimpleNamespace(source_only=False,live_preflight=True,branch_preflight=False)))
+    ok(order[before:]==["source","artifact-hold"])
+else:
+    raise AssertionError("unknown synthetic group")
+print(json.dumps({"group":group,"checks":checks,"http":0,"database":0}))
+`;
+function legacyGuardPython(group) {
+  const f=legacyDevFixture(),proof=a.proveLegacyMonthlyDev(f.c,f.io);
+  const result=spawnSync("python",["-B","-c",LEGACY_GUARD_PY],{cwd:a.ROOT,encoding:"utf8",timeout:20000,
+    input:JSON.stringify({group,guard:a.LEGACY_GUARD,proof,env:f.env,readonly:JSON.parse(read(Object.keys(a.LEGACY_READONLY)[0]))})});
+  assert.equal(result.status,0,result.stderr);const receipt=JSON.parse(result.stdout);
+  assert.equal(receipt.group,group);assert.ok(receipt.checks>0);assert.equal(receipt.http,0);assert.equal(receipt.database,0);
+}
+test("LEGACY-MONTHLY-GUARD: exact source24 two actual layers and immutable dependency reach DEV consumer",()=>{
+  const f=legacyDevFixture(),p=a.proveLegacyMonthlyDev(f.c,f.io);
+  assert.equal(p.files,24);assert.equal(p.layers,2);assert.equal(p.immutableDependencies,1);
+  assert.equal(p.admissionRoute,"legacy-monthly-dev567-manual");assert.equal(p.deploymentAdmitted,false);
+  assert.equal(a.legacyMonthlyOriginalGuard(f.texts[a.LEGACY_GUARD]),f.baseTexts[a.LEGACY_GUARD]);
+  const ro=Object.keys(a.LEGACY_READONLY)[0];
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,read:q=>f.texts[q]+(q===ro?"drift":"")}),/LEGACY_IMMUTABLE_DEPENDENCY/);
+  for(const patch of [{attempt:"2"},{event:"push"},{ref:"refs/heads/main"},{input:f.s},{workflowSha:f.m},{head:f.s},{repo:"untrusted/repo"}]){
+    f.reads.length=0;assert.throws(()=>a.proveLegacyMonthlyDev({...f.c,...patch},f.io),/LEGACY_DEV_CONTEXT/);assert.deepEqual(f.reads,[]);
+  }
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,tree:()=>"0".repeat(40)}),/LEGACY_BASE/);
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,blob:(r,p)=>f.io.blob(r,p)+(p===a.LEGACY_GUARD&&r===f.h?"x":"")}),/LEGACY_CONTENT_PIN/);
+  const single=legacyMonthlyFixture(false);
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,single.io),/LEGACY_DEV_TWO_ACTUAL_COMMITS/);
+});
+for(const group of ["loader-source","runtime","live","target","transport","dispatch"])
+  test("LEGACY-MONTHLY-GUARD: actual Python loader and synthetic "+group,()=>legacyGuardPython(group));
+test("LEGACY-MONTHLY-GUARD: added domain-shape mismatch only",()=>legacyGuardPython("target-domain-shape"));
+test("LEGACY-MONTHLY-GUARD: actual Git base modes and exact source-final mode drift",()=>{
+  const f=legacyDevFixture(),real=a.legacyMonthlyIO();
+  for(const p of [...a.LEGACY_PATHS,...Object.keys(a.LEGACY_READONLY)]){
+    const expected=p===a.LEGACY_META?"":p==="scripts/verify.sh"?"100755":"100644";
+    assert.equal(real.mode(a.LEGACY_BASE,p),expected,"actual base "+p);
+    assert.equal(f.io.mode(a.LEGACY_BASE,p),expected,"fixture base "+p);
+  }
+  assert.equal(a.LEGACY_MODE_MAP["scripts/verify.sh"],"100755");
+  assert.equal(a.proveLegacyMonthlyDev(f.c,f.io).files,24);
+  for(const ref of [a.LEGACY_BASE,f.s,f.h]){
+    for(const [path,bad] of [["scripts/verify.sh","100644"],[a.LEGACY_GUARD,"100755"],["app/release.json","100755"]]){
+      assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,mode:(r,p)=>r===ref&&p===path?bad:f.io.mode(r,p)}),
+        /LEGACY_MODE|LEGACY_SOURCE_MODE/);
+    }
+  }
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,mode:(r,p)=>r===a.LEGACY_BASE&&p===a.LEGACY_META?"100644":f.io.mode(r,p)}),/LEGACY_MODE/);
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,mode:(r,p)=>r===f.s&&p===a.LEGACY_META?"":f.io.mode(r,p)}),/LEGACY_SOURCE_MODE/);
+  assert.throws(()=>a.proveLegacyMonthlyDev(f.c,{...f.io,mode:(r,p)=>r===f.h&&p===a.LEGACY_META?"120000":f.io.mode(r,p)}),/LEGACY_MODE/);
+});
+test("LEGACY-MONTHLY-GUARD: sparse loader dependency and official new-only CI route preserve workflow authority",()=>{
+  const f=legacyDevFixture(),w=f.texts[".github/workflows/tennisnote-public-ci.yml"],v=f.texts["scripts/verify.sh"];
+  assert.equal(a.LEGACY_PATHS.length,24);assert.equal(a.LEGACY_SOURCE_PATHS.length,11);
+  assert.deepEqual(Object.keys(a.LEGACY_READONLY),["tests/fixtures/r3-dev-cache-floors.json"]);
+  for(const p of [...a.LEGACY_PATHS,...Object.keys(a.LEGACY_READONLY)])assert.equal(w.split("            /"+p+"\n").length-1,1);
+  assert.ok(v.includes('--test-name-pattern="^LEGACY-MONTHLY-GUARD:"'));
+  const pr=legacyMonthlyFixture(true),outputs=[];
+  assert.equal(a.runLegacyMonthlyCi(pr.env,pr.event,{status:()=>"",checkout:()=>pr.m,io:pr.io},s=>outputs.push(s)).files,24);
+  assert.deepEqual(outputs,["scoped=true\nlegacy_monthly_only=true\n"]);
 });

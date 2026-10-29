@@ -508,6 +508,209 @@ def branch_preflight() -> None:
     print(f"Development branch runtime, exact existing projects, rollback and monotonic release PASS; proof sha256={proof}")
 
 
+# LEGACY_MONTHLY_567_BEGIN
+def legacy_monthly_claimed() -> bool:
+    return os.environ.get("GITHUB_REF", "").startswith("refs/heads/codex/tennisnote-r3-legacy-monthly-")
+
+
+def legacy_monthly_need(condition: bool, code: str) -> None:
+    if not condition:
+        fail("LEGACY_MONTHLY_" + code)
+
+
+def legacy_monthly_context(env: dict[str, str], head: str) -> str:
+    branch = "refs/heads/codex/tennisnote-r3-legacy-monthly-public-20261029"
+    candidate = env.get("TENNISNOTE_CANDIDATE_SHA", "")
+    legacy_monthly_need(
+        env.get("GITHUB_REPOSITORY") == EXPECTED_REPOSITORY
+        and env.get("GITHUB_RUN_ATTEMPT") == "1"
+        and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and env.get("GITHUB_REF_TYPE") == "branch" and env.get("GITHUB_REF") == branch
+        and env.get("GITHUB_WORKFLOW") == EXPECTED_WORKFLOW_NAME
+        and env.get("GITHUB_WORKFLOW_REF") == EXPECTED_REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@" + branch
+        and env.get("TENNISNOTE_WORKFLOW_REF") == env.get("GITHUB_WORKFLOW_REF")
+        and SHA40_RE.fullmatch(candidate) is not None
+        and candidate == env.get("GITHUB_SHA") == env.get("GITHUB_WORKFLOW_SHA") == head,
+        "CONTEXT",
+    )
+    url = env.get("TENNISNOTE_SUPABASE_URL", "")
+    legacy_monthly_need(
+        env.get("TENNISNOTE_ENVIRONMENT") == "development"
+        and re.fullmatch(r"https://[a-z0-9]+\.supabase\.co", url) is not None
+        and project_fingerprint(url) == EXPECTED_DEV_PROJECT_FINGERPRINT
+        and bool(env.get("TENNISNOTE_SUPABASE_PUBLISHABLE_KEY"))
+        and env.get("TENNISNOTE_PAYMENTS_ENABLED") == "false"
+        and env.get("TENNISNOTE_PAYMENT_MODE") == "disabled"
+        and env.get("TENNISNOTE_ALLOWED_PAYMENT_METHODS", "") == ""
+        and env.get("TENNISNOTE_BANK_TRANSFER_ENABLED") == "false",
+        "ENVIRONMENT",
+    )
+    return candidate
+
+
+def legacy_monthly_proof(proof: object, candidate: str) -> dict[str, object]:
+    legacy_monthly_need(isinstance(proof, dict), "SOURCE_SHAPE")
+    private = proof.get("privateSource") or {}
+    release = proof.get("release") or {}
+    legacy_monthly_need(isinstance(private, dict) and isinstance(release, dict), "SOURCE_SHAPE")
+    legacy_monthly_need(
+        proof.get("status") == "SOURCE_PROVEN" and proof.get("privateSourceBound") is True
+        and proof.get("head") == proof.get("checkout") == candidate
+        and proof.get("base") == "8cef5b40228c929693c31aaa8af2a089cb0262f4"
+        and SHA40_RE.fullmatch(str(proof.get("tree", ""))) is not None
+        and proof.get("files") == 24 and proof.get("layers") == 2 and proof.get("immutableDependencies") == 1
+        and proof.get("admissionRoute") == "legacy-monthly-dev567-manual"
+        and private.get("commit") == "4d9e9aeaab972609f7260b3d7db068ce5708d7b9"
+        and private.get("tree") == "0911d86a5b424c3037ec015e430ffdc04e14be95"
+        and release.get("version") == release.get("appSurfaceVersion") == "1.0.567"
+        and release.get("releaseId") == "2026.10.29.01"
+        and release.get("memberCache") == "tennis-note-member-pwa-v600"
+        and release.get("coachCache") == "tennis-note-coach-mode-v573"
+        and proof.get("databaseActions") == 0,
+        "SOURCE_PROOF",
+    )
+    return proof
+
+
+def legacy_monthly_source() -> dict[str, object]:
+    candidate = legacy_monthly_context(dict(os.environ), run_git("rev-parse", "HEAD"))
+    try:
+        result = subprocess.run(
+            ["node", "scripts/check_r3_purchase_identity_admission.mjs", "--dev-source", "--legacy-monthly"],
+            cwd=ROOT, text=True, encoding="utf-8", capture_output=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        fail("LEGACY_MONTHLY_SOURCE_PROCESS")
+    legacy_monthly_need(result.returncode == 0 and len(result.stdout) <= 64000, "SOURCE_PROCESS")
+    try:
+        proof = json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        fail("LEGACY_MONTHLY_SOURCE_JSON")
+    return legacy_monthly_proof(proof, candidate)
+
+
+def legacy_monthly_artifacts(proof: dict[str, object], member_root: Path, admin_root: Path) -> None:
+    expected = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    for root in (member_root, admin_root):
+        legacy_monthly_need(json.loads((root / "release.json").read_text(encoding="utf-8")) == expected, "ARTIFACT_RELEASE")
+        text = (root / "shared/config.local.js").read_text(encoding="utf-8")
+        browser = _extract_assignment(text, "window.TENNISNOTE_CONFIG = ", ";\n\nwindow.TENNIS_NOTE_PAYMENT_CONFIG")
+        payment = _extract_assignment(text, "window.TENNIS_NOTE_PAYMENT_CONFIG = ")
+        url = browser.get("supabaseUrl")
+        legacy_monthly_need(
+            browser.get("environment") == "development" and isinstance(url, str)
+            and re.fullmatch(r"https://[a-z0-9]+\.supabase\.co", url) is not None
+            and project_fingerprint(url) == browser.get("projectFingerprint") == EXPECTED_DEV_PROJECT_FINGERPRINT
+            and bool(browser.get("supabasePublishableKey"))
+            and browser.get("pushEnabled", False) is False
+            and payment.get("enabled") is False and payment.get("mode") == "disabled"
+            and payment.get("allowedMethods") == [] and payment.get("bankTransfer") == {"enabled": False}
+            and payment.get("channels") in ({}, None)
+            and not payment.get("channelKey") and not payment.get("storeId")
+            and "개발계 · 실제 결제·푸시 차단" in (root / "index.html").read_text(encoding="utf-8"),
+            "ARTIFACT_RUNTIME",
+        )
+    for path, source in (
+        ("service-worker.js", "app/tennis-note-member-app/service-worker.js"),
+        ("tennis-note-coach-app/service-worker.js", "app/tennis-note-coach-app/service-worker.js"),
+    ):
+        legacy_monthly_need(
+            normalize_text((member_root / path).read_bytes()) == normalize_text((ROOT / source).read_bytes()),
+            "ARTIFACT_CACHE_BYTES",
+        )
+    legacy_monthly_need(
+        expected.get("version") == proof["release"]["version"] and expected.get("releaseId") == proof["release"]["releaseId"],
+        "ARTIFACT_SOURCE",
+    )
+
+
+def legacy_monthly_live(proof: dict[str, object]) -> None:
+    candidate = proof["head"]
+    states = read_live_dev_states(candidate)
+    legacy_monthly_need(len(states) == 2, "LIVE_DEV_COUNT")
+    for state in states:
+        release = state.get("release") or {}
+        legacy_monthly_need(
+            release.get("version") == "1.0.566" and release.get("releaseId") == "2026.10.28.05"
+            and state.get("member_cache") == 599 and state.get("coach_cache") == 572, "LIVE_DEV_BASELINE",
+        )
+    for role in ("production_member_release", "production_admin_release", "production_pages_release"):
+        release = _http_read(role, candidate)
+        legacy_monthly_need(
+            isinstance(release, dict) and release.get("version") == "1.0.559"
+            and release.get("releaseId") == "2026.10.29.01", "LIVE_PROD_BASELINE",
+        )
+    verify_monotonic_release(proof["release"], 600, 573, states)
+    legacy_monthly_need(
+        _numeric_version(proof["release"]["version"], "candidate") > _numeric_version("1.0.566", "DEV")
+        and _numeric_version(proof["release"]["releaseId"], "candidate") > _numeric_version("2026.10.28.05", "DEV")
+        and 600 > max(599, 592) and 573 > max(572, 565), "LIVE_FLOORS",
+    )
+
+
+def legacy_monthly_cloudflare_get(account_id: str, token: str, path: str) -> dict[str, object]:
+    allowed = {
+        "pages/projects/" + name + suffix
+        for name in EXPECTED_PROJECTS for suffix in ("", "/deployments?env=production&per_page=1")
+    }
+    legacy_monthly_need(path in allowed and re.fullmatch(r"[a-f0-9]{32}", account_id) is not None and bool(token), "TARGET_REQUEST")
+    request = urllib.request.Request(
+        "https://api.cloudflare.com/client/v4/accounts/" + account_id + "/" + path,
+        headers={"Authorization": "Bearer " + token, "Accept": "application/json"}, method="GET",
+    )
+    try:
+        with _LIVE_READ_OPENER.open(request, timeout=20) as response:
+            raw = response.read(2_000_001)
+        legacy_monthly_need(len(raw) <= 2_000_000, "TARGET_RESPONSE_SIZE")
+        result = json.loads(raw)
+    except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException):
+        fail("LEGACY_MONTHLY_TARGET_READ")
+    legacy_monthly_need(isinstance(result, dict) and result.get("success") is True, "TARGET_RESPONSE")
+    return result
+
+
+def legacy_monthly_target(env: dict[str, str], get=None) -> str:
+    expected = env.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", "")
+    account, token = env.get("CLOUDFLARE_ACCOUNT_ID", ""), env.get("CLOUDFLARE_API_TOKEN", "")
+    legacy_monthly_need(
+        SHA256_RE.fullmatch(expected) is not None and re.fullmatch(r"[a-f0-9]{32}", account) is not None
+        and bool(token) and sha256(account.encode("utf-8")) == expected, "TARGET_ACCOUNT",
+    )
+    get = get or legacy_monthly_cloudflare_get
+    rollback = {}
+    for name in EXPECTED_PROJECTS:
+        result = get(account, token, "pages/projects/" + name).get("result")
+        domain = EXPECTED_PROJECT_DOMAINS[name]
+        domains = result.get("domains") if isinstance(result, dict) else None
+        legacy_monthly_need(
+            isinstance(result, dict) and result.get("name") == name and result.get("production_branch") == "dev"
+            and result.get("subdomain") == domain and isinstance(domains, list)
+            and all(isinstance(d, str) for d in domains) and domain in domains
+            and all(d not in {"tennisnote-app.pages.dev", "tennisnote-admin.pages.dev"} for d in domains),
+            "TARGET_PROJECT",
+        )
+        rows = get(account, token, "pages/projects/" + name + "/deployments?env=production&per_page=1").get("result")
+        legacy_monthly_need(isinstance(rows, list), "TARGET_ROLLBACK_SHAPE")
+        previous = rollback_proof(name, rows)
+        legacy_monthly_need(previous["commit_sha"] == "2c6eba698c3eaf0bced8352d0b234d463e4689e6", "TARGET_ROLLBACK_SOURCE")
+        rollback[name] = previous
+    return sha256(json.dumps(rollback, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def legacy_monthly_dispatch(args) -> None:
+    legacy_monthly_need(int(args.source_only) + int(args.live_preflight) + int(args.branch_preflight) == 1
+                        and not args.branch_preflight, "ENTRYPOINT")
+    proof = legacy_monthly_source()
+    if args.live_preflight:
+        legacy_monthly_artifacts(proof, Path("dist/member-dev"), Path("dist/admin-dev"))
+        legacy_monthly_live(proof)
+        rollback = legacy_monthly_target(dict(os.environ))
+        print("LEGACY_MONTHLY_DEV_PREFLIGHT_PASS rollback_sha256=" + rollback)
+    else:
+        print("LEGACY_MONTHLY_SOURCE_PASS source_files=24 database_actions=0")
+# LEGACY_MONTHLY_567_END
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-only", action="store_true")
@@ -515,6 +718,11 @@ def main() -> int:
     parser.add_argument("--branch-preflight", action="store_true")
     args = parser.parse_args()
     try:
+        # LEGACY_MONTHLY_ENTRY_BEGIN
+        if legacy_monthly_claimed():
+            legacy_monthly_dispatch(args)
+            return 0
+        # LEGACY_MONTHLY_ENTRY_END
         if args.source_only:
             validate_dispatch_context(
                 event_name=os.environ.get("GITHUB_EVENT_NAME", ""),

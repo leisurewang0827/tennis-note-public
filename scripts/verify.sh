@@ -11,6 +11,13 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# 정확한 새 연결 검사만 선택하며 기본 전체 검사는 아래에 그대로 둡니다.
+if [[ "${1:-}" == "--r3-legacy-monthly" ]]; then
+  [[ $# -eq 1 ]] || exit 2
+  R3_LEGACY_MONTHLY_SELECTED=1 node --test --test-name-pattern="^LEGACY-MONTHLY-GUARD:" tests/r3-purchase-identity-admission.test.mjs
+  exit $?
+fi
+
 : "${TENNISNOTE_SUPABASE_URL:=https://example.supabase.co}"
 : "${TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:=test-publishable-key-for-ci-only}"
 : "${TENNISNOTE_PORTONE_STORE_ID:=test-store-id}"

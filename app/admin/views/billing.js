@@ -663,7 +663,7 @@ function renderEffectiveSettlementPreview() {
   if (summary) summary.innerHTML = current.results.map((entry) => `<article>
     <span>${escapeHtml(entry.coach.name)}</span>
     <strong>${entry.error ? "확인 필요" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>
-    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건 · 본수업 ${money.format(entry.value.ownSettlement)}원 / 대타 ${money.format(entry.value.substituteSettlement)}원${entry.value.branchSubstituteExpense ? ` · 지점 대타비 ${money.format(entry.value.branchSubstituteExpense)}원` : ""}${entry.value.confirmationReady ? "" : " · 새 계산 미리보기 / 기존 확정 내역 유지"}`)}</small>
+<small>${escapeHtml(entry.error || `${entry.value.sourceEvidenceLabel && entry.value.settledMinutes === 0 ? "수업 횟수·분은 금액 계산에 사용하지 않음" : `실제 진행 ${entry.value.settledMinutes}분`} · 결제 ${entry.value.paymentCount}건 · 본수업 ${money.format(entry.value.ownSettlement)}원 / 대타 ${money.format(entry.value.substituteSettlement)}원${entry.value.branchSubstituteExpense ? ` · 지점 대타비 ${money.format(entry.value.branchSubstituteExpense)}원` : ""}${entry.value.sourceEvidenceLabel ? ` · ${entry.value.sourceEvidenceLabel}` : ""}${entry.value.sourceHoldLabel ? ` · ${entry.value.sourceHoldLabel}` : entry.value.confirmationReady ? "" : " · 새 계산 미리보기 / 기존 확정 내역 유지"}`)}</small>
   </article>`).join("") || "계산할 코치가 없습니다.";
   const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]
     : entry.value.rows.map((row) => ({ ...entry, row })));

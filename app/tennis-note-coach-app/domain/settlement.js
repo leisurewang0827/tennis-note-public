@@ -30,7 +30,7 @@ function coachSettlementMonth() {
 }
 
 function coachSettlementRuleLabel(settlement = {}) {
-  if (settlement.ruleType === "effective_periods") return "수업·결제 기준일별 조건 · 월 합계에서 원 단위 반올림" + (settlement.confirmationReady ? "" : " · 새 계산은 미리보기이며 기존 확정 내역은 유지됩니다");
+  if (settlement.ruleType === "effective_periods") return "수업·결제 기준일별 조건 · 월 합계에서 원 단위 반올림" + (settlement.sourceEvidenceLabel ? ` · ${settlement.sourceEvidenceLabel}` : "") + (settlement.sourceHoldLabel ? ` · ${settlement.sourceHoldLabel}` : settlement.confirmationReady ? "" : " · 새 계산은 미리보기이며 기존 확정 내역은 유지됩니다");
   if (settlement.ruleType === "hourly") return `시급 ${formatCoachWon(settlement.hourlyRate)}`;
   const rate = Math.round((Number(settlement.ruleRate) || 0) * 100);
   const basis = settlement.settlementBasis === "actual_paid_inc_vat" ? "실결제" : "정산 기준가";
