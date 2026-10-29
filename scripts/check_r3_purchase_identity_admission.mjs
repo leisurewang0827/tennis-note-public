@@ -371,9 +371,199 @@ function productionMain(mode){
  else need(c.workflow!=='Tennis Note Public PWA CI','PRODUCTION_DEPLOY_WORKFLOW');
  console.log(JSON.stringify(proof));
 }
+// PROD_LEGACY_SUCCESSOR_BEGIN
+// 승인된 제품 다섯 개와 운영 메타데이터만 판정하며 과거 권위는 그대로 둡니다.
+export const PL_BASE = "8cef5b40228c929693c31aaa8af2a089cb0262f4";
+export const PL_BASE_TREE = "d912835abe666f1ce6d83f88c5cd74e52f1bb767";
+export const PL_DEV = "a5503e5855d0b30e34e4992976e6303342c40f9b";
+export const PL_DEV_TREE = "39b6b126b7095ca4fde7c7d20851396d3a6832df";
+export const PL_DEV_PARENT = "a0ccbccdc70efa03781cc1895bcccb26742dbd09";
+export const PL_DEV_PARENT_TREE = "32f73931c2f23afbd2d7e756fe8d565e9785ceb4";
+export const PL_PRIVATE = Object.freeze({commit:"4d9e9aeaab972609f7260b3d7db068ce5708d7b9",tree:"0911d86a5b424c3037ec015e430ffdc04e14be95",migrationSha256:"dcf5e719a2b9726686ebf95f63df32e513c2f36d437f0cb60d1298ac854e4e57"});
+export const PL_BRANCH = "codex/tennisnote-r3-production-legacy-monthly-20261029";
+export const PL_PREFIX = "codex/tennisnote-r3-production-legacy-monthly-";
+export const PL_PATTERN = "^PROD-LEGACY560:";
+export const PL_PRODUCT_PINS = Object.freeze({"app/admin/actions/billing.js":"48c6cd5b96e8a61300ca9adfaecb9258d6d31d88018008db7819399cbd88a185","app/admin/views/billing.js":"cc7df735c1ab10cb6dfa5c19ec2383622a33d693b9b090b2c91192c4cb9a9b52","app/shared/tennisnote-settlement-adjustment.js":"d55ca914171ce380eed3e3b35d7d363428170530518e2824175cce2d3e33deb2","app/tennis-note-coach-app/domain/settlement.js":"5c50ba3a7375fe083fbcbdf0c987a0efc1d9644c4f5853a8d2762f9fa9604adb","app/tennis-note-coach-app/views/settlement.js":"2f225c94f707d0779d1de3fa4496b1e120f7bd46d3cbfdbf9383d922b97a9b86"});
+export const PL_METADATA_PINS = Object.freeze({"app/admin/index.html":"7f6addc315dc1f1d779bc8c7a003b9653287d7c46fce5216f81a6b09ea9e05b1","app/release.json":"23e7deac0a12ac02319ac4c085ccdb261a68b8fdd7a65716bf4e7ccfac6e27a2","app/shared/tennisnote-release.js":"c72b0a03069dc86235d5c08dab9b1c37aae05b7e6a3b978f6212db3e5ee77776","app/tennis-note-coach-app/app.js":"4419918f727285bb35d07c71a7715db561ffa9fb7297619e10137def6e0ba80e","app/tennis-note-coach-app/domain/coaches.js":"087312fb320c3d3d522f81cf93a4f5c05d8d0dcec0818be373d306c461a869dc","app/tennis-note-coach-app/forms/common.js":"ab9eb3b747e287509d0d9b3dd86c1f0fdcb3dcbe2914721a8df41d418384cf5b","app/tennis-note-coach-app/index.html":"c9ab1d379aa206abc37f317a04ddad91bfa4dadb12e600857b7a78fdfb4ce448","app/tennis-note-coach-app/service-worker.js":"80320bb0d41f65fbbd1ebb438e58496ea45893a9691f35b631e2502c2bf834a9","app/tennis-note-member-app/app.js":"87b6e653c466b5b9a6621d23f03782d8ef07deede2acca2c7f64c694c81b7d0f","app/tennis-note-member-app/forms/common.js":"d0e556ac9a2548e7fedb775005594b5ec297fbcd7351aeb70315f64c8d790373","app/tennis-note-member-app/index.html":"b0044ff0ebdaed5cd044c2a726ecccd997b707524ac3bdef92192ecde792b869","app/tennis-note-member-app/service-worker.js":"1adcf99a47ee759e906a9645d52d39d2b2fa2ad2a3e19c1a7f7c706c284d0c9e","app/tennis-note-member-app/ui/screens.js":"9209bea288b8d5ef9980843b0e1738cc618956a2620dc7db75e9dd12428b2043"});
+export const PL_RELEASE = Object.freeze({"version":"1.0.560","appSurfaceVersion":"1.0.560","releaseId":"2026.10.29.02","deployedAt":"2026-10-29T23:13:29+09:00","memberCache":"tennis-note-member-pwa-v593","coachCache":"tennis-note-coach-mode-v566"});
+export const PL_TOOL_PINS = Object.freeze({"tests/r3-purchase-identity-admission.test.mjs":"b7a5dfedc03925e7b89469a9cba1212d61ab2545e9e6f43a4fd72ca8d6782ed8","scripts/verify.sh":"e0534b38b522b2f1a5de26b5c3e2c6d423788c07d5d509e8f02f0388cac1167d",".github/workflows/tennisnote-public-ci.yml":"e45c19007f3c8b66622e4328337613cae1dfe884680d944d2c786a37b7709332"});
+export const PL_CONTROL_PINS = Object.freeze({"scripts/check_r3_dev_deployment.py":"d7ff9e22babe37669cfe25356c05b9a789e6898bf47218e5f3934303c1cd9bc7","scripts/check_production_release_order.py":"533360968e8af20848c2702fdd9ad177316974682d98db8be65de0c29633db12",".github/workflows/deploy-cloudflare-pages.yml":"35f42f0b8caace8a3cf3c6d5b55287f8e4d355c0c1bb475dc45a45050e096b5b",".github/workflows/deploy-pages.yml":"f2ca1d13a51cc1c8fcf5fea6823e2eeb0d07739eebeee37243c13613a18b0c13",".github/workflows/deploy-cloudflare-pages-dev.yml":"2118c7c378086e74262b48b0a0495e42abe35f9e34f2e7d3f4f50f6762b3bdd9","tests/fixtures/r3-production-purchase-selection.json":"4c2f0448e932e70f1e4e9f03d1e427536eac2cc568cdee8bc5939223865d2940"});
+export const PL_OLD_SOURCE_SHA = "e82c4df3493bd7acc01bdd5cb178856fdd54da0952597fd35325f63297729a78";
+export const PL_SELF_SEAL = "a9701a7370a6b1ed1859b28354591f284a798dfec890223536ce01677b5df3da";
+export const PL_SOURCE_PATHS = Object.freeze([...Object.keys(PL_PRODUCT_PINS), ...Object.keys(PL_TOOL_PINS), SELF].sort());
+export const PL_PATHS = Object.freeze([...PL_SOURCE_PATHS, ...Object.keys(PL_METADATA_PINS)].sort());
+export const PL_MODES = Object.freeze(Object.fromEntries(PL_PATHS.map(p=>[p,p==="scripts/verify.sh"?"100755":"100644"])));
+export const PL_OLD_ENTRY = "    if(process.argv[3]==='--production'){productionMain(process.argv[2]);}\n";
+export const PL_NEW_ENTRY = "    if (prodLegacyRequested(process.argv, process.env)) { prodLegacyMain(process.argv[2]); }\n    else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}\n";
+const plNeed = (ok, code) => need(ok, "PROD_LEGACY_" + code);
+const plSha = s => /^[0-9a-f]{40}$/.test(s || "") && !/^0+$/.test(s);
+export function prodLegacyOriginal(s) {
+  s=lf(s);
+  const begin="// PROD_LEGACY_SUCCESSOR_BEGIN\n",end="// PROD_LEGACY_SUCCESSOR_END\n\n";
+  plNeed(s.split(begin).length===2 && s.split(end).length===2, "ORIGINAL_MARKERS");
+  const start=s.indexOf(begin),stop=s.indexOf(end);
+  plNeed(start<stop, "ORIGINAL_MARKERS");
+  return once(once(s,s.slice(start,stop+end.length),""),PL_NEW_ENTRY,PL_OLD_ENTRY);
+}
+export function prodLegacySeal(s) {
+  s=lf(s);
+  const re=/^export const PL_SELF_SEAL = "(?:[a-f0-9]{64}|PENDING)";$/gm;
+  plNeed([...s.matchAll(re)].length===1,"SEAL_LITERAL");
+  return hash(s.replace(re,'export const PL_SELF_SEAL = "PENDING";'));
+}
+export function prodLegacyClaimed(env,event) {
+  return String(event.pull_request?.head?.ref || "").startsWith(PL_PREFIX)
+    || String(env.GITHUB_REF || "").startsWith("refs/heads/"+PL_PREFIX)
+    || (env.GITHUB_EVENT_NAME==="push" && event.before===PL_BASE);
+}
+export function prodLegacyRequested(argv,env) {
+  if(argv[3]==="--production-legacy") return true;
+  return Boolean(env.GITHUB_EVENT_PATH) && prodLegacyClaimed(env,JSON.parse(readFileSync(env.GITHUB_EVENT_PATH,"utf8")));
+}
+export function prodLegacyIO() {
+  const paths=new Set([...PL_PATHS,...Object.keys(PL_CONTROL_PINS)]);
+  const allow=p=>plNeed(paths.has(p),"READ_SCOPE");
+  const ref=r=>plNeed(plSha(r),"IO_REF");
+  return {
+    tree:r=>{ref(r);return git("rev-parse",r+"^{tree}");},
+    parents:r=>{ref(r);return git("show","-s","--format=%P",r).split(" ").filter(Boolean);},
+    changes:(b,h)=>{ref(b);ref(h);return git("diff","--no-renames","--name-status",b,h).split("\n").filter(Boolean).map(s=>s.split("\t"));},
+    mode:(r,p)=>{ref(r);allow(p);return git("ls-tree","--format=%(objectmode)",r,"--",p);},
+    blob:(r,p)=>{ref(r);allow(p);return lf(execFileSync("git",["show",r+":"+p],{cwd:ROOT,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:15000,maxBuffer:2000000}));},
+    read:p=>{
+      allow(p);plNeed(lstatSync(ROOT).isDirectory()&&!lstatSync(ROOT).isSymbolicLink(),"ROOT_KIND");
+      let path=ROOT;for(const part of p.split("/")){path=resolve(path,part);plNeed(!lstatSync(path).isSymbolicLink(),"SYMLINK");}
+      plNeed(lstatSync(path).isFile(),"REGULAR_FILE");return lf(readFileSync(path,"utf8"));
+    }
+  };
+}
+function prodLegacyAnchors(io) {
+  plNeed(PL_SOURCE_PATHS.length===9 && PL_PATHS.length===22 && new Set(PL_PATHS).size===22,"STATIC_SCOPE");
+  plNeed(io.tree(PL_BASE)===PL_BASE_TREE && io.tree(PL_DEV)===PL_DEV_TREE
+    && io.tree(PL_DEV_PARENT)===PL_DEV_PARENT_TREE
+    && same(io.parents(PL_DEV),[PL_DEV_PARENT]) && same(io.parents(PL_DEV_PARENT),[PL_BASE]),"ANCHOR_GRAPH");
+  plNeed(hash(io.blob(PL_BASE,SELF))===PL_OLD_SOURCE_SHA,"ORIGINAL_BASE");
+  for(const [p,pin]of Object.entries(PL_PRODUCT_PINS)) {
+    plNeed(io.mode(PL_DEV,p)==="100644" && io.mode(PL_DEV_PARENT,p)==="100644"
+      && hash(io.blob(PL_DEV,p))===pin && io.blob(PL_DEV_PARENT,p)===io.blob(PL_DEV,p),"DEV_PRODUCT");
+  }
+  for(const [p,pin]of Object.entries(PL_CONTROL_PINS))
+    plNeed(io.mode(PL_BASE,p)==="100644" && hash(io.blob(PL_BASE,p))===pin,"CONTROL_BASE");
+}
+function prodLegacyDelta(io,b,h,paths) {
+  const rows=io.changes(b,h);
+  plNeed(same(rows.map(r=>r[1]).sort(),paths) && rows.length===paths.length,"EXACT_SCOPE");
+  for(const r of rows)plNeed(r.length===2 && r[0]==="M"
+    && io.mode(b,r[1])===PL_MODES[r[1]] && io.mode(h,r[1])===PL_MODES[r[1]],"FILE_KIND_MODE");
+}
+export function prodLegacyBodies(read,io) {
+  const body=read(SELF);
+  plNeed(prodLegacyOriginal(body)===io.blob(PL_BASE,SELF)
+    && hash(prodLegacyOriginal(body))===PL_OLD_SOURCE_SHA,"ORIGINAL_BYTES");
+  plNeed(/^[0-9a-f]{64}$/.test(PL_SELF_SEAL)
+    && body.match(/^export const PL_SELF_SEAL = "([0-9a-f]{64})";$/m)?.[1]===PL_SELF_SEAL
+    && prodLegacySeal(body)===PL_SELF_SEAL,"SELF_SEAL");
+  for(const [p,pin]of Object.entries(PL_PRODUCT_PINS))
+    plNeed(hash(read(p))===pin && read(p)===io.blob(PL_DEV,p),"PRODUCT_BYTES");
+  for(const [p,pin]of Object.entries(PL_TOOL_PINS))
+    plNeed(/^[0-9a-f]{64}$/.test(pin) && hash(read(p))===pin,"TOOL_BYTES");
+  for(const [p,pin]of Object.entries(PL_METADATA_PINS)) {
+    const actual=read(p),baseline=io.blob(PL_BASE,p);
+    plNeed(hash(actual)===pin && actual===expectedMetadata(p,baseline,PL_RELEASE,"1.0.559"),"METADATA_BYTES");
+    if(p==="app/release.json")plNeed(same(JSON.parse(actual).nativePlatforms,JSON.parse(baseline).nativePlatforms),"NATIVE_METADATA");
+  }
+  for(const [p,pin]of Object.entries(PL_CONTROL_PINS))
+    plNeed(read(p)===io.blob(PL_BASE,p) && hash(read(p))===pin,"CONTROL_BYTES");
+}
+export function proveProdLegacyTree(ref,io=prodLegacyIO(),squash=false) {
+  plNeed(plSha(ref) && ref!==PL_BASE && ref!==PL_DEV,"REF");
+  // 경로와 mode를 먼저 잠가 승인되지 않은 candidate body는 읽지 않습니다.
+  const parents=io.parents(ref);plNeed(parents.length===1,"PARENT");
+  prodLegacyDelta(io,PL_BASE,ref,PL_PATHS);
+  let source=null;
+  if(squash)plNeed(same(parents,[PL_BASE]),"SQUASH_PARENT");
+  else {
+    source=parents[0];
+    plNeed(plSha(source) && source!==PL_BASE && source!==ref && same(io.parents(source),[PL_BASE]),"TWO_LAYERS");
+    prodLegacyDelta(io,PL_BASE,source,PL_SOURCE_PATHS);
+    prodLegacyDelta(io,source,ref,Object.keys(PL_METADATA_PINS).sort());
+    for(const p of PL_SOURCE_PATHS)plNeed(io.blob(source,p)===io.blob(ref,p),"SOURCE_LAYER");
+    for(const p of Object.keys(PL_METADATA_PINS))plNeed(io.blob(source,p)===io.blob(PL_BASE,p),"EARLY_METADATA");
+  }
+  prodLegacyAnchors(io);
+  prodLegacyBodies(p=>io.blob(ref,p),io);
+  const tree=io.tree(ref);
+  plNeed(plSha(tree) && ![PL_BASE_TREE,PL_DEV_TREE].includes(tree),"TREE");
+  return {contract:"r3-production-legacy-monthly-source/1",status:"SOURCE_PROVEN",head:ref,tree,base:PL_BASE,
+    source:PL_DEV,sourceTree:PL_DEV_TREE,privateSource:PL_PRIVATE,files:22,layers:squash?1:2,
+    graph:squash?"main-single-squash":"feature-two-ordinary",sourceCommit:source,
+    release:PL_RELEASE,databaseActions:0,networkActions:0,deploymentAdmitted:false};
+}
+export function prodLegacyContext(env,event,checkout) {
+  return {...context(env,event,checkout),before:event.before,number:event.number,
+    prNumber:event.pull_request?.number,baseRepo:event.pull_request?.base?.repo?.full_name};
+}
+export function proveProdLegacyEvent(c,io=prodLegacyIO()) {
+  plNeed(c.repo===REPOSITORY && c.attempt==="1" && Object.hasOwn(PRODUCTION_WORKFLOWS,c.workflow),"CONTEXT");
+  plNeed(plSha(c.head)&&plSha(c.sha)&&c.checkout===c.sha && c.workflowSha===c.sha
+    && c.workflowRef===REPOSITORY+"/"+PRODUCTION_WORKFLOWS[c.workflow]+"@"+c.ref
+    && c.refType==="branch" && c.input===undefined,"WORKFLOW");
+  const pr=c.event==="pull_request";
+  if(pr) {
+    plNeed(c.workflow==="Tennis Note Public PWA CI" && c.target==="main" && c.base===PL_BASE
+      && c.headRef===PL_BRANCH && c.headRepo===REPOSITORY && c.baseRepo===REPOSITORY
+      && Number.isSafeInteger(c.number)&&c.number>0 && c.number===c.prNumber
+      && c.ref==="refs/pull/"+c.number+"/merge" && same(io.parents(c.sha),[PL_BASE,c.head]),"PR");
+  }else plNeed(c.event==="push" && c.ref==="refs/heads/main" && c.before===PL_BASE
+    && c.sha===c.head,"MAIN_PUSH");
+  const proof=proveProdLegacyTree(c.head,io,!pr);
+  plNeed(io.tree(c.checkout)===proof.tree,"CHECKOUT_TREE");
+  return {...proof,checkout:c.checkout,event:c.event,workflow:c.workflow};
+}
+export function runProdLegacy(mode,c,host,emit=()=>{}) {
+  plNeed(["--ci-route","--production-source"].includes(mode),"MODE");
+  plNeed(host.status()==="","DIRTY");
+  const proof=proveProdLegacyEvent(c,host.io);
+  for(const p of [...PL_PATHS,...Object.keys(PL_CONTROL_PINS)])
+    plNeed(host.read(p)===host.io.blob(c.checkout,p),"WORKTREE_BYTES");
+  if(mode==="--ci-route") {
+    plNeed(c.workflow==="Tennis Note Public PWA CI","CI_WORKFLOW");
+    emit("scoped=true\nproduction_legacy_only=true\n");
+  }else plNeed(c.workflow!=="Tennis Note Public PWA CI" && c.event==="push","DEPLOY_WORKFLOW");
+  return proof;
+}
+export function proveProdLegacyLocal() {
+  plNeed(git("rev-parse","HEAD")===PL_BASE && git("branch","--show-current")===PL_BRANCH
+    && git("diff","--cached","--name-only")==="" && git("ls-files","--others","--exclude-standard")==="","LOCAL_STATE");
+  const rows=git("diff","--no-renames","--name-status").split("\n").filter(Boolean).map(s=>s.split("\t"));
+  plNeed(same(rows.map(r=>r[1]).sort(),PL_PATHS) && rows.every(r=>r.length===2&&r[0]==="M"),"LOCAL_SCOPE");
+  const io=prodLegacyIO();prodLegacyAnchors(io);
+  for(const p of PL_PATHS)plNeed(io.mode(PL_BASE,p)===PL_MODES[p],"LOCAL_MODE");
+  prodLegacyBodies(io.read,io);
+  return {contract:"r3-production-legacy-monthly-local/1",status:"LOCAL_SOURCE_PREPARED",base:PL_BASE,
+    candidateCommit:null,tree:null,files:22,sourcePaths:9,metadataPaths:13,source:PL_DEV,
+    privateSource:PL_PRIVATE,release:PL_RELEASE,realCandidateGraphProven:false,databaseActions:0,
+    networkActions:0,deploymentAdmitted:false};
+}
+function prodLegacyMain(mode) {
+  plNeed(process.argv.length===4,"ARGUMENTS");
+  if(mode==="--local") {
+    plNeed(process.argv[3]==="--production-legacy","LOCAL_ENTRY");
+    console.log(JSON.stringify(proveProdLegacyLocal()));return;
+  }
+  plNeed(process.argv[3]==="--production","ENTRY");
+  const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,"utf8"));
+  const io=prodLegacyIO(),c=prodLegacyContext(process.env,event,git("rev-parse","HEAD"));
+  const proof=runProdLegacy(mode,c,{status:()=>git("status","--porcelain","--untracked-files=all"),io,read:io.read},
+    s=>appendFileSync(process.env.GITHUB_OUTPUT,s));
+  console.log(JSON.stringify(proof));
+}
+// PROD_LEGACY_SUCCESSOR_END
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
+    if (prodLegacyRequested(process.argv, process.env)) { prodLegacyMain(process.argv[2]); }
+    else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
     else {
     const mode=process.argv[2],term=process.argv[3]==="--term-history";
     const checkout=process.argv[3]==="--checkout-mode";

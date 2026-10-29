@@ -59,8 +59,46 @@ jobs:
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
       - uses: actions/checkout@v7
+        if: ${{ !(startsWith(github.head_ref, 'codex/tennisnote-r3-production-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-production-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')) }}
         with:
           fetch-depth: 0
+      # PROD_LEGACY_CHECKOUT_BEGIN
+      - uses: actions/checkout@v7
+        if: startsWith(github.head_ref, 'codex/tennisnote-r3-production-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-production-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/workflows/deploy-cloudflare-pages-dev.yml
+            /.github/workflows/deploy-cloudflare-pages.yml
+            /.github/workflows/deploy-pages.yml
+            /.github/workflows/tennisnote-public-ci.yml
+            /app/admin/actions/billing.js
+            /app/admin/index.html
+            /app/admin/views/billing.js
+            /app/release.json
+            /app/shared/tennisnote-release.js
+            /app/shared/tennisnote-settlement-adjustment.js
+            /app/tennis-note-coach-app/app.js
+            /app/tennis-note-coach-app/domain/coaches.js
+            /app/tennis-note-coach-app/domain/settlement.js
+            /app/tennis-note-coach-app/forms/common.js
+            /app/tennis-note-coach-app/index.html
+            /app/tennis-note-coach-app/service-worker.js
+            /app/tennis-note-coach-app/views/settlement.js
+            /app/tennis-note-member-app/app.js
+            /app/tennis-note-member-app/forms/common.js
+            /app/tennis-note-member-app/index.html
+            /app/tennis-note-member-app/service-worker.js
+            /app/tennis-note-member-app/ui/screens.js
+            /scripts/check_production_release_order.py
+            /scripts/check_r3_dev_deployment.py
+            /scripts/check_r3_purchase_identity_admission.mjs
+            /scripts/verify.sh
+            /tests/fixtures/r3-production-purchase-selection.json
+            /tests/r3-purchase-identity-admission.test.mjs
+      # PROD_LEGACY_CHECKOUT_END
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -77,6 +115,11 @@ jobs:
           else
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
+      # PROD_LEGACY_COLLECTOR_BEGIN
+      - name: Legacy monthly production successor delta only
+        if: steps.display.outputs.production_legacy_only == 'true' && github.event_name == 'pull_request'
+        run: ./scripts/verify.sh --r3-production-legacy
+      # PROD_LEGACY_COLLECTOR_END
       - name: Canonical production selection and forward recovery delta only
         if: steps.display.outputs.production_only == 'true' && github.event_name == 'pull_request'
         env:

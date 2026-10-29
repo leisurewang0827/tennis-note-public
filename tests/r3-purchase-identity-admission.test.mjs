@@ -483,3 +483,101 @@ test("DEV566 checkout-mode: official generated metadata and workflow guards matc
   assert.ok(f.files[a.WORKFLOWS[1]].includes("environment: development"));
   assert.equal(a.CHECKOUT_PATHS.some(p=>Object.hasOwn(a.PRESERVED,p)),false);
 });
+
+// PROD_LEGACY_TEST_BEGIN
+// 새 successor만 수집하며 과거 테스트 본문은 실행하지 않습니다.
+let plMemo,plDisk;
+function plFixture() {
+  if(!plMemo) {
+    const real=a.prodLegacyIO(),memo=new Map();
+    const prior=(m,...xs)=>{const k=JSON.stringify([m,...xs]);if(!memo.has(k))memo.set(k,real[m](...xs));return memo.get(k);};
+    plMemo={tree:r=>prior("tree",r),parents:r=>prior("parents",r),changes:(b,h)=>prior("changes",b,h),mode:(r,p)=>prior("mode",r,p),blob:(r,p)=>prior("blob",r,p)};
+    plDisk=Object.fromEntries([...a.PL_PATHS,...Object.keys(a.PL_CONTROL_PINS)].map(p=>[p,read(p)]));
+  }
+  const h="6".repeat(40),s="7".repeat(40),m="8".repeat(40),q="9".repeat(40),t="a".repeat(40),st="b".repeat(40),files={...plDisk},calls=[];
+  const io={tree:r=>[h,m,q].includes(r)?t:r===s?st:plMemo.tree(r),
+    parents:r=>r===h?[s]:r===s?[a.PL_BASE]:r===m?[a.PL_BASE,h]:r===q?[a.PL_BASE]:plMemo.parents(r),
+    changes:(b,r)=>r===h?(b===s?Object.keys(a.PL_METADATA_PINS).sort():a.PL_PATHS).map(p=>["M",p]):r===s?a.PL_SOURCE_PATHS.map(p=>["M",p]):r===q?a.PL_PATHS.map(p=>["M",p]):plMemo.changes(b,r),
+    mode:(r,p)=>[h,s,m,q].includes(r)?a.PL_MODES[p]||"100644":plMemo.mode(r,p),
+    blob:(r,p)=>{calls.push([r,p]);return [h,m,q].includes(r)?files[p]:r===s?(Object.hasOwn(a.PL_METADATA_PINS,p)?plMemo.blob(a.PL_BASE,p):files[p]):plMemo.blob(r,p);}};
+  const c={repo:a.REPOSITORY,attempt:"1",event:"pull_request",workflow:"Tennis Note Public PWA CI",workflowRef:a.REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@refs/pull/777/merge",workflowSha:m,sha:m,ref:"refs/pull/777/merge",refType:"branch",head:h,checkout:m,target:"main",base:a.PL_BASE,headRepo:a.REPOSITORY,headRef:a.PL_BRANCH,baseRepo:a.REPOSITORY,number:777,prNumber:777};
+  const main=(workflow="Tennis Note Public PWA CI")=>({...c,event:"push",before:a.PL_BASE,head:q,sha:q,checkout:q,workflowSha:q,ref:"refs/heads/main",workflow,workflowRef:a.REPOSITORY+"/"+a.PRODUCTION_WORKFLOWS[workflow]+"@refs/heads/main"});
+  return {h,s,m,q,t,st,files,calls,io,c,main};
+}
+function plVm(f,c=f.c,mode="--ci-route",extra={}) {
+  const event=c.event==="pull_request"?{number:c.number,pull_request:{number:c.prNumber,head:{sha:c.head,ref:c.headRef,repo:{full_name:c.headRepo}},base:{sha:c.base,ref:c.target,repo:{full_name:c.baseRepo}}}}:{before:c.before};
+  const env={GITHUB_EVENT_PATH:"/safe-event",GITHUB_OUTPUT:"/safe-output",GITHUB_REPOSITORY:c.repo,GITHUB_RUN_ATTEMPT:c.attempt,GITHUB_EVENT_NAME:c.event,GITHUB_WORKFLOW:c.workflow,GITHUB_WORKFLOW_REF:c.workflowRef,GITHUB_WORKFLOW_SHA:c.workflowSha,GITHUB_SHA:c.sha,GITHUB_REF:c.ref,GITHUB_REF_TYPE:c.refType};
+  const printed=[],outputs=[],errors=[],commands=[],modulePath=resolve(a.ROOT,a.SELF),process={argv:["node",modulePath,mode,"--production"],env,exitCode:0};
+  const fsRead=p=>{if(p==="/safe-event")return JSON.stringify(event);const n=String(p).replaceAll("\\","/").slice(a.ROOT.replaceAll("\\","/").length+1);assert.ok(Object.hasOwn(f.files,n),"VM read outside scope");return (extra.read||(p=>f.files[p]))(n);};
+  const exec=(bin,args)=>{commands.push(args);assert.equal(bin,"git");if(extra.failGit)throw Error("synthetic process failure");
+    if(args[0]==="status")return extra.dirty||"";
+    if(args[0]==="rev-parse")return args[1]==="HEAD"?c.checkout:f.io.tree(args[1].replace(/\^\{tree\}$/,""));
+    if(args[0]==="show")return args[1]==="-s"?f.io.parents(args.at(-1)).join(" "):f.io.blob(args[1].slice(0,40),args[1].slice(41));
+    if(args[0]==="ls-tree")return f.io.mode(args[2],args[4]);
+    if(args[0]==="diff")return f.io.changes(args.at(-2),args.at(-1)).map(r=>r.join("\t")).join("\n");
+    throw Error("unexpected process");};
+  const code=read(a.SELF).replace(/^import .*;\r?\n/gm,"").replace(/^export /gm,"").replaceAll("import.meta.url",JSON.stringify(pathToFileURL(modulePath).href));
+  runInNewContext(code,{createHash,readFileSync:fsRead,appendFileSync:(p,s)=>{assert.equal(p,"/safe-output");outputs.push(s);},lstatSync:p=>({isDirectory:()=>p===a.ROOT,isFile:()=>true,isSymbolicLink:()=>Boolean(extra.symlink)&&String(p).endsWith(extra.symlink)}),execFileSync:exec,fileURLToPath,pathToFileURL,dirname,resolve,process,console:{log:s=>printed.push(JSON.parse(s)),error:s=>errors.push(s)},fetch:()=>{throw Error("network forbidden");},setTimeout:()=>{throw Error("retry forbidden");}},{timeout:5000});
+  return {printed,outputs,errors,commands,exit:process.exitCode};
+}
+const plHeld=r=>{assert.equal(r.exit,2);assert.deepEqual(r.printed,[]);assert.deepEqual(r.outputs,[]);assert.deepEqual(r.errors,["R3_PURCHASE_IDENTITY_HOLD"]);};
+
+test("PROD-LEGACY560: exact public provenance and source9 plus metadata13",()=>{
+  const f=plFixture(),p=a.proveProdLegacyEvent(f.c,f.io);
+  assert.equal(p.files,22);assert.equal(p.layers,2);assert.equal(p.sourceCommit,f.s);assert.equal(p.source,a.PL_DEV);
+  assert.equal(p.privateSource.commit,"4d9e9aeaab972609f7260b3d7db068ce5708d7b9");assert.equal(p.release.version,"1.0.560");assert.equal(p.deploymentAdmitted,false);
+  assert.equal(a.PL_SOURCE_PATHS.length,9);assert.equal(Object.keys(a.PL_METADATA_PINS).length,13);assert.equal(new Set(a.PL_PATHS).size,22);assert.equal(a.PL_MODES["scripts/verify.sh"],"100755");
+});
+test("PROD-LEGACY560: wrong anchors and absent immutable source reject",()=>{
+  for(const ref of [a.PL_BASE,a.PL_DEV,a.PL_DEV_PARENT]){const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,tree:r=>r===ref?"f".repeat(40):f.io.tree(r)}));}
+  const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,parents:r=>r===a.PL_DEV?[a.PL_BASE]:f.io.parents(r)}));
+  assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,blob:(r,p)=>{if(r===a.PL_DEV)throw Error("missing object");return f.io.blob(r,p);}}));
+});
+test("PROD-LEGACY560: scope kind mode and fail before unknown body reads",()=>{
+  for(const change of [rs=>[...rs,["M","outside"]],rs=>rs.slice(1),rs=>[...rs,rs[0]],rs=>rs.map((r,i)=>i?r:["D",r[1]]),rs=>rs.map((r,i)=>i?r:["R100",r[1],"outside"])]){
+    const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,changes:(b,h)=>h===f.h?change(f.io.changes(b,h)):f.io.changes(b,h)}));assert.equal(f.calls.some(([r])=>r===f.h),false);
+  }
+  for(const p of a.PL_PATHS){const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,mode:(r,n)=>r===f.h&&n===p?(p==="scripts/verify.sh"?"100644":"120000"):f.io.mode(r,n)}));}
+});
+test("PROD-LEGACY560: layer mixing combined commits and metadata logic reject",()=>{
+  for(const ps of [[],[a.PL_BASE],["d".repeat(40)],["d".repeat(40),"e".repeat(40)]]){const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,parents:r=>r===f.h?ps:f.io.parents(r)}));}
+  for(const p of Object.keys(a.PL_METADATA_PINS)){const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,blob:(r,n)=>r===f.s&&n===p?f.files[p]:f.io.blob(r,n)}));f.files[p]+="\n// semantic";assert.throws(()=>a.proveProdLegacyTree(f.h,f.io));}
+  const f=plFixture();assert.throws(()=>a.proveProdLegacyTree(f.h,{...f.io,changes:(b,h)=>h===f.s?a.PL_PATHS.map(p=>["M",p]):f.io.changes(b,h)}));
+  assert.deepEqual(JSON.parse(f.files["app/release.json"]).nativePlatforms,JSON.parse(plMemo.blob(a.PL_BASE,"app/release.json")).nativePlatforms);
+});
+test("PROD-LEGACY560: original historical bytes and separate full self seal",()=>{
+  const f=plFixture(),body=f.files[a.SELF];
+  assert.equal(a.prodLegacyOriginal(body),plMemo.blob(a.PL_BASE,a.SELF));assert.equal(a.hash(a.prodLegacyOriginal(body)),a.PL_OLD_SOURCE_SHA);
+  assert.equal(a.PRODUCTION_SEAL,"4901705ce3f62a9fa1e13337502e4968f05c924744f7b1980e18180c62f74f86");assert.equal(a.prodLegacySeal(body),a.PL_SELF_SEAL);
+  assert.equal(a.hash(plMemo.blob(a.PL_DEV,a.SELF)),"809532c19c8817859c584d0148562a64813743bec59eb2670c486ffe0252a8d5");
+  for(const [b,s]of [["// PROD_LEGACY_SUCCESSOR_BEGIN\n","// PROD_LEGACY_SUCCESSOR_BEGIN\n// PROD_LEGACY_SUCCESSOR_BEGIN\n"],[a.PL_NEW_ENTRY,a.PL_NEW_ENTRY+a.PL_NEW_ENTRY],["4901705ce3f62a9fa1e13337502e4968f05c924744f7b1980e18180c62f74f86","f".repeat(64)],['export const PL_SELF_SEAL = "'+a.PL_SELF_SEAL+'";','export const PL_SELF_SEAL = "'+"f".repeat(64)+'";']]){const g=plFixture();g.files[a.SELF]=body.replace(b,s);assert.throws(()=>a.proveProdLegacyTree(g.h,g.io));}
+  for(const p of [...Object.keys(a.PL_PRODUCT_PINS),...Object.keys(a.PL_CONTROL_PINS)]){const g=plFixture();g.files[p]+="x";assert.throws(()=>a.proveProdLegacyTree(g.h,g.io));}
+});
+test("PROD-LEGACY560: exact PR and main squash events deny drift and retries",()=>{
+  const f=plFixture();
+  for(const patch of [{repo:"other/repo"},{attempt:"2"},{target:"dev"},{headRef:a.PL_PREFIX+"unknown"},{headRepo:"other/repo"},{baseRepo:"other/repo"},{base:a.PL_DEV},{workflow:"unknown"},{workflowSha:f.h},{refType:"tag"},{ref:"refs/pull/778/merge"},{prNumber:778},{number:0},{checkout:f.h},{input:f.h},{workflowRef:"wrong"},{event:"workflow_dispatch"}])assert.throws(()=>a.proveProdLegacyEvent({...f.c,...patch},f.io));
+  for(const w of Object.keys(a.PRODUCTION_WORKFLOWS)){const c=f.main(w),p=a.proveProdLegacyEvent(c,f.io);assert.equal(p.graph,"main-single-squash");assert.equal(p.layers,1);assert.equal(p.sourceCommit,null);assert.equal(p.tree,a.proveProdLegacyEvent(f.c,f.io).tree);
+    for(const patch of [{before:a.PL_DEV},{ref:"refs/heads/dev"},{event:"workflow_dispatch"},{head:f.h}])assert.throws(()=>a.proveProdLegacyEvent({...c,...patch},f.io));}
+});
+test("PROD-LEGACY560: actual CLI entries and source-only output with tripwires",()=>{
+  const f=plFixture(),pr=plVm(f);assert.equal(pr.exit,0);assert.deepEqual(pr.errors,[]);assert.deepEqual(pr.outputs,["scoped=true\nproduction_legacy_only=true\n"]);assert.equal(pr.printed[0].files,22);
+  for(const w of ["Deploy Tennis Note short URLs","Deploy Tennis Note web beta"]){const r=plVm(plFixture(),f.main(w),"--production-source");assert.equal(r.exit,0);assert.deepEqual(r.outputs,[]);assert.equal(r.printed[0].deploymentAdmitted,false);assert.ok(r.commands.every(xs=>["status","rev-parse","show","diff","ls-tree"].includes(xs[0])));}
+  assert.equal(a.prodLegacyClaimed({GITHUB_EVENT_NAME:"pull_request"},{pull_request:{head:{ref:a.PL_PREFIX+"unknown"}}}),true);
+  plHeld(plVm(f,{...f.c,headRef:a.PL_PREFIX+"unknown"}));plHeld(plVm(f,f.c,"--production-source"));
+});
+test("PROD-LEGACY560: actual CLI dirty symlink read drift and child failure deny",()=>{
+  const f=plFixture();plHeld(plVm(f,f.c,"--ci-route",{dirty:" M unrelated"}));plHeld(plVm(f,f.c,"--ci-route",{failGit:true}));plHeld(plVm(f,f.c,"--ci-route",{symlink:"billing.js"}));plHeld(plVm(f,f.c,"--ci-route",{read:p=>f.files[p]+(p==="app/admin/actions/billing.js"?"x":"")}));
+  for(const p of Object.keys(a.PL_TOOL_PINS)){const g=plFixture();g.files[p]+="x";plHeld(plVm(g));}
+});
+test("PROD-LEGACY560: sparse collector selects only successor and preserves old tests",()=>{
+  const f=plFixture(),workflow=f.files[a.WORKFLOWS[0]],verify=f.files["scripts/verify.sh"],testBody=f.files[a.TEST];
+  const sparse=[...workflow.matchAll(/^            \/(.+)$/gm)].map(m=>m[1]).sort();assert.deepEqual(sparse,[...a.PL_PATHS,...Object.keys(a.PL_CONTROL_PINS)].sort());
+  assert.ok(workflow.includes("if: ${{ !(startsWith(github.head_ref, 'codex/tennisnote-r3-production-legacy-monthly-')"));
+  assert.ok(workflow.includes("production_legacy_only == 'true' && github.event_name == 'pull_request'"));assert.ok(workflow.indexOf("sparse-checkout: |")<workflow.indexOf("Admit exact reviewed"));assert.ok(workflow.indexOf("--ci-route --production")<workflow.indexOf("--r3-production-legacy"));
+  assert.ok(verify.includes('R3_PRODUCTION_SELECTED=1 node --test --test-name-pattern="^PROD-LEGACY560:"'));assert.ok(verify.indexOf("--r3-production-legacy")<verify.indexOf('TENNISNOTE_SUPABASE_URL:='));
+  assert.equal(testBody.slice(0,testBody.indexOf("\n// PROD_LEGACY_TEST_BEGIN\n")),plMemo.blob(a.PL_BASE,a.TEST));
+  const vb=verify.indexOf("\n# PROD_LEGACY_COLLECTOR_BEGIN\n"),ve=verify.indexOf("# PROD_LEGACY_COLLECTOR_END\n")+("# PROD_LEGACY_COLLECTOR_END\n").length;
+  assert.equal(verify.slice(0,vb)+verify.slice(ve),plMemo.blob(a.PL_BASE,"scripts/verify.sh"));
+  assert.ok(workflow.includes("if: steps.display.outputs.scoped != 'true'\n        run: ./scripts/verify.sh"));assert.equal(a.PL_PATHS.some(p=>/projection|manual_ledger|migrations|config\.local/.test(p)),false);
+});
+// PROD_LEGACY_TEST_END

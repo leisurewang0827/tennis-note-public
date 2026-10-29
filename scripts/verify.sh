@@ -11,6 +11,15 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# PROD_LEGACY_COLLECTOR_BEGIN
+# 새 운영 후속 연결만 검사하며 통과한 과거 제품·DB 검사는 반복하지 않습니다.
+if [[ "${1:-}" == "--r3-production-legacy" ]]; then
+  [[ $# -eq 1 ]] || exit 2
+  R3_PRODUCTION_SELECTED=1 node --test --test-name-pattern="^PROD-LEGACY560:" tests/r3-purchase-identity-admission.test.mjs
+  exit $?
+fi
+# PROD_LEGACY_COLLECTOR_END
+
 : "${TENNISNOTE_SUPABASE_URL:=https://example.supabase.co}"
 : "${TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:=test-publishable-key-for-ci-only}"
 : "${TENNISNOTE_PORTONE_STORE_ID:=test-store-id}"
