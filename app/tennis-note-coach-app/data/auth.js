@@ -70,6 +70,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
       profilePhotoUrl: profile?.profile_photo_url || user?.user_metadata?.picture || user?.user_metadata?.avatar_url || "",
       authUserId: user?.id || "",
       coachRoleId: coachRole?.id || "",
+      coachRoleUserId: coachRole?.user_id || "",
       role: profile?.role || "coach",
       branchId: coachRole?.branch_id || "",
     };

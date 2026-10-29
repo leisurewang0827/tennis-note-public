@@ -36,8 +36,9 @@ function renderCoachSettlement() {
   if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = unavailable ? "—" : formatCoachWon(settlement.estimatedSettlement);
   if ($("#coachSettlementRule")) {
     const substitute = Number(settlement.substituteSettlement) || 0;
+    const substituteCount = Number(settlement.substituteSessionCount) || 0;
     $("#coachSettlementRule").textContent = settlement.ruleType
-      ? `${coachSettlementRuleLabel(settlement)}${substitute ? ` · 대타 ${formatCoachWon(substitute)}` : ""}`
+      ? `${coachSettlementRuleLabel(settlement)}${substituteCount > 0 ? ` · 대타 ${substituteCount}회 · ${formatCoachWon(substitute)}` : ""}${Number(settlement.branchSubstituteExpense) > 0 ? ` · 지점 대타비 ${formatCoachWon(settlement.branchSubstituteExpense)}` : ""}`
       : "정산 규칙 확인 중";
   }
   const compactAmount = $("#coachSettlementCompactAmount");
@@ -57,6 +58,35 @@ function renderCoachSettlement() {
         : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회${Number(settlement.refundedAmount) ? ` · 환불 ${formatCoachWon(settlement.refundedAmount)}` : ""}`;
   }
   const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
+  const substituteDetail = (row) => {
+    const components = row.calculationComponents || {};
+    const formulas = (components.contributions || []).map((item) => item.formula);
+    const excluded = components.nonPayableDecision === true;
+    const basis = excluded || components.duplicateSharedTime === true ? ""
+      : formulas.length && formulas.every((formula) => formula === "hourly") ? "시간제 근거"
+        : formulas.length && formulas.every((formula) => formula === "session_progress") ? "회원권 결제 근거" : "적용기간별 계산 근거";
+    const peerMinutes = typeof components.physicalKey === "string" && components.physicalKey
+      && row.sourceLessonId && row.sourceSubstituteAssignmentId && row.coachRoleId
+      ? rows.filter((peer) => peer.lineKind === "substitute_session"
+        && peer.calculationComponents?.physicalKey === components.physicalKey
+        && peer.sourceLessonId === row.sourceLessonId && peer.sourceSubstituteAssignmentId === row.sourceSubstituteAssignmentId
+        && peer.coachRoleId === row.coachRoleId && Number.isSafeInteger(peer.settledMinutes) && peer.settledMinutes > 0
+        && peer.settledSessions > 0 && peer.calculationComponents?.duplicateSharedTime !== true
+        && Array.isArray(peer.calculationComponents?.contributions) && peer.calculationComponents.contributions.length > 0)
+        .map((peer) => peer.settledMinutes) : [];
+    const occurrenceMinutes = new Set(peerMinutes).size === 1 ? peerMinutes[0] : null;
+    const progress = excluded
+      ? `${components.nonPayableReason === "recipient_original_coach" ? "실제 진행 수업" : "대타 배정 근거"} · 정산 반영 0분`
+      : Number.isSafeInteger(row.settledMinutes) && row.settledMinutes > 0
+      ? `실제 진행 ${row.settledMinutes}분`
+      : occurrenceMinutes ? `공동 수업 ${occurrenceMinutes}분` : "수업 시간 확인 필요";
+    const exclusion = excluded
+      ? components.nonPayableReason === "recipient_original_coach" ? "원코치 귀속 · 대타 코치 지급 제외"
+        : components.nonPayableReason === "explicit_no_settlement" ? "명시적 정산 없음" : "지급 제외 근거"
+      : components.duplicateSharedTime === true ? "시간·정산 중복 제외"
+      : row.settledMinutes === 0 ? "시간 합계 중복 제외" : "";
+    return [progress, `정산 ${Number(row.settledSessions) || 0}회`, basis, exclusion].filter(Boolean).join(" · ");
+  };
   const rowsTarget = $("#coachSettlementRows");
   if (rowsTarget) {
     rowsTarget.innerHTML = rows.length
@@ -68,7 +98,7 @@ function renderCoachSettlement() {
           </div>
           <div>
             <b>${formatCoachWon(row.estimatedSettlement)}</b>
-            <small>매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : ""} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>
+            <small>${row.lineKind === "substitute_session" ? escapeHtml(substituteDetail(row)) : `매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : ""} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회`}</small>
           </div>
         </article>`).join("")
       : coachEmptyState({
@@ -76,8 +106,8 @@ function renderCoachSettlement() {
         description: state.coachSettlementError || "관리자 결제 귀속과 수업 완료·적용기간을 확인해 주세요.",
       });
   }
-  renderVisibleMemberSettlement();
   renderCoachSettlementHistory();
+  renderVisibleMemberSettlement();
 }
 
 // 기존 내 정산 상세에서 확정 이력과 코치 응답을 함께 표시합니다.
@@ -146,6 +176,14 @@ function renderCoachSettlementHistory() {
     retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(uiState);
     retry.disabled = busy;
   }
+  window.TennisNoteSettlementAdjustment.mountUnpaidDetail($("#coachSettlementReconciliation"), () => ({
+    role:"coach",client:window.TennisNoteDataClient,scope:coachSettlementReconciliationScope(),
+    snapshot:coachSettlementHistory.coachSettlementReconciliation?.snapshot,payload:coachSettlementHistory.coachSettlementPayoutState,
+    actorKey:String(state.liveProfileId||""),authorized:Boolean(coachSettlementReconciliationContinuation()?.())
+      &&!coachSettlementHistory.coachSettlementReconciliationLoading&&!coachSettlementHistory.coachSettlementReconciliationSubmitting,
+    originalAck:coachSettlementHistory.coachSettlementReconciliation?.reconciliation?.status==="acknowledged",
+    accept(value){coachSettlementHistory.coachSettlementPayoutState=value;renderCoachSettlementHistory();}
+  }));
 }
 
 function renderCoachSettlementResponseControls() {

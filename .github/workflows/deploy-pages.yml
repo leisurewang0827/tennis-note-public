@@ -20,6 +20,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Admit exact canonical production source before configuration
+        run: node scripts/check_r3_purchase_identity_admission.mjs --production-source --production
 
       - name: Prepare public site
         shell: bash
@@ -46,6 +53,9 @@ jobs:
 
           write_browser_config(Path("_site/app"))
           PY
+
+      - name: Require exact production runtime and fresh release order
+        run: python scripts/check_production_release_order.py --github-pages
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

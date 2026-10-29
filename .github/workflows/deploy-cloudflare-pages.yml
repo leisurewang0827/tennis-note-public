@@ -35,6 +35,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Admit exact canonical production source before configuration
+        run: node scripts/check_r3_purchase_identity_admission.mjs --production-source --production
 
       - name: Build isolated member and admin sites
         run: |
@@ -43,6 +50,9 @@ jobs:
 
       - name: Verify production deployment configuration
         run: python scripts/check_cloudflare_build.py
+
+      - name: Require exact production runtime and fresh release order
+        run: python scripts/check_production_release_order.py
 
       - name: Deploy member PWA
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''

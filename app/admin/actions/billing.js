@@ -1,3 +1,80 @@
+async function previewR3SubstituteDecision(assignmentId) {
+  if (r3SubstituteDecisionUi.busy || !adminApprovalReady()) return;
+  const context = effectiveSettlementPreview.context;
+  if (!effectiveSettlementPreviewContextIsCurrent(context)) return;
+  const matches = effectiveSettlementPreview.results.flatMap((entry) => (entry.candidates || [])
+    .filter((item) => item.id === assignmentId && entry.coach.serverRoleId === item.coachRoleId));
+  const candidate = matches.length === 1 ? matches[0] : null;
+  if (!candidate || candidate.branchId !== activeOperationBranchId()
+    || String(candidate.serviceDate || "").slice(0, 7) !== state.billingMonth) return;
+  r3SubstituteDecisionUi.busy = true;
+  r3SubstituteDecisionUi.message = "대타 귀속 근거를 확인하고 있습니다.";
+  renderEffectiveSettlementPreview();
+  try {
+    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)) return;
+    const value = await context.client.rpc("tn_admin_preview_substitute_policy_decision", {
+      target_branch_id: candidate.branchId, target_assignment_id: assignmentId,
+    });
+    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
+      || value.branchId !== candidate.branchId
+      || value.assignmentId !== assignmentId || value.lessonId !== candidate.lessonId
+      || Number(value.lessonRevision) !== Number(candidate.lessonRevision)
+      || value.sourceFingerprint !== candidate.sourceFingerprint
+      || value.originalCoachRoleId !== candidate.originalCoachRoleId
+      || value.actualCoachRoleId !== candidate.actualCoachRoleId) return;
+    r3SubstituteDecisionUi.preview = value;
+    r3SubstituteDecisionUi.context = context;
+    r3SubstituteDecisionUi.recipient = "";
+    r3SubstituteDecisionUi.operationKey = "";
+    r3SubstituteDecisionUi.message = value.decisionEnabled ? "원 담당 A와 실제 대타 B 중 귀속을 확인해 주세요."
+      : "대타 귀속 승인 기능은 현재 OFF입니다. 운영 게이트 확인 전 저장할 수 없습니다.";
+  } catch (error) {
+    if (effectiveSettlementPreview.context === context && effectiveSettlementPreviewContextIsCurrent(context))
+      r3SubstituteDecisionUi.message = window.TennisNoteSettlementAdjustment.effectiveError(error);
+  } finally {
+    r3SubstituteDecisionUi.busy = false;
+    if (effectiveSettlementPreview.context === context && effectiveSettlementPreviewContextIsCurrent(context))
+      renderEffectiveSettlementPreview();
+  }
+}
+
+async function confirmR3SubstituteDecision() {
+  const decision = r3SubstituteDecisionUi.preview;
+  const context = r3SubstituteDecisionUi.context;
+  const recipient = r3SubstituteDecisionUi.recipient;
+  if (r3SubstituteDecisionUi.busy || !decision?.decisionEnabled || decision.chosenRecipient
+    || !["originalCoach", "actualCoach"].includes(recipient)
+    || !r3SubstituteDecisionCandidate(context, decision)) return;
+  const operationKey = r3SubstituteDecisionUi.operationKey || createAdminOperationKey("r3-substitute-decision");
+  r3SubstituteDecisionUi.operationKey = operationKey;
+  r3SubstituteDecisionUi.busy = true;
+  renderEffectiveSettlementPreview();
+  try {
+    if (r3SubstituteDecisionUi.preview !== decision || r3SubstituteDecisionUi.context !== context
+      || r3SubstituteDecisionUi.recipient !== recipient || r3SubstituteDecisionUi.operationKey !== operationKey
+      || !r3SubstituteDecisionCandidate(context, decision)) return;
+    const result = await context.client.rpc("tn_admin_confirm_substitute_policy_decision", {
+      target_branch_id: decision.branchId, target_assignment_id: decision.assignmentId,
+      expected_lesson_revision: decision.lessonRevision, expected_source_fingerprint: decision.sourceFingerprint,
+      target_chosen_recipient: recipient,
+      target_operation_key: operationKey,
+    });
+    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
+      || result?.ok !== true) return;
+    r3SubstituteDecisionUi.preview = null;
+    r3SubstituteDecisionUi.context = null;
+    r3SubstituteDecisionUi.message = "대타 귀속을 기록했습니다. 서버 정산을 다시 확인합니다.";
+    void refreshEffectiveSettlementPreview(effectiveSettlementPreviewSignature());
+  } catch (error) {
+    if (effectiveSettlementPreview.context === context && effectiveSettlementPreviewContextIsCurrent(context))
+      r3SubstituteDecisionUi.message = window.TennisNoteSettlementAdjustment.effectiveError(error);
+  } finally {
+    r3SubstituteDecisionUi.busy = false;
+    if (effectiveSettlementPreview.context === context && effectiveSettlementPreviewContextIsCurrent(context))
+      renderEffectiveSettlementPreview();
+  }
+}
+
 // 결제·정산 관련해 관리자가 누른 것을 처리하는 함수들.
 //
 // 화면을 읽고 서버를 부르고 상태를 바꾼다.
@@ -872,9 +949,7 @@ async function refreshAdminMonthlySettlementPayoutState() {
     && Number(adminR3SettlementSnapshot(current.scopeState)?.revision || 0) === expectedRevision
     && String(adminR3SettlementSnapshot(current.scopeState)?.sourceFingerprint || "") === expectedFingerprint;
   try {
-    const raw = await client.rpc("tn_monthly_settlement_payout_state", {
-      target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth,
-    });
+    const raw = await window.TennisNoteSettlementAdjustment.readUnpaidState(client, scope);
     const result = Array.isArray(raw) ? raw[0] || null : raw;
     if (!isCurrent() || !adminR3PayoutBaseMatches(result, scope, expected)) throw new Error("payout_scope_mismatch");
     current.payoutState = result; current.payoutReadValid = true; current.payoutUncertain = false; current.payoutMessage = "";
@@ -895,6 +970,7 @@ function adminR3EnsurePayoutOperation(kind, signature) {
   return current[keyField];
 }
 async function recordAdminMonthlySettlementPayout() {
+  if (adminMonthlySettlementWrite.payoutState?.adjustment?.head) return false; // Shared adjusted-head handler is authoritative.
   const current = adminMonthlySettlementWrite;
   if (current.payoutSubmitting || current.payoutLoading || current.payoutUncertain) return false;
   const scope = adminSettlementHistoryScope(); const snapshot = adminR3SettlementSnapshot(current.scopeState);
@@ -979,7 +1055,7 @@ async function reverseAdminMonthlySettlementPayout() {
     });
     if (!isCurrent()) return false;
     const response = Array.isArray(responseRaw) ? responseRaw[0] || null : responseRaw;
-    const raw = await client.rpc("tn_monthly_settlement_payout_state", { target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth });
+    const raw = await window.TennisNoteSettlementAdjustment.readUnpaidState(client, scope);
     const readback = Array.isArray(raw) ? raw[0] || null : raw;
     const event = adminR3PayoutEvent(readback, hash, "payout_record_reversed", active.eventId, active);
     if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot) || !event || String(response?.payoutEventId || "") !== String(event.eventId || "")) throw new Error("payout_reversal_readback_mismatch");
@@ -990,7 +1066,7 @@ async function reverseAdminMonthlySettlementPayout() {
     if (!writeAttempted) { current.payoutMessage = "정정 확인 정보를 준비하지 못해 요청을 보내지 않았습니다."; return false; }
     current.payoutUncertain = true;
     try {
-      const raw = await client.rpc("tn_monthly_settlement_payout_state", { target_branch_id: scope.branchId, target_coach_role_id: scope.coachRoleId, target_month: scope.settlementMonth });
+      const raw = await window.TennisNoteSettlementAdjustment.readUnpaidState(client, scope);
       const readback = Array.isArray(raw) ? raw[0] || null : raw; const event = adminR3PayoutEvent(readback, hash, "payout_record_reversed", active.eventId, active);
       if (!isCurrent() || !adminR3PayoutBaseMatches(readback, scope, snapshot)) throw new Error("payout_reversal_uncertain_scope_mismatch");
       current.payoutState = readback; current.payoutReadValid = true;
