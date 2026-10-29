@@ -825,6 +825,9 @@ async function previewAdminMonthlySettlement() {
       current.status = "EMPTY"; current.message = "선택한 월에 확인할 정산 원천이 없습니다.";
     } else if (snapshot && !adminR3SettlementSnapshotMatches(snapshot, preview, scope)) {
       current.status = "STALE"; current.message = "기존 계산본과 현재 원천이 다릅니다. 최신 상태를 확인해 주세요.";
+    } else if (window.TennisNoteSettlementAdjustment.sourceHold(preview).hold) {
+      current.status = "ERROR";
+      current.message = window.TennisNoteSettlementAdjustment.sourceHold(preview).label;
     } else {
       current.status = "READY";
       current.message = snapshot ? "기존 계산본과 현재 원천이 일치합니다. 확인 후 확정할 수 있습니다." : "서버 계산 결과입니다. 확정하면 계산 원천과 합계를 보존합니다.";
@@ -848,6 +851,12 @@ async function confirmAdminMonthlySettlementSnapshot() {
   const current = adminMonthlySettlementWrite;
   if (current.submitting || current.loading || current.status !== "READY") return false;
   const scope = adminSettlementHistoryScope(); const preview = current.preview;
+  if (window.TennisNoteSettlementAdjustment.sourceHold(preview).hold) {
+    current.status = "ERROR";
+    current.message = window.TennisNoteSettlementAdjustment.sourceHold(preview).label;
+    renderAdminSettlementHistory();
+    return false;
+  }
   const client = window.TennisNoteDataClient; const token = client?.getSession?.()?.access_token || "";
   const profileId = String(adminImportAuthState.profile?.id || "");
   if (!client?.rpc || !token || !profileId || !adminSettlementHistoryAccessReady()

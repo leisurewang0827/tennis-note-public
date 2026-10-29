@@ -18,6 +18,17 @@ function renderCoachSettlement() {
   const monthInput = $("#coachSettlementMonth");
   if (monthInput && monthInput.value !== coachSettlementMonth()) monthInput.value = coachSettlementMonth();
   const settlement = state.coachSettlement || {};
+  const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
+  // 월 결제 정산의 0은 실제 수업 수가 아니라 계산에 횟수를 쓰지 않는다는 뜻입니다.
+  const monthlyRow = (row) => row.lineKind !== "substitute_session"
+    && Number(row.settledSessions) === 0 && Number(row.settledMinutes) === 0
+    && Array.isArray(row.calculationComponents?.contributions)
+    && row.calculationComponents.contributions.length > 0
+    && row.calculationComponents.contributions.every((item) => item.formula === "monthly_payment");
+  const monthlyOnly = rows.length > 0 && rows.every(monthlyRow)
+    && Number(settlement.settledSessions) === 0 && Number(settlement.settledMinutes) === 0;
+  const countLabel = monthlyOnly ? "월 결제 기준 · 횟수 미사용"
+    : `${settlement.sourceEvidenceLabel || rows.some(monthlyRow) ? "정산 반영 " : ""}${Number(settlement.settledSessions) || 0}회${settlement.sourceEvidenceLabel ? " · 과거 기록은 월 결제 기준" : ""}`;
   const status = $("#coachSettlementStatus");
   if (status) {
     status.hidden = !state.coachSettlementLoading && !state.coachSettlementError;
@@ -32,7 +43,7 @@ function renderCoachSettlement() {
     const refundedAmount = Number(settlement.refundedAmount) || 0;
     $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건${refundedAmount ? ` · 환불 조정 ${formatCoachWon(refundedAmount)}` : ""}`;
   }
-  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = unavailable ? "확인 필요" : `${Number(settlement.settledSessions) || 0}회`;
+  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = unavailable ? "확인 필요" : countLabel;
   if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = unavailable ? "—" : formatCoachWon(settlement.estimatedSettlement);
   if ($("#coachSettlementRule")) {
     const substitute = Number(settlement.substituteSettlement) || 0;
@@ -55,9 +66,8 @@ function renderCoachSettlement() {
       ? "정산 자료를 불러오지 못했습니다. 눌러서 다시 시도하세요."
       : state.coachSettlementLoading
         ? "정산 자료를 불러오는 중입니다."
-        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회${Number(settlement.refundedAmount) ? ` · 환불 ${formatCoachWon(settlement.refundedAmount)}` : ""}`;
+        : `결제 ${Number(settlement.paymentCount) || 0}건 · ${settlement.sourceEvidenceLabel || rows.some(monthlyRow) ? countLabel : `수업 ${Number(settlement.settledSessions) || 0}회`}${Number(settlement.refundedAmount) ? ` · 환불 ${formatCoachWon(settlement.refundedAmount)}` : ""}`;
   }
-  const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
   const substituteDetail = (row) => {
     const components = row.calculationComponents || {};
     const formulas = (components.contributions || []).map((item) => item.formula);
@@ -98,7 +108,7 @@ function renderCoachSettlement() {
           </div>
           <div>
             <b>${formatCoachWon(row.estimatedSettlement)}</b>
-            <small>${row.lineKind === "substitute_session" ? escapeHtml(substituteDetail(row)) : `매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : ""} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회`}</small>
+            <small>${row.lineKind === "substitute_session" ? escapeHtml(substituteDetail(row)) : `매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : ""} · ${monthlyRow(row) ? "월 결제 기준 · 횟수 미사용" : `정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회`}`}</small>
           </div>
         </article>`).join("")
       : coachEmptyState({

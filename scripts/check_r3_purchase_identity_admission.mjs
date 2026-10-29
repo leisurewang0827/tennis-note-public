@@ -371,9 +371,192 @@ function productionMain(mode){
  else need(c.workflow!=='Tennis Note Public PWA CI','PRODUCTION_DEPLOY_WORKFLOW');
  console.log(JSON.stringify(proof));
 }
+// 새 monthly source 연결만 판정합니다. 이전 후보/역사 fixture 계약은 그대로 둡니다.
+export const LEGACY_BASE = "8cef5b40228c929693c31aaa8af2a089cb0262f4";
+export const LEGACY_BASE_TREE = "d912835abe666f1ce6d83f88c5cd74e52f1bb767";
+export const LEGACY_BRANCH = "codex/tennisnote-r3-legacy-monthly-public-20261029";
+export const LEGACY_META = "tests/fixtures/r3-legacy-monthly-selected-source.json";
+export const LEGACY_PATTERN = "^LEGACY-MONTHLY-GUARD:";
+export const LEGACY_GUARD = "scripts/check_r3_dev_deployment.py";
+export const LEGACY_READONLY = Object.freeze({"tests/fixtures/r3-dev-cache-floors.json":"a43b36b47a2c249d4e5a1cebe4ad403d95c66e63c950c5dbb7afbdb4eb6cc0b8"});
+export const LEGACY_GUARD_HOOK = "        # LEGACY_MONTHLY_ENTRY_BEGIN\n        if legacy_monthly_claimed():\n            legacy_monthly_dispatch(args)\n            return 0\n        # LEGACY_MONTHLY_ENTRY_END\n";
+export function legacyMonthlyOriginalGuard(s) {
+  const begin="# LEGACY_MONTHLY_567_BEGIN\n",end="# LEGACY_MONTHLY_567_END\n\n\n";
+  need(s.split(begin).length===2&&s.split(end).length===2,"LEGACY_GUARD_BLOCK");
+  const start=s.indexOf(begin),stop=s.indexOf(end,start);
+  need(stop>start,"LEGACY_GUARD_BLOCK");
+  return once(once(s,s.slice(start,stop+end.length),""),LEGACY_GUARD_HOOK,"");
+}
+export const LEGACY_PRIVATE_SOURCE = Object.freeze({commit:"4d9e9aeaab972609f7260b3d7db068ce5708d7b9",tree:"0911d86a5b424c3037ec015e430ffdc04e14be95",productPins:{
+  "90-Dashboard/shared/tennisnote-settlement-adjustment.js":"d55ca914171ce380eed3e3b35d7d363428170530518e2824175cce2d3e33deb2",
+  "90-Dashboard/tennis-note-coach-app/app.js":"99f63e7d4761a6dab35a4ca29ad88d97d871a732f4db099049159d76f35e78f9",
+  "90-Dashboard/tennis-note-prototype/app.js":"db67b05b7c0aa1c068435df021ca5f2c88c2de099b62c459b5d2dd63922e1a7f"
+}});
+export const LEGACY_RELEASE = Object.freeze({"version":"1.0.567","appSurfaceVersion":"1.0.567","releaseId":"2026.10.29.01","deployedAt":"2026-10-29T19:42:29+09:00","memberCache":"tennis-note-member-pwa-v600","coachCache":"tennis-note-coach-mode-v573"});
+export const LEGACY_RELEASE_PINS = {
+  "app/admin/index.html": "c31cefc00869cfddb7a9fbaa69ea716a86e1510c3adf5adca4feee9145c7fd55",
+  "app/release.json": "63737c980d6d73c8131c84a446db4510ffb48362ba5427c6b5741304abfe6c3a",
+  "app/shared/tennisnote-release.js": "4258cff47f8080f0c5adea86187308ca14c549367e0699795c305a246f5f129a",
+  "app/tennis-note-coach-app/app.js": "31ea4fd96445f2bfaa361f67ad098d4fa0d03a99f5ff07520d96c793f8c5c8d6",
+  "app/tennis-note-coach-app/domain/coaches.js": "caa4f52bf525b1f2c44289665c1a6364f29d90a416a5955bcb23529549269145",
+  "app/tennis-note-coach-app/forms/common.js": "df6fa7a4a9afeb60aa87aa2e97d0829df8ca0e16a166237182499f1d27b75dc3",
+  "app/tennis-note-coach-app/index.html": "4a24599f49db0b525243084483108a287562c21456e468702caeeab59512aab9",
+  "app/tennis-note-coach-app/service-worker.js": "80e227f5a522d6b808752691da10f95ebdb3563c1f60cb485b62cfbf9216eef8",
+  "app/tennis-note-member-app/app.js": "6c88d590b9de4a772d3224039014be6ccd5d283cb7c109d81731116c768bdbbd",
+  "app/tennis-note-member-app/forms/common.js": "76c5969fe5f123898b5cc974856dd2daea986556040b595074e64a9eb2e62727",
+  "app/tennis-note-member-app/index.html": "237ee961a82b577d44aa48de412dece30e712efa89e195d27b59edaa1362eee6",
+  "app/tennis-note-member-app/service-worker.js": "58c9fcf2bb4b4f45467c4d0f52d8434cfa492955d1e2392abf51b8147fa60b46",
+  "app/tennis-note-member-app/ui/screens.js": "4b7e9d9acb8407581f6ee0c7f4513bbc387681db7be84d3401f89f830fe3e70f"
+};
+export const LEGACY_SELF_SEAL = "79d4f876854453623e00e1ad0dcc78e16b80096f1f017668b7943f4e111b7c1b";
+export const LEGACY_PRODUCT_PINS = {
+  "app/admin/actions/billing.js": "48c6cd5b96e8a61300ca9adfaecb9258d6d31d88018008db7819399cbd88a185",
+  "app/admin/views/billing.js": "cc7df735c1ab10cb6dfa5c19ec2383622a33d693b9b090b2c91192c4cb9a9b52",
+  "app/shared/tennisnote-settlement-adjustment.js": "d55ca914171ce380eed3e3b35d7d363428170530518e2824175cce2d3e33deb2",
+  "app/tennis-note-coach-app/domain/settlement.js": "5c50ba3a7375fe083fbcbdf0c987a0efc1d9644c4f5853a8d2762f9fa9604adb",
+  "app/tennis-note-coach-app/views/settlement.js": "2f225c94f707d0779d1de3fa4496b1e120f7bd46d3cbfdbf9383d922b97a9b86"
+};
+export const LEGACY_TOOL_PINS = {
+  "scripts/check_r3_dev_deployment.py": "8a87963ab9f53da4942c00e3a2f17c97c94771d3a637911942251beed61ddb46",
+  ".github/workflows/tennisnote-public-ci.yml": "724d5652aea42b94cf04a1b073fb4b653a1ca5359402f28d0066a4a26faaf144",
+  "tests/r3-purchase-identity-admission.test.mjs": "214087e547abcc1e1e88bbf5d34c46c3fcac71500ee0946e71cdf1569c370d40",
+  "tests/fixtures/r3-legacy-monthly-selected-source.json": "201cad67910c76c50c4a0fc71928d5dcf4c9643e6cb496509077cec0518bc5af",
+  "scripts/verify.sh": "5c04e60b4cbbf0aa13812dc6ead3d10d213ac705a2c26f65a716cbefae12e54f"
+};
+export const LEGACY_SOURCE_PATHS = [...Object.keys(LEGACY_PRODUCT_PINS), ...Object.keys(LEGACY_TOOL_PINS), SELF].sort();
+export const LEGACY_PATHS = [...LEGACY_SOURCE_PATHS, ...Object.keys(LEGACY_RELEASE_PINS)].sort();
+export const LEGACY_MODE_MAP = Object.freeze(Object.fromEntries(LEGACY_PATHS.map(p=>[p,p==="scripts/verify.sh"?"100755":"100644"])));
+export const legacyMonthlySeal = s => hash(lf(s).replace(/export const LEGACY_SELF_SEAL = "[^"]+";/, 'export const LEGACY_SELF_SEAL = "PENDING";'));
+export function legacyMonthlyClaimed(env, event) {
+  return String(event.pull_request?.head?.ref || "").startsWith("codex/tennisnote-r3-legacy-monthly-")
+    || String(env.GITHUB_REF || "").startsWith("refs/heads/codex/tennisnote-r3-legacy-monthly-")
+    || (env.GITHUB_EVENT_NAME === "push" && event.before === LEGACY_BASE);
+}
+export function legacyMonthlyContext(env, event, checkout) {
+  return {...context(env, event, checkout), base:event.pull_request?.base?.sha || event.before,
+    number:event.number, prNumber:event.pull_request?.number, baseRepo:event.pull_request?.base?.repo?.full_name};
+}
+export function legacyMonthlyIO() {
+  const allow = p => need(LEGACY_PATHS.includes(p)||Object.hasOwn(LEGACY_READONLY,p), "LEGACY_READ_OUTSIDE_SCOPE");
+  return {
+    tree:r=>git("rev-parse", r+"^{tree}"),
+    parents:r=>git("show","-s","--format=%P",r).split(" ").filter(Boolean),
+    changes:(b,h)=>git("diff","--no-renames","--name-status",b,h).split("\n").filter(Boolean).map(s=>s.split("\t")),
+    mode:(r,p)=>{allow(p);return git("ls-tree","--format=%(objectmode)",r,"--",p);},
+    blob:(r,p)=>{allow(p);return lf(execFileSync("git",["show",r+":"+p],{cwd:ROOT,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:15000,maxBuffer:2000000}));},
+    read:p=>{
+      allow(p);let current=ROOT;
+      for(const part of p.split("/")){current=resolve(current,part);need(!lstatSync(current).isSymbolicLink(),"LEGACY_SYMLINK");}
+      need(lstatSync(current).isFile(),"LEGACY_REGULAR_FILE");
+      return lf(readFileSync(current,"utf8"));
+    }
+  };
+}
+export function proveLegacyMonthlyTree(ref, io) {
+  need(/^[0-9a-f]{40}$/.test(ref||"") && ref!==LEGACY_BASE,"LEGACY_REFS");
+  need(io.tree(LEGACY_BASE)===LEGACY_BASE_TREE,"LEGACY_BASE");
+  const parents=io.parents(ref);
+  need(parents.length===1,"LEGACY_PARENT");
+  const source=parents[0]===LEGACY_BASE?ref:parents[0];
+  if(source!==ref)need(same(io.parents(source),[LEGACY_BASE]),"LEGACY_TWO_LAYERS");
+  const changes=io.changes(LEGACY_BASE,ref);
+  need(same(changes.map(r=>r[1]).sort(),LEGACY_PATHS)
+    &&changes.every(r=>r.length===2&&r[0]===(r[1]===LEGACY_META?"A":"M")),"LEGACY_EXACT_PATHS");
+  if(source!==ref){
+    const first=io.changes(LEGACY_BASE,source),second=io.changes(source,ref);
+    need(same(first.map(r=>r[1]).sort(),LEGACY_SOURCE_PATHS)
+      &&first.every(r=>r.length===2&&r[0]===(r[1]===LEGACY_META?"A":"M"))
+      &&same(second.map(r=>r[1]).sort(),Object.keys(LEGACY_RELEASE_PINS).sort())
+      &&second.every(r=>r.length===2&&r[0]==="M"),"LEGACY_LAYER_PATHS");
+  }
+  const blobs={};
+  for(const [p,pin] of Object.entries(LEGACY_READONLY)){
+    need(io.mode(LEGACY_BASE,p)==="100644"&&io.mode(ref,p)==="100644","LEGACY_DEPENDENCY_MODE");
+    const original=io.blob(LEGACY_BASE,p);
+    need(hash(original)===pin&&io.blob(ref,p)===original&&io.read(p)===original,"LEGACY_IMMUTABLE_DEPENDENCY");
+  }
+  for(const p of LEGACY_PATHS){
+    need(io.mode(ref,p)===LEGACY_MODE_MAP[p]&&io.mode(LEGACY_BASE,p)===(p===LEGACY_META?"":LEGACY_MODE_MAP[p]),"LEGACY_MODE");
+    const s=io.blob(ref,p);
+    need(p===SELF?legacyMonthlySeal(s)===LEGACY_SELF_SEAL:hash(s)===(LEGACY_PRODUCT_PINS[p]||LEGACY_TOOL_PINS[p]||LEGACY_RELEASE_PINS[p]),"LEGACY_CONTENT_PIN");
+    need(io.read(p)===s,"LEGACY_WORKTREE_BYTES");blobs[p]=s;
+    if(source!==ref){
+      need(io.mode(source,p)===LEGACY_MODE_MAP[p],"LEGACY_SOURCE_MODE");
+      need(io.blob(source,p)===(Object.hasOwn(LEGACY_RELEASE_PINS,p)?io.blob(LEGACY_BASE,p):s),"LEGACY_LAYER_BYTES");
+    }
+    if(Object.hasOwn(LEGACY_RELEASE_PINS,p))need(s===expectedMetadata(p,io.blob(LEGACY_BASE,p),LEGACY_RELEASE,"1.0.559"),"LEGACY_METADATA_ONLY");
+    if(p===LEGACY_GUARD)need(legacyMonthlyOriginalGuard(s)===io.blob(LEGACY_BASE,p),"LEGACY_HISTORIC_GUARD_BYTES");
+  }
+  const f=JSON.parse(blobs[LEGACY_META]),provenance=f.privateSource||{};
+  need(f.contract==="r3-legacy-monthly-selected-source/1"&&f.base===LEGACY_BASE&&f.baseTree===LEGACY_BASE_TREE&&f.branch===LEGACY_BRANCH
+    &&f.candidateCommit===null&&same(f.productPaths,Object.keys(LEGACY_PRODUCT_PINS).sort())
+    &&same(f.connectionPaths,[SELF,...Object.keys(LEGACY_TOOL_PINS)].sort()),"LEGACY_METADATA");
+  need(provenance.base==="32bf1d3741f6ed02374d0294af7c9c4a7efb6c98"
+    &&provenance.baseTree==="a2129b8834febb771902b39a333f43a972ca0a7c"
+    &&provenance.migrationSha256==="dcf5e719a2b9726686ebf95f63df32e513c2f36d437f0cb60d1298ac854e4e57"
+    &&provenance.commit===LEGACY_PRIVATE_SOURCE.commit&&provenance.tree===LEGACY_PRIVATE_SOURCE.tree
+    &&same(provenance.productPins,LEGACY_PRIVATE_SOURCE.productPins)&&f.status==="BOUND_PRIVATE_SOURCE","LEGACY_PRIVATE_BINDING");
+  need(f.releaseLayer.status==="PREPARED_LOCAL_NOT_DEPLOY_ADMITTED"
+    &&same(f.releaseLayer.changedPaths,Object.keys(LEGACY_RELEASE_PINS).sort())
+    &&["version","releaseId","memberCache","coachCache"].every(k=>f.releaseLayer[k]===LEGACY_RELEASE[k])
+    &&f.releaseLayer.preservedDeployedDevSource==="2c6eba698c3eaf0bced8352d0b234d463e4689e6","LEGACY_RELEASE_LAYER");
+  return {status:"SOURCE_PROVEN",privateSourceBound:true,privateSource:LEGACY_PRIVATE_SOURCE,base:LEGACY_BASE,
+    head:ref,tree:io.tree(ref),sourceCommit:source,layers:source===ref?1:2,files:LEGACY_PATHS.length,
+    release:LEGACY_RELEASE,immutableDependencies:Object.keys(LEGACY_READONLY).length,databaseActions:0,oldChecksRepeated:0,deploymentAdmitted:false};
+}
+export function proveLegacyMonthlySource(c, io) {
+  need(c.repo===REPOSITORY && c.attempt==="1" && c.workflow==="Tennis Note Public PWA CI","LEGACY_CONTEXT");
+  need(c.workflowSha===c.sha && c.workflowRef===REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@"+c.ref,"LEGACY_WORKFLOW");
+  need([c.head,c.sha,c.checkout,c.base].every(s=>/^[0-9a-f]{40}$/.test(s||"")),"LEGACY_REFS");
+  need(c.base===LEGACY_BASE && io.tree(c.base)===LEGACY_BASE_TREE,"LEGACY_BASE");
+  need(c.head!==c.base,"LEGACY_REFS");
+  if(c.event==="pull_request"){
+    need(Number.isSafeInteger(c.number)&&c.number>0&&c.prNumber===c.number&&c.ref==="refs/pull/"+c.number+"/merge"
+      && c.target==="main"&&c.headRef===LEGACY_BRANCH&&c.headRepo===REPOSITORY&&c.baseRepo===REPOSITORY,"LEGACY_PR");
+    need(c.checkout===c.sha&&same(io.parents(c.checkout),[c.base,c.head])&&io.tree(c.checkout)===io.tree(c.head),"LEGACY_MERGE");
+  }else{
+    need(c.event==="push"&&c.ref==="refs/heads/main"&&c.refType==="branch"
+      &&c.sha===c.head&&c.checkout===c.head,"LEGACY_MAIN");
+  }
+  return {...proveLegacyMonthlyTree(c.head,io),checkout:c.checkout,event:c.event};
+}
+export function runLegacyMonthlyCi(env,event,host,writeOutput) {
+  need(legacyMonthlyClaimed(env,event),"LEGACY_NOT_CLAIMED");
+  need(host.status()==="","LEGACY_DIRTY");
+  const proof=proveLegacyMonthlySource(legacyMonthlyContext(env,event,host.checkout()),host.io);
+  need(proof.privateSourceBound,"LEGACY_NOT_ADMITTED_PRIVATE_COMMIT_BINDING_PENDING");
+  writeOutput("scoped=true\nlegacy_monthly_only=true\n");
+  return proof;
+}
+export function proveLegacyMonthlyDev(c,io) {
+  const ref="refs/heads/"+LEGACY_BRANCH;
+  need(c.repo===REPOSITORY&&c.attempt==="1"&&c.event==="workflow_dispatch"&&c.workflow==="Deploy Tennis Note development sites"
+    &&c.ref===ref&&c.refType==="branch"
+    &&c.workflowRef===REPOSITORY+"/.github/workflows/deploy-cloudflare-pages-dev.yml@"+ref
+    &&c.sha===c.head&&c.head===c.checkout&&c.input===c.head&&c.workflowSha===c.sha,"LEGACY_DEV_CONTEXT");
+  const proof=proveLegacyMonthlyTree(c.head,io);
+  need(proof.layers===2,"LEGACY_DEV_TWO_ACTUAL_COMMITS");
+  return {...proof,checkout:c.checkout,admissionRoute:"legacy-monthly-dev567-manual"};
+}
+export function runLegacyMonthlyDev(env,event,host) {
+  need(legacyMonthlyClaimed(env,event),"LEGACY_NOT_CLAIMED");
+  need(host.status()==="","LEGACY_DIRTY");
+  return proveLegacyMonthlyDev(legacyMonthlyContext(env,event,host.checkout()),host.io);
+}
+function legacyMonthlyMain(mode) {
+  need(["--ci-route","--dev-source"].includes(mode)&&process.argv.length===4&&process.argv[3]==="--legacy-monthly","LEGACY_MODE");
+  const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,"utf8"));
+  const host={status:()=>git("status","--porcelain","--untracked-files=all"),checkout:()=>git("rev-parse","HEAD"),io:legacyMonthlyIO()};
+  const proof=mode==="--dev-source"?runLegacyMonthlyDev(process.env,event,host):
+    runLegacyMonthlyCi(process.env,event,host,s=>appendFileSync(process.env.GITHUB_OUTPUT,s));
+  console.log(JSON.stringify(proof));
+}
+
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
+    if(process.argv[3]==='--legacy-monthly' || (process.argv[2]==='--ci-route' && process.env.GITHUB_EVENT_PATH && legacyMonthlyClaimed(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'))))){legacyMonthlyMain(process.argv[2]);}
+    else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
     else {
     const mode=process.argv[2],term=process.argv[3]==="--term-history";
     const checkout=process.argv[3]==="--checkout-mode";

@@ -59,8 +59,41 @@ jobs:
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
       - uses: actions/checkout@v7
+        if: ${{ !(startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')) }}
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v7
+        if: startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/workflows/tennisnote-public-ci.yml
+            /app/admin/actions/billing.js
+            /app/admin/views/billing.js
+            /app/shared/tennisnote-settlement-adjustment.js
+            /app/tennis-note-coach-app/domain/settlement.js
+            /app/tennis-note-coach-app/views/settlement.js
+            /scripts/check_r3_purchase_identity_admission.mjs
+            /scripts/check_r3_dev_deployment.py
+            /scripts/verify.sh
+            /tests/fixtures/r3-legacy-monthly-selected-source.json
+            /tests/fixtures/r3-dev-cache-floors.json
+            /tests/r3-purchase-identity-admission.test.mjs
+            /app/admin/index.html
+            /app/release.json
+            /app/shared/tennisnote-release.js
+            /app/tennis-note-coach-app/app.js
+            /app/tennis-note-coach-app/domain/coaches.js
+            /app/tennis-note-coach-app/forms/common.js
+            /app/tennis-note-coach-app/index.html
+            /app/tennis-note-coach-app/service-worker.js
+            /app/tennis-note-member-app/app.js
+            /app/tennis-note-member-app/forms/common.js
+            /app/tennis-note-member-app/index.html
+            /app/tennis-note-member-app/service-worker.js
+            /app/tennis-note-member-app/ui/screens.js
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -71,12 +104,18 @@ jobs:
         id: display
         env:
           R3_TARGET: ${{ github.base_ref || github.ref_name }}
+          R3_LEGACY_CLAIMED: ${{ startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4') }}
         run: |
-          if [ "$R3_TARGET" = main ]; then
+          if [ "$R3_LEGACY_CLAIMED" = true ]; then
+            node scripts/check_r3_purchase_identity_admission.mjs --ci-route --legacy-monthly
+          elif [ "$R3_TARGET" = main ]; then
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --production
           else
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
+      - name: Legacy monthly source linkage only; reviewed product evidence is not repeated
+        if: steps.display.outputs.legacy_monthly_only == 'true' && github.event_name == 'pull_request'
+        run: ./scripts/verify.sh --r3-legacy-monthly
       - name: Canonical production selection and forward recovery delta only
         if: steps.display.outputs.production_only == 'true' && github.event_name == 'pull_request'
         env:
