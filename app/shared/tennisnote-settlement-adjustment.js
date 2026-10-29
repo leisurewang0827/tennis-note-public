@@ -45,6 +45,36 @@
   }
 
   // Projection only: formulas and rounding belong to the server calculator.
+  function sourceHold(value = {}) {
+    const legacy = value?.sourceManifest?.legacyMonthlyEvidence;
+    if (legacy == null) return { hold: false, label: "", evidenceLabel: "" };
+    const count = legacy.participantEntitlementHoldCount;
+    if (legacy.version !== 1 || legacy.mode !== "monthly_payment"
+      || legacy.legacyFinalsSynthesized !== false || !Array.isArray(legacy.lessons)
+      || !Number.isSafeInteger(count) || count < 0 || legacy.writeAdmissionReady !== (count === 0)) {
+      throw new Error("settlement_legacy_hold_source_invalid");
+    }
+    const currentIds = new Set((value.sourceManifest.lessons || []).map((row) => row.id));
+    const legacyIds = new Set();
+    let observedHolds = 0;
+    for (const row of legacy.lessons) {
+      if (!row?.lessonId || legacyIds.has(row.lessonId) || currentIds.has(row.lessonId) || row.financialContribution !== false) {
+        throw new Error("settlement_legacy_source_overlap_or_invalid");
+      }
+      legacyIds.add(row.lessonId);
+      if (!Array.isArray(row.participantSet) || !Number.isSafeInteger(row.participantEntitlementHoldCount)
+        || row.participantEntitlementHoldCount < 0
+        || row.participantSet.some((item) => !Array.isArray(item) || item.length !== 3 || !item[0] || !item[1] || typeof item[2] !== "boolean")
+        || row.participantSet.filter((item) => item[2] === false).length !== row.participantEntitlementHoldCount) {
+        throw new Error("settlement_legacy_entitlement_evidence_invalid");
+      }
+      observedHolds += row.participantEntitlementHoldCount;
+    }
+    if (observedHolds !== count) throw new Error("settlement_legacy_hold_count_mismatch");
+    return { hold: count > 0, evidenceLabel: `V2 처리 수업 ${currentIds.size}개 · 과거 완료 기록 ${legacyIds.size}개 · 과거 완료 기록은 월 결제 기준`, label: count > 0
+      ? `과거 수업의 회원권 참여 연결 ${count}건 확인 필요 · 금액은 미리보기이며 확정할 수 없습니다.` : "" };
+  }
+
   function effectiveProjection(value, scope) {
     if (!value?.ok || value.calculationVersion !== "r3_effective_settlement_v2"
       || value.scope?.branchId !== scope.branchId || value.scope?.coachRoleId !== scope.coachRoleId
@@ -176,9 +206,12 @@
     if (ticketById.size !== value.sourceManifest.tickets.length || ticketById.has(undefined) || ticketById.has(null)) {
       throw new Error("settlement_ticket_source_ambiguous");
     }
+    const legacyHold = sourceHold(value);
     return {
       ...value, coachRoleId: scope.coachRoleId, branchId: scope.branchId,
-      confirmationReady: value.confirmationReady === true,
+      confirmationReady: value.confirmationReady === true && !legacyHold.hold,
+      sourceHoldLabel: legacyHold.label,
+      sourceEvidenceLabel: legacyHold.evidenceLabel,
       month: scope.settlementMonth.slice(0, 7), ruleType: "effective_periods",
       estimatedSettlement: value.totals.totalSettlementAmount,
       ownSettlement: value.totals.ownSettlementAmount,
@@ -397,6 +430,7 @@
     paymentAmounts,
     isIncluded,
     effectiveProjection,
+    sourceHold,
     effectiveError,
     unpaidProjection,
     readUnpaidState,
