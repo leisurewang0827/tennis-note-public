@@ -1,3 +1,27 @@
+/* R3: dynamic adjustment controls inherit one shared touch/focus contract. */
+.r3-unpaid-adjustment {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.r3-unpaid-adjustment > div,
+.r3-unpaid-adjustment label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.r3-unpaid-adjustment :is(input, select, textarea, button) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: max(1rem, 16px);
+}
+.r3-unpaid-adjustment textarea {
+  resize: vertical;
+}
+
 html[data-tennisnote-surface] {
   --tn-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --tn-safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));

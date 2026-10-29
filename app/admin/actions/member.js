@@ -209,6 +209,30 @@ async function updateMembershipProductSetting(productId, options = {}) {
     showToast("현재 운영 지점의 회원권 상품만 수정할 수 있습니다.");
     return;
   }
+  if (nextProduct.coachSaleMode === "selected") {
+    const entries = Object.entries(nextProduct.coachSaleAvailability || {});
+    const selectedEntries = entries.filter(([, allowed]) => allowed === true);
+    const serverRoles = Array.isArray(adminLiveDataState.coachRoles) ? adminLiveDataState.coachRoles : [];
+    const selectionValid = entries.every(([, allowed]) => allowed === true || allowed === false)
+      && selectedEntries.every(([roleId]) => {
+        const matches = serverRoles.filter((role) => role?.id === roleId);
+        const role = matches[0];
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roleId)
+          && matches.length === 1
+          && role.branch_id === branchId
+          && role.status === "approved"
+          && Object.prototype.hasOwnProperty.call(role, "employment_status")
+          && (role.employment_status ?? "active") === "active"
+          && role.archived_at === null
+          && role.deleted_at === null;
+      });
+    if (!selectionValid) {
+      showToast("회원권 상품 저장에 실패했습니다. 서버 연결과 관리자 권한을 확인해 주세요.");
+      return false;
+    }
+    // 선택 모드는 true만 허용한다. false/누락은 모두 거부하며, 다른 지점의 미선택 키는 전송하지 않는다.
+    nextProduct.coachSaleAvailability = Object.fromEntries(selectedEntries);
+  }
   if (saveButton) {
     saveButton.disabled = true;
     saveButton.textContent = "저장 중";
@@ -549,9 +573,96 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   syncMemberRegistrationSummary(form);
 }
 
+function onsitePurchaseIdentitySnapshot(form) {
+  if (!form?.isConnected || $("#onsitePaymentForm") !== form) throw new Error("purchase_identity_selection_changed");
+  const control = (id) => {
+    const element = form.querySelector(`#${id}`);
+    if (!element) throw new Error("purchase_identity_selection_changed");
+    return element;
+  };
+  return JSON.stringify([
+    activeOperationBranchId(),
+    control("onsitePaymentMember").value,
+    control("onsitePaymentSourceTicket").value,
+    control("onsitePaymentProduct").value,
+    control("onsitePaymentCoach").value,
+    control("onsitePaymentMethod").value,
+    control("onsitePaymentDate").value,
+    control("onsitePaymentAmount").value,
+    control("onsitePaymentStartDate").value,
+    Boolean(control("onsitePaymentKeepSchedule").checked),
+  ]);
+}
+
+function captureMemberPurchaseIdentityContext(form) {
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const actor = adminImportAuthState.profile?.id || "";
+  const branch = activeOperationBranchId();
+  const action = memberManagementModalState.action;
+  const memberId = memberManagementModalState.memberId;
+  const current = () => Boolean(token && actor && branch
+    && client === window.TennisNoteDataClient
+    && token === client?.getSession?.()?.access_token
+    && actor === adminImportAuthState.profile?.id && adminImportAuthState.profile?.role === "admin"
+    && branch === activeOperationBranchId()
+    && action === memberManagementModalState.action && memberId === memberManagementModalState.memberId
+    && form.isConnected && $("#memberManagementForm") === form && !$("#memberManagementModal")?.hidden);
+  if (!current()) throw new Error("purchase_identity_selection_changed");
+  return current;
+}
+
+async function confirmMemberPurchaseIdentity(form, record, schedules, operationKey, kind, expectedFormValues = null, expectedCurrent = null) {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!branchId || record.branchId !== branchId) throw new Error("purchase_identity_branch_mismatch");
+  const onsite = kind === "onsite";
+  const action = onsite ? "onsite" : memberManagementModalState.action;
+  const selectedId = onsite ? record.userId : memberManagementModalState.purchaseTargetUserId;
+  const request = JSON.stringify({ record, schedules, operationKey, kind });
+  const currentFormValues = () => onsite ? onsitePurchaseIdentitySnapshot(form) : JSON.stringify([...new FormData(form).entries()]);
+  const formValues = currentFormValues();
+  if (expectedFormValues !== null && formValues !== expectedFormValues) throw new Error("purchase_identity_selection_changed");
+  const stillExact = () => (!expectedCurrent || expectedCurrent())
+    && form.isConnected && $(onsite ? "#onsitePaymentForm" : "#memberManagementForm") === form
+    && (onsite ? !$("#onsitePaymentModal")?.hidden : memberManagementModalState.action === action)
+    && activeOperationBranchId() === branchId
+    && currentFormValues() === formValues
+    && (onsite ? $("#onsitePaymentMember")?.value === selectedId
+      && members.filter((item) => item.serverUserId === selectedId).length === 1
+      : action === "create" || (selectedId === record.userId
+      && memberManagementModalState.purchaseTargetUserId === selectedId
+      && members.filter((item) => item.id === memberManagementModalState.memberId).length === 1
+      && members.find((item) => item.id === memberManagementModalState.memberId)?.serverUserId === selectedId))
+    && JSON.stringify({ record, schedules, operationKey, kind }) === request;
+  if (!stillExact()) throw new Error("purchase_identity_selection_changed");
+  const proof = normalizedRpcResult(await client.rpc("tn_admin_preview_purchase_identity", {
+    target_record: record, target_schedules: schedules,
+    target_operation_key: operationKey, target_kind: kind,
+  }, expectedCurrent ? { requireCurrentSession: true, retryAuth: false } : {}));
+  if (!stillExact() || !/^[a-f0-9]{64}$/.test(proof.revision || "")
+    || proof.branchId !== branchId || (proof.userId || null) !== (record.userId || null)
+    || !Array.isArray(proof.people) || !proof.people.length) {
+    throw new Error("purchase_identity_selection_changed");
+  }
+  const providerLabels = { email: "이메일", "custom:naver": "네이버", "custom:kakao": "카카오", kakao: "카카오", apple: "Apple", google: "Google" };
+  const lines = proof.people.map((person, index) => {
+    const providers = (person.providers || []).map((p) => providerLabels[p] || "기타 로그인").join("·") || "앱 로그인 미연결";
+    const contact = /^\*{3}-\*{4}-[0-9]{4}$/.test(person.phoneMasked || "") ? person.phoneMasked : "연락처 미등록";
+    const mark = /^[a-f0-9]{8}$/.test(person.identityTag || "") ? person.identityTag : "신규";
+    return `${index ? "파트너" : "대상"}: ${providers} / ${contact} / 전화 인증 ${person.phoneVerified ? "확인" : "미확인"} / 구분 ${mark}`;
+  });
+  if (!window.confirm(`회원권을 받을 계정을 확인해 주세요. 이름이 같아도 다른 로그인 계정일 수 있습니다.\n${lines.join("\n")}\n현재 선택 지점에 등록합니다. 이 계정이 맞습니까?`)) {
+    throw new Error("purchase_identity_confirmation_cancelled");
+  }
+  if (!stillExact()) throw new Error("purchase_identity_selection_changed");
+  return { ...record, identityProof: proof.revision };
+}
+
 async function submitMemberManagementForm(event) {
   event.preventDefault();
   const form = event.target;
+  if (form.dataset.purchaseSubmitting === "true") return;
   const member = members.find((item) => item.id === memberManagementModalState.memberId);
   const action = memberManagementModalState.action;
   const isCreate = action === "create";
@@ -703,7 +814,11 @@ async function submitMemberManagementForm(event) {
   }
   if (message) message.textContent = "";
 
+  form.dataset.purchaseSubmitting = "true";
+  const purchaseFormValues = JSON.stringify([...new FormData(form).entries()]);
+
   try {
+    const purchaseCurrent = (isCreate || action === "assign") ? captureMemberPurchaseIdentityContext(form) : null;
     let result = null;
     let linkedSourceSignupUserId = "";
     let linkedTargetMemberUserId = "";
@@ -722,16 +837,19 @@ async function submitMemberManagementForm(event) {
           ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
           : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
         result = await client.rpc(assignmentRpc, {
-          target_record: managementPayload,
+          target_record: await confirmMemberPurchaseIdentity(form, managementPayload,
+            managementPayload.createWithoutSchedule ? [] : createRegularSchedules, createOperationKey,
+            Number(selectedManagementProduct?.group_size || 1) === 2 ? "group" : "assign", purchaseFormValues, purchaseCurrent),
           target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
           target_operation_key: createOperationKey,
-        });
+        }, { requireCurrentSession: true, retryAuth: false });
       } else {
         result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
-          target_record: managementPayload,
+          target_record: await confirmMemberPurchaseIdentity(form, managementPayload,
+            managementPayload.createWithoutSchedule ? [] : createRegularSchedules, createOperationKey, "create", purchaseFormValues, purchaseCurrent),
           target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
           target_operation_key: createOperationKey,
-        });
+        }, { requireCurrentSession: true, retryAuth: false });
       }
       state.memberFilter = "active";
     } else if (action === "assign") {
@@ -745,10 +863,12 @@ async function submitMemberManagementForm(event) {
         ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
         : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
       result = await client.rpc(assignmentRpc, {
-        target_record: assignmentPayload,
+        target_record: await confirmMemberPurchaseIdentity(form, assignmentPayload,
+          managementPayload.createWithoutSchedule ? [] : createRegularSchedules, assignmentRequestId,
+          Number(selectedManagementProduct?.group_size || 1) === 2 ? "group" : "assign", purchaseFormValues, purchaseCurrent),
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
         target_operation_key: assignmentRequestId,
-      });
+      }, { requireCurrentSession: true, retryAuth: false });
       state.memberFilter = "active";
     } else if (action === "link_existing") {
       linkedTargetMemberUserId = form.elements.targetMembershipUserId?.value || "";
@@ -978,6 +1098,8 @@ async function submitMemberManagementForm(event) {
             ? "앱 계정 연결"
             : `${memberManagementActionLabel(action)} 확정`;
     }
+  } finally {
+    delete form.dataset.purchaseSubmitting;
   }
 }
 

@@ -848,11 +848,7 @@ function coachSettlementPayoutPayloadIsExact(value, reconciliation, scope) {
 }
 
 async function readCoachSettlementPayoutState(scope) {
-  return window.TennisNoteDataClient.rpc("tn_monthly_settlement_payout_state", {
-    target_branch_id: scope.branchId,
-    target_coach_role_id: scope.coachRoleId,
-    target_month: scope.settlementMonth,
-  });
+  return window.TennisNoteSettlementAdjustment.readUnpaidState(window.TennisNoteDataClient, scope);
 }
 
 async function syncCoachSettlementHistoryFromServer() {
@@ -932,14 +928,19 @@ function coachSettlementReconciliationContinuation(scope = coachSettlementReconc
   const token = client?.getSession?.()?.access_token || "";
   const profileId = String(state.liveProfileId || "");
   const authUserId = String(state.coach?.authUserId || "");
+  const actorRole = String(state.coach?.role || "");
+  const roleOwnerId = String(state.coach?.coachRoleUserId || "");
+  const selfRoleAllowed = actorRole === "coach"
+    || (actorRole === "admin" && roleOwnerId === profileId && Boolean(profileId));
   const signature = coachSettlementReconciliationScopeSignature(scope);
   if (!client?.rpc || !token || !profileId || !authUserId || state.dataMode !== "live"
-    || state.coach?.role !== "coach" || !scope.branchId || !scope.coachRoleId) return null;
+    || !selfRoleAllowed || !scope.branchId || !scope.coachRoleId) return null;
   return () => window.TennisNoteDataClient === client
     && token === (client.getSession?.()?.access_token || "")
     && profileId === String(state.liveProfileId || "")
     && authUserId === String(state.coach?.authUserId || "")
-    && state.dataMode === "live" && state.coach?.role === "coach"
+    && state.dataMode === "live" && state.coach?.role === actorRole
+    && (actorRole !== "admin" || roleOwnerId === String(state.coach?.coachRoleUserId || ""))
     && signature === coachSettlementReconciliationScopeSignature();
 }
 

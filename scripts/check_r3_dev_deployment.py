@@ -60,6 +60,9 @@ EXPECTED_PROJECT_DOMAINS = {
 DEV_MEMBER_ORIGIN = "https://tennisnote-app-dev.pages.dev"
 DEV_ADMIN_ORIGIN = "https://tennisnote-admin-dev.pages.dev"
 LIVE_READ_ENDPOINTS = {
+    "production_member_release": ("https://tennisnote-app.pages.dev", "/release.json", True),
+    "production_admin_release": ("https://tennisnote-admin.pages.dev", "/release.json", True),
+    "production_pages_release": ("https://leisurewang0827.github.io", "/tennis-note-public/app/release.json", True),
     "member_release": (DEV_MEMBER_ORIGIN, "/release.json", True),
     "admin_release": (DEV_ADMIN_ORIGIN, "/release.json", True),
     "member_worker": (DEV_MEMBER_ORIGIN, "/service-worker.js", False),
