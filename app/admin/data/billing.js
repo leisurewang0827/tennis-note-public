@@ -1,11 +1,18 @@
-const r3SubstituteDecisionUi = { preview: null, context: null, recipient: "", operationKey: "", busy: false, message: "" };
+const r3SubstituteDecisionUi = { preview: null, context: null, scope: null, recipient: "", operationKey: "", busy: false, message: "" };
 
-function r3SubstituteDecisionCandidate(context, decision) {
+function r3SubstituteDecisionCandidate(context, decision, scope = r3SubstituteDecisionUi.scope) {
   if (!decision || effectiveSettlementPreview.context !== context
-    || !effectiveSettlementPreviewContextIsCurrent(context) || effectiveSettlementPreview.loading) return null;
-  const matches = effectiveSettlementPreview.results.flatMap((entry) => (entry.candidates || [])
+    || !effectiveSettlementPreviewContextIsCurrent(context) || effectiveSettlementPreview.loading
+    || !scope || scope.branchId !== activeOperationBranchId()
+    || String(scope.settlementMonth || "").slice(0, 7) !== state.billingMonth
+    || ![decision.originalCoachRoleId, decision.actualCoachRoleId].includes(scope.coachRoleId)) return null;
+  const matches = effectiveSettlementPreview.results
+    .filter((entry) => entry.coach.serverRoleId === scope.coachRoleId)
+    .flatMap((entry) => (entry.candidates || [])
     .filter((candidate) => entry.coach.serverRoleId === candidate.coachRoleId
+      && candidate.coachRoleId === scope.coachRoleId && candidate.settlementMonth === scope.settlementMonth
       && candidate.id === decision.assignmentId && candidate.branchId === decision.branchId
+      && candidate.branchId === scope.branchId
       && candidate.branchId === activeOperationBranchId()
       && String(candidate.serviceDate || "").slice(0, 7) === state.billingMonth
       && candidate.lessonId === decision.lessonId
@@ -35,6 +42,8 @@ function validatedR3SubstituteDecisionCandidates(value, scope) {
       || item.branchId !== scope.branchId
       || !/^[0-9a-f-]{36}$/i.test(String(item.lessonId || ""))
       || !Number.isSafeInteger(Number(item.lessonRevision))
+      || (item.coachRoleId != null && item.coachRoleId !== scope.coachRoleId)
+      || (item.settlementMonth != null && item.settlementMonth !== scope.settlementMonth)
       || String(item.serviceDate || "").slice(0, 7) !== scope.settlementMonth.slice(0, 7)
       || ![item.originalCoachRoleId, item.actualCoachRoleId].includes(scope.coachRoleId)
       || !/^[0-9a-f]{64}$/.test(String(item.sourceFingerprint || ""))) {
@@ -42,7 +51,9 @@ function validatedR3SubstituteDecisionCandidates(value, scope) {
     }
     seen.add(item.id);
   }
-  return value.candidates;
+  return value.candidates.map((item) => ({ ...item,
+    coachRoleId: scope.coachRoleId, settlementMonth: scope.settlementMonth,
+  }));
 }
 
 // 서버(Supabase)에서 결제·정산 데이터를 가져오는 함수들.

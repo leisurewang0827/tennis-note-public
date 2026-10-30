@@ -18,6 +18,13 @@ if [[ "${1:-}" == "--r3-legacy-monthly" ]]; then
   exit $?
 fi
 
+# 검수된 17개 제품 검사는 반복하지 않고 실제 경로 연결 차이만 확인합니다.
+if [[ "${1:-}" == "--r3-substitute-row-scope" ]]; then
+  [[ $# -eq 1 ]] || exit 2
+  node --test --test-name-pattern="^integration:" tests/r3-substitute-policy-row-scope.test.cjs
+  exit $?
+fi
+
 : "${TENNISNOTE_SUPABASE_URL:=https://example.supabase.co}"
 : "${TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:=test-publishable-key-for-ci-only}"
 : "${TENNISNOTE_PORTONE_STORE_ID:=test-store-id}"
