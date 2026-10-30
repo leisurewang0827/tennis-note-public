@@ -29,6 +29,10 @@ function renderCoachSettlement() {
     && Number(settlement.settledSessions) === 0 && Number(settlement.settledMinutes) === 0;
   const countLabel = monthlyOnly ? "월 결제 기준 · 횟수 미사용"
     : `${settlement.sourceEvidenceLabel || rows.some(monthlyRow) ? "정산 반영 " : ""}${Number(settlement.settledSessions) || 0}회${settlement.sourceEvidenceLabel ? " · 과거 기록은 월 결제 기준" : ""}`;
+  const countValue = monthlyOnly ? "횟수 미사용" : `${Number(settlement.settledSessions) || 0}회`;
+  const countDetail = monthlyOnly ? "월 결제 기준"
+    : settlement.sourceEvidenceLabel ? "정산 반영 · 과거 기록은 월 결제 기준"
+      : rows.some(monthlyRow) ? "정산 반영 · 완료·이관 수업 기준" : "완료·이관 수업 기준";
   const status = $("#coachSettlementStatus");
   if (status) {
     status.hidden = !state.coachSettlementLoading && !state.coachSettlementError;
@@ -43,7 +47,12 @@ function renderCoachSettlement() {
     const refundedAmount = Number(settlement.refundedAmount) || 0;
     $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건${refundedAmount ? ` · 환불 조정 ${formatCoachWon(refundedAmount)}` : ""}`;
   }
-  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = unavailable ? "확인 필요" : countLabel;
+  const settledCount = $("#coachSettledSessions");
+  if (settledCount) {
+    settledCount.textContent = unavailable ? "확인 필요" : countValue;
+    const countDescription = settledCount.parentElement?.querySelector("small");
+    if (countDescription) countDescription.textContent = unavailable ? "완료·이관 수업 기준" : countDetail;
+  }
   if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = unavailable ? "—" : formatCoachWon(settlement.estimatedSettlement);
   if ($("#coachSettlementRule")) {
     const substitute = Number(settlement.substituteSettlement) || 0;

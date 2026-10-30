@@ -851,3 +851,185 @@ test("LEGACY-MONTHLY-GUARD: sparse loader dependency and official new-only CI ro
   assert.equal(a.runLegacyMonthlyCi(pr.env,pr.event,{status:()=>"",checkout:()=>pr.m,io:pr.io},s=>outputs.push(s)).files,24);
   assert.deepEqual(outputs,["scoped=true\nlegacy_monthly_only=true\n"]);
 });
+
+// SUMMARY_LAYOUT_TEST_BEGIN
+// 새 표시 후보의 연결만 검사합니다. 과거 PROD559/LEGACY560 테스트는 실행하지 않습니다.
+function summaryFixture() {
+  const hosted = process.env.GITHUB_ACTIONS === "true";
+  const mode = process.env.GITHUB_WORKFLOW === "Tennis Note Public PWA CI" ? "--ci-route" : "--production-source";
+  const actual = a.summaryPacket(hosted ? [mode, "--production"] : ["--local", "--summary-layout"]), p = a.SUMMARY_PROFILES.production;
+  // hosted 실행은 위에서 실제 event/clean/source를 먼저 확인하고, 아래 graph만 합성합니다.
+  const local = { ...structuredClone(actual), event: "local", args: ["--local", "--summary-layout"], head: p.base, checkout: p.base, indexEmpty: true, clean: false,
+    rows: a.summaryPaths("production").map(path => ["M", path]) };
+  for (const path of a.METADATA) local.bodies[path] = local.originals[path];
+  const s = { ...structuredClone(local), event: "pull_request", mode: "--ci-route", args: ["--ci-route", "--production"], clean: true,
+    head: "1".repeat(40), sha: "2".repeat(40), checkout: "2".repeat(40), tree: "3".repeat(40), checkoutTree: "3".repeat(40),
+    parents: ["4".repeat(40)], sourceParents: [p.base], mergeParents: [p.base, "1".repeat(40)],
+    rows: [...a.summaryPaths("production"), ...a.METADATA].map(path => ["M", path]),
+    sourceRows: a.summaryPaths("production").map(path => ["M", path]), metadataRows: a.METADATA.map(path => ["M", path]),
+    workflow: "Tennis Note Public PWA CI", workflowRef: a.REPOSITORY + "/.github/workflows/tennisnote-public-ci.yml@refs/pull/1/merge", workflowSha: "2".repeat(40), ref: "refs/pull/1/merge", refType: "branch", target: "main", baseRepo: a.REPOSITORY, headRepo: a.REPOSITORY, number: 1, prNumber: 1,
+    modes: Object.fromEntries([...a.summaryPaths("production"), ...a.METADATA].map(path => [path, "100644"])) };
+  const release = { version: p.version, appSurfaceVersion: p.version, releaseId: "2026.10.30.01", deployedAt: "2026-10-30T09:00:00+09:00", memberCache: "tennis-note-member-pwa-v" + p.member, coachCache: "tennis-note-coach-mode-v" + p.coach };
+  s.sourceBodies = structuredClone(s.bodies);
+  for (const path of a.METADATA) s.bodies[path] = a.expectedMetadata(path, s.originals[path], release, p.previous);
+  return { local, s };
+}
+test("SUMMARY-LAYOUT: actual local source and original inverse; accepted renderer retained", () => {
+  const { local } = summaryFixture();
+  assert.equal(a.summaryValidate(local).status, "LOCAL_SOURCE_ONLY");
+  assert.equal(a.summaryOriginal(local.bodies[a.SELF]), local.originals[a.SELF]);
+  const renderer = local.bodies[a.SUMMARY_UI[0]].match(/function renderCoachSettlement\(\) \{[\s\S]*?\n\}/)[0];
+  const css = local.bodies[a.SUMMARY_UI[1]].match(/\.coach-settlement-summary[^{}]*\{[^{}]*\}/g).join("\n");
+  assert.equal(a.hash(renderer), "f66c13da55ae3f84a32648e4b15c633e2fcabdb502c53fb4b1a0559cdefc7473");
+  assert.equal(a.hash(css), "79e4255a973771e11d7e663a210322c75fb389b73fbc0ef9c95da2835b498b79");
+});
+test("SUMMARY-LAYOUT: new two-layer PR and squash production source boundary", () => {
+  const { s } = summaryFixture(); assert.equal(a.summaryValidate(s).files, 17);
+  for (const workflow of Object.keys(a.PRODUCTION_WORKFLOWS)) {
+    const main = { ...structuredClone(s), event: "push", head: s.sha, before: s.base, parents: [s.base], ref: "refs/heads/main", workflow, workflowRef: a.REPOSITORY + "/" + a.PRODUCTION_WORKFLOWS[workflow] + "@refs/heads/main", mode: workflow === "Tennis Note Public PWA CI" ? "--ci-route" : "--production-source" };
+    main.args = [main.mode, "--production"];
+    assert.equal(a.summaryValidate(main).deploymentAdmitted, false);
+  }
+});
+test("SUMMARY-LAYOUT: new boundary negatives reject source parent mode context and scope", () => {
+  const { s } = summaryFixture();
+  const cases = [
+    x => { x.profile = "unknown"; }, x => { x.base = "f".repeat(40); }, x => { x.baseTree = "e".repeat(40); },
+    x => { x.branch += "-other"; }, x => { x.repo += "-other"; }, x => { x.attempt = "2"; },
+    x => { x.clean = false; }, x => { x.rows.push(["M", "other.txt"]); }, x => { x.rows.pop(); },
+    x => { x.rows[0][0] = "R100"; }, x => { x.modes[a.SELF] = "120000"; }, x => { x.sourceParents = []; },
+    x => { x.parents = [x.base]; }, x => { x.metadataRows.pop(); }, x => { x.sourceRows.push(["M", a.METADATA[0]]); },
+    x => { x.args.push("--bypass"); }, x => { x.workflow = "unknown"; }, x => { x.workflowSha = x.head; },
+    x => { x.workflowRef += "x"; }, x => { x.refType = "tag"; }, x => { x.checkout = x.head; },
+    x => { x.mergeParents.reverse(); }, x => { x.checkoutTree = "c".repeat(40); },
+    x => { x.target = "dev"; }, x => { x.baseRepo += "x"; }, x => { x.headRepo += "x"; },
+    x => { x.prNumber = 2; }, x => { x.event = "workflow_dispatch"; }, x => { x.mode = "--production-source"; },
+  ];
+  for (const mutate of cases) { const copy = structuredClone(s); mutate(copy); assert.throws(() => a.summaryValidate(copy)); }
+});
+test("SUMMARY-LAYOUT: every candidate body and early metadata mutation is held", () => {
+  const { s } = summaryFixture();
+  for (const path of Object.keys(s.bodies)) {
+    const copy = structuredClone(s); copy.bodies[path] += "\n"; assert.throws(() => a.summaryValidate(copy), undefined, path);
+  }
+  for (const path of a.METADATA) {
+    const copy = structuredClone(s); copy.sourceBodies[path] = copy.bodies[path]; assert.throws(() => a.summaryValidate(copy), undefined, path);
+  }
+  const changed = structuredClone(s); changed.sourceBodies[a.SUMMARY_UI[0]] += "x"; assert.throws(() => a.summaryValidate(changed));
+});
+test("SUMMARY-LAYOUT: actual CLI runs only new boundary suite before scoped emission", () => {
+  const source = read(a.SELF), start = source.indexOf("function summaryMain(args) {"), stop = source.indexOf("// SUMMARY_LAYOUT_SUCCESSOR_END", start), entry = source.slice(start, stop);
+  assert.ok(entry.indexOf("summaryPacket(args)") < entry.indexOf("summaryValidate(s)"));
+  assert.ok(entry.indexOf("summaryValidate(s)") < entry.indexOf("execFileSync(process.execPath"));
+  assert.ok(entry.indexOf("execFileSync(process.execPath") < entry.indexOf('appendFileSync(process.env.GITHUB_OUTPUT'));
+  assert.ok(entry.includes('"--test-name-pattern=^SUMMARY-LAYOUT:"'));
+  assert.equal(entry.includes("production_legacy_only=true"), false); assert.equal(entry.includes("production_only=true"), false);
+  assert.equal(entry.includes("--test-name-pattern=^PROD"), false);
+});
+// SUMMARY_LAYOUT_TEST_END
+
+// SUMMARY_DEV_IMPACT_BEGIN
+function summaryDevFixture() {
+  const p = a.SUMMARY_PROFILES.development, hosted = process.env.GITHUB_ACTIONS === "true";
+  const args = hosted ? (process.env.GITHUB_EVENT_NAME === "workflow_dispatch" ? ["--dev-source", "--summary-layout"] : ["--ci-route", "--checkout-mode"]) : ["--local", "--summary-layout"];
+  const actual = a.summaryPacket(args), paths = a.summaryPaths("development");
+  const local = { ...structuredClone(actual), event: "local", args: ["--local", "--summary-layout"], head: p.base, checkout: p.base, indexEmpty: true, clean: false, rows: paths.map(path => ["M", path]) };
+  for (const path of a.METADATA) local.bodies[path] = local.originals[path];
+  const s = { ...structuredClone(local), event: "pull_request", mode: "--ci-route", args: ["--ci-route", "--checkout-mode"], clean: true, head: "1".repeat(40), sha: "2".repeat(40), checkout: "2".repeat(40), tree: "3".repeat(40), checkoutTree: "3".repeat(40),
+    parents: ["4".repeat(40)], sourceParents: [p.base], mergeParents: [p.base, "1".repeat(40)], rows: [...paths, ...a.METADATA].map(path => ["M", path]), sourceRows: paths.map(path => ["M", path]), metadataRows: a.METADATA.map(path => ["M", path]),
+    workflow: "Tennis Note Public PWA CI", workflowRef: a.REPOSITORY + "/.github/workflows/tennisnote-public-ci.yml@refs/pull/1/merge", workflowSha: "2".repeat(40), ref: "refs/pull/1/merge", refType: "branch", target: p.target, baseRepo: a.REPOSITORY, headRepo: a.REPOSITORY, number: 1, prNumber: 1,
+    modes: Object.fromEntries([...paths, ...a.METADATA].map(path => [path, "100644"])), sourceModes: Object.fromEntries([...paths, ...a.METADATA].map(path => [path, "100644"])) };
+  const release = { version: p.version, appSurfaceVersion: p.version, releaseId: "2026.10.30.01", deployedAt: "2026-10-30T09:00:00+09:00", memberCache: "tennis-note-member-pwa-v601", coachCache: "tennis-note-coach-mode-v574" };
+  s.sourceBodies = structuredClone(s.bodies);
+  for (const path of a.METADATA) s.bodies[path] = a.expectedMetadata(path, s.originals[path], release, p.previous);
+  return { local, s };
+}
+test("SUMMARY-DEV: new source5 helper inverse private provenance and manual dispatch", () => {
+  const { local, s } = summaryDevFixture();
+  assert.equal(a.summaryValidate(local).status, "LOCAL_SOURCE_ONLY");
+  const proof = a.summaryValidate(s); assert.equal(proof.files, 18); assert.equal(proof.layers, 2);
+  assert.equal(proof.privateSource.commit, "a8da7b7c25f5f47c27cc5d12dcb3fc46b41d26f2");
+  assert.equal(a.summaryHelperOriginal(local.bodies["scripts/check_r3_dev_deployment.py"]), local.originals["scripts/check_r3_dev_deployment.py"]);
+  const branch = "refs/heads/" + a.SUMMARY_PROFILES.development.branch;
+  const manual = { ...s, event: "workflow_dispatch", mode: "--dev-source", args: ["--dev-source", "--summary-layout"], sha: s.head, checkout: s.head, workflowSha: s.head, workflow: "Deploy Tennis Note development sites", workflowRef: a.REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@" + branch, ref: branch, input: s.head };
+  assert.equal(a.summaryValidate(manual).admissionRoute, "summary-layout-dev568-manual");
+});
+test("SUMMARY-DEV: new dev branch metadata helper mode and stale-source negative boundaries", () => {
+  const { s } = summaryDevFixture();
+  const mutations = [x => { x.base = a.SUMMARY_PROFILES.production.base; }, x => { x.target = "dev"; }, x => { x.target = "main"; }, x => { x.branch += "x"; }, x => { x.attempt = "2"; }, x => { x.args = ["--ci-route", "--legacy-monthly"]; }, x => { x.clean = false; }, x => { x.rows.push(["M", "unapproved.txt"]); }, x => { x.metadataRows.pop(); }, x => { x.sourceRows.pop(); }, x => { x.sourceParents = []; }, x => { x.bodies["scripts/check_r3_dev_deployment.py"] += "\n"; }, x => { x.bodies[a.SUMMARY_UI[0]] += "\n"; }, x => { x.checkoutTree = "f".repeat(40); }];
+  for (const mutate of mutations) { const copy = structuredClone(s); mutate(copy); assert.throws(() => a.summaryValidate(copy)); }
+  for (const path of [...a.summaryPaths("development"), ...a.METADATA]) {
+    const copy = structuredClone(s); copy.sourceModes[path] = "120000"; assert.throws(() => a.summaryValidate(copy));
+  }
+  for (const path of a.METADATA) { const copy = structuredClone(s); copy.sourceBodies[path] = copy.bodies[path]; assert.throws(() => a.summaryValidate(copy)); }
+});
+test("SUMMARY-DEV: new helper runtime live baseline target rollback and no-network boundaries", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const code = String.raw`
+import copy, hashlib, json, runpy
+g = runpy.run_path("scripts/check_r3_dev_deployment.py", run_name="summary_dev_unit")
+n = g["summary_layout_context"].__globals__
+calls = {"network": 0, "process": 0, "checks": 0}
+def forbidden(*args, **kwargs):
+    calls["network"] += 1
+    raise AssertionError("NETWORK_FORBIDDEN")
+n["_LIVE_READ_OPENER"].open = forbidden
+def process_forbidden(*args, **kwargs):
+    calls["process"] += 1
+    raise AssertionError("PROCESS_FORBIDDEN")
+n["subprocess"].run = process_forbidden
+n["subprocess"].check_output = process_forbidden
+def holds(fn):
+    try: fn()
+    except (RuntimeError, KeyError, ValueError): calls["checks"] += 1; return
+    raise AssertionError("EXPECTED_HOLD")
+branch = "refs/heads/codex/tennisnote-coach-settlement-summary-dev568-20261030"
+repo = n["EXPECTED_REPOSITORY"]
+head = "1" * 40
+env = {"GITHUB_REPOSITORY":repo,"GITHUB_RUN_ATTEMPT":"1","GITHUB_EVENT_NAME":"workflow_dispatch","GITHUB_REF_TYPE":"branch","GITHUB_REF":branch,"GITHUB_WORKFLOW":n["EXPECTED_WORKFLOW_NAME"],"GITHUB_WORKFLOW_REF":repo+"/.github/workflows/deploy-cloudflare-pages-dev.yml@"+branch,"TENNISNOTE_WORKFLOW_REF":repo+"/.github/workflows/deploy-cloudflare-pages-dev.yml@"+branch,"TENNISNOTE_CANDIDATE_SHA":head,"GITHUB_SHA":head,"GITHUB_WORKFLOW_SHA":head,"TENNISNOTE_SUPABASE_URL":"https://fixture.supabase.co","TENNISNOTE_ENVIRONMENT":"development","TENNISNOTE_SUPABASE_PUBLISHABLE_KEY":"synthetic-public","TENNISNOTE_PAYMENTS_ENABLED":"false","TENNISNOTE_PAYMENT_MODE":"disabled","TENNISNOTE_ALLOWED_PAYMENT_METHODS":"","TENNISNOTE_BANK_TRANSFER_ENABLED":"false"}
+n["project_fingerprint"] = lambda url: n["EXPECTED_DEV_PROJECT_FINGERPRINT"] if url == env["TENNISNOTE_SUPABASE_URL"] else ""
+assert n["summary_layout_context"](env,head) == head
+for key,value in [("GITHUB_RUN_ATTEMPT","2"),("GITHUB_REF",branch+"x"),("GITHUB_EVENT_NAME","push"),("GITHUB_WORKFLOW_SHA","2"*40),("TENNISNOTE_ENVIRONMENT","production"),("TENNISNOTE_SUPABASE_URL","https://other.supabase.co"),("TENNISNOTE_PAYMENTS_ENABLED","true"),("TENNISNOTE_BANK_TRANSFER_ENABLED","true")]:
+    changed = dict(env); changed[key]=value; holds(lambda: n["summary_layout_context"](changed,head))
+release = {"version":"1.0.568","appSurfaceVersion":"1.0.568","releaseId":"2026.10.30.01","memberCache":"tennis-note-member-pwa-v601","coachCache":"tennis-note-coach-mode-v574"}
+proof = {"contract":"r3-summary-public-source/1","status":"SOURCE_PROVEN","head":head,"checkout":head,"base":"a5503e5855d0b30e34e4992976e6303342c40f9b","tree":"2"*40,"profile":"development","files":18,"layers":2,"admissionRoute":"summary-layout-dev568-manual","privateSource":{"commit":"a8da7b7c25f5f47c27cc5d12dcb3fc46b41d26f2","tree":"c26e11ee4444eade7e756cfd570bdafdc4827fff"},"release":release,"databaseActions":0,"browserRuns":0}
+assert n["summary_layout_proof"](proof,head) is proof
+for key,value in [("status","LOCAL_SOURCE_ONLY"),("files",24),("profile","production"),("admissionRoute","legacy-monthly-dev567-manual"),("databaseActions",1)]:
+    changed = copy.deepcopy(proof); changed[key]=value; holds(lambda: n["summary_layout_proof"](changed,head))
+states=[{"release":{"version":"1.0.567","releaseId":"2026.10.29.01"},"member_cache":600,"coach_cache":573} for _ in range(2)]
+prod=lambda role,sha:{"version":"1.0.560","releaseId":"2026.10.29.02"}
+n["summary_layout_live"](proof,lambda sha:states,prod)
+stale=copy.deepcopy(states);stale[0]["member_cache"]=601
+holds(lambda:n["summary_layout_live"](proof,lambda sha:stale,prod))
+holds(lambda:n["summary_layout_live"](proof,lambda sha:states,lambda role,sha:{"version":"1.0.561","releaseId":"2026.10.30.01"}))
+account="f"*32
+target={"CLOUDFLARE_ACCOUNT_ID":account,"CLOUDFLARE_API_TOKEN":"synthetic","EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT":hashlib.sha256(account.encode()).hexdigest()}
+def get(a,t,path,wrong=False):
+    assert a==account and t=="synthetic"
+    name=path.split("/")[2]
+    if path.endswith("per_page=1"):
+        return {"result":[{"environment":"production","deployment_trigger":{"metadata":{"branch":"dev","commit_hash": "f"*40 if wrong else proof["base"]}},"latest_stage":{"status":"success"},"id":"-".join(["0"*8,"0"*4,"0"*4,"0"*4,"0"*12]),"url":"https://"+name+".pages.dev","created_on":"synthetic"}]}
+    return {"result":{"name":name,"production_branch":"dev","subdomain":name+".pages.dev","domains":[name+".pages.dev"]}}
+assert len(n["summary_layout_target"](target,get))==64
+holds(lambda:n["summary_layout_target"](target,lambda a,t,p:get(a,t,p,True)))
+bad=dict(target);bad["EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT"]="0"*64
+holds(lambda:n["summary_layout_target"](bad,forbidden))
+assert calls["network"]==calls["process"]==0
+print(json.dumps({"impactChecks":calls["checks"],"network":0,"process":0}))
+`;
+  const result = JSON.parse(execFileSync("python", ["-B", "-c", code], { cwd: a.ROOT, encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] }));
+  assert.ok(result.impactChecks >= 17); assert.equal(result.network, 0); assert.equal(result.process, 0);
+});
+test("SUMMARY-DEV: actual new entry and runtime reuse precede scoped/deployment emission", () => {
+  const source = read(a.SELF), helper = read("scripts/check_r3_dev_deployment.py");
+  assert.ok(source.includes('s.profile === "development" ? "^SUMMARY-DEV:" : "^SUMMARY-LAYOUT:"'));
+  assert.ok(source.indexOf("summaryValidate(s);", source.indexOf("function summaryMain")) < source.indexOf("execFileSync(process.execPath", source.indexOf("function summaryMain")));
+  const entry = helper.slice(helper.indexOf("def main() -> int:"));
+  assert.ok(entry.indexOf("if summary_layout_claimed():") < entry.indexOf("if legacy_monthly_claimed():"));
+  const dispatch = helper.slice(helper.indexOf("def summary_layout_dispatch"), helper.indexOf("# SUMMARY_LAYOUT_568_END"));
+  assert.ok(dispatch.includes("legacy_monthly_artifacts(proof,"));
+  assert.ok(dispatch.indexOf("summary_layout_source()") < dispatch.indexOf("summary_layout_live(proof)"));
+  assert.ok(dispatch.indexOf("summary_layout_live(proof)") < dispatch.indexOf("summary_layout_target(dict(os.environ))"));
+  assert.equal(dispatch.includes("legacy_monthly_source()"), false);
+});
+// SUMMARY_DEV_IMPACT_END
