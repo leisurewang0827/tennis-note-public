@@ -994,6 +994,172 @@ def row_scope_dispatch(args):
         print("ROW_SCOPE_SOURCE_AND_CI_PASS run_id=" + str(ci["runId"]))
 # ROW_SCOPE_DEV_569_END
 
+# CURRENT_TERM_DEV_570_BEGIN
+CURRENT_TERM_DEV_BRANCH = "codex/tennisnote-r3-current-term-dev570-20261031"
+CURRENT_TERM_DEV_BASE = "436d11ac11fb31ff0d02a8f9de9233a71f0fe00f"
+CURRENT_TERM_PRIVATE_SOURCE_COMMIT = "5f6684792b83ca2a3f381517aab22e6be1e2c08a"
+CURRENT_TERM_PRIVATE_SOURCE_TREE = "e7f4b8c5bb57fb1d860c46f34f3354c2c3b02d2c"
+CURRENT_TERM_PRIVATE_SOURCE_LF_SHA256 = "69dd4cb4c6db3038b32455f4a1375cacda448a33960077cd43f96ef0667fe2ca"
+
+
+def current_term_dev_context(env, head):
+    candidate = env.get("TENNISNOTE_CANDIDATE_SHA", "")
+    legacy_monthly_need(env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and env.get("GITHUB_REPOSITORY") == EXPECTED_REPOSITORY
+        and env.get("GITHUB_REF") == "refs/heads/" + CURRENT_TERM_DEV_BRANCH
+        and env.get("GITHUB_REF_TYPE") == "branch"
+        and env.get("GITHUB_WORKFLOW") == EXPECTED_WORKFLOW_NAME
+        and env.get("TENNISNOTE_WORKFLOW_REF") == EXPECTED_REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@refs/heads/" + CURRENT_TERM_DEV_BRANCH
+        and env.get("GITHUB_RUN_ATTEMPT") == "1" and SHA40_RE.fullmatch(candidate or "") is not None
+        and candidate == env.get("GITHUB_SHA") == head, "CURRENT_TERM_CONTEXT")
+    return candidate
+
+
+def current_term_dev_release(release):
+    legacy_monthly_need(isinstance(release, dict)
+        and release.get("version") == release.get("appSurfaceVersion") == "1.0.570"
+        and release.get("releaseId") == "2026.10.31.01"
+        and release.get("memberCache") == "tennis-note-member-pwa-v603"
+        and release.get("coachCache") == "tennis-note-coach-mode-v576", "CURRENT_TERM_RELEASE")
+
+
+def current_term_dev_live_baseline(states):
+    legacy_monthly_need(isinstance(states, list) and len(states) == 2, "CURRENT_TERM_LIVE_COUNT")
+    for state in states:
+        release = state.get("release") or {}
+        legacy_monthly_need(release.get("version") == "1.0.569" and release.get("releaseId") == "2026.10.30.02"
+            and state.get("member_cache") == 602 and state.get("coach_cache") == 575, "CURRENT_TERM_LIVE_BASELINE")
+
+
+def current_term_dev_ci_evidence(run, pr, head_commit, source_commit, merge_commit, candidate):
+    repo = "leisurewang0827/tennis-note-public"
+    parent = "codex/tennisnote-r3-substitute-row-scope-dev569-20261030"
+    def parents(commit):
+        return [entry.get("sha") for entry in commit.get("parents", [])]
+    legacy_monthly_need(isinstance(candidate, str) and SHA40_RE.fullmatch(candidate) is not None
+        and isinstance(run, dict) and isinstance(pr, dict)
+        and isinstance(head_commit, dict) and isinstance(source_commit, dict) and isinstance(merge_commit, dict), "CURRENT_TERM_CI_SHAPE")
+    links = run.get("pull_requests")
+    legacy_monthly_need(run.get("workflow_id") == 329932540 and run.get("path") == ".github/workflows/tennisnote-public-ci.yml"
+        and run.get("event") == "pull_request" and run.get("head_sha") == candidate
+        and run.get("run_attempt") == 1 and type(run.get("id")) is int and run["id"] > 0
+        and run.get("status") == "completed" and run.get("conclusion") == "success"
+        and (run.get("repository") or {}).get("full_name") == repo
+        and (run.get("head_repository") or {}).get("full_name") == repo, "CURRENT_TERM_CI_RUN")
+    legacy_monthly_need(pr.get("state") == "open" and type(pr.get("number")) is int and pr["number"] > 0
+        and (pr.get("head") or {}).get("sha") == candidate and (pr.get("head") or {}).get("ref") == CURRENT_TERM_DEV_BRANCH
+        and ((pr.get("head") or {}).get("repo") or {}).get("full_name") == repo
+        and (pr.get("base") or {}).get("sha") == CURRENT_TERM_DEV_BASE and (pr.get("base") or {}).get("ref") == parent
+        and ((pr.get("base") or {}).get("repo") or {}).get("full_name") == repo
+        and isinstance(links, list) and len(links) == 1 and links[0].get("number") == pr["number"]
+        and (links[0].get("head") or {}).get("sha") == candidate
+        and (links[0].get("base") or {}).get("sha") == CURRENT_TERM_DEV_BASE, "CURRENT_TERM_CI_PR")
+    tree = (head_commit.get("tree") or {}).get("sha")
+    source_sha = source_commit.get("sha")
+    legacy_monthly_need(isinstance(source_sha, str) and SHA40_RE.fullmatch(source_sha) is not None
+        and head_commit.get("sha") == candidate and parents(head_commit) == [source_sha]
+        and parents(source_commit) == [CURRENT_TERM_DEV_BASE]
+        and merge_commit.get("sha") == pr.get("merge_commit_sha")
+        and parents(merge_commit) == [CURRENT_TERM_DEV_BASE, candidate]
+        and SHA40_RE.fullmatch(str(tree or "")) is not None
+        and tree == (merge_commit.get("tree") or {}).get("sha"), "CURRENT_TERM_CI_GRAPH")
+    return {"status": "CI_METADATA_ONLY_NOT_DEPLOYMENT", "candidate": candidate, "source": source_sha, "tree": tree, "runId": run["id"]}
+
+
+def current_term_dev_source_proof(proof, candidate):
+    legacy_monthly_need(isinstance(proof, dict) and proof.get("contract") == "r3-current-term-public/1"
+        and proof.get("status") == "SOURCE_PROVEN" and proof.get("base") == CURRENT_TERM_DEV_BASE
+        and proof.get("branch") == CURRENT_TERM_DEV_BRANCH and proof.get("head") == proof.get("checkout") == candidate
+        and SHA40_RE.fullmatch(str(proof.get("source", ""))) is not None
+        and SHA40_RE.fullmatch(str(proof.get("tree", ""))) is not None
+        and proof.get("sourceFiles") == 7 and proof.get("metadataFiles") == 13 and proof.get("layers") == 2
+        and proof.get("privateSourceCommit") == CURRENT_TERM_PRIVATE_SOURCE_COMMIT
+        and proof.get("privateSourceTree") == CURRENT_TERM_PRIVATE_SOURCE_TREE
+        and proof.get("privateSourceLfSha256") == CURRENT_TERM_PRIVATE_SOURCE_LF_SHA256
+        and proof.get("databaseActions") == 0 and proof.get("deploymentAdmitted") is False, "CURRENT_TERM_SOURCE")
+    current_term_dev_release(proof.get("release"))
+    return proof
+
+
+def current_term_dev_ci(candidate, get=None):
+    legacy_monthly_need(isinstance(candidate, str) and SHA40_RE.fullmatch(candidate) is not None, "CURRENT_TERM_CI_HEAD")
+    get = get or row_scope_github_get
+    listing = get("actions/workflows/tennisnote-public-ci.yml/runs?head_sha=" + candidate + "&event=pull_request&per_page=100")
+    rows = listing.get("workflow_runs") if isinstance(listing, dict) else None
+    legacy_monthly_need(isinstance(rows, list) and len(rows) < 100, "CURRENT_TERM_CI_LIST")
+    matches = [r for r in rows if isinstance(r, dict) and r.get("head_sha") == candidate
+        and r.get("event") == "pull_request" and r.get("workflow_id") == 329932540]
+    legacy_monthly_need(len(matches) == 1 and type(matches[0].get("id")) is int and matches[0]["id"] > 0, "CURRENT_TERM_CI_UNIQUE")
+    run = get("actions/runs/" + str(matches[0]["id"]))
+    links = run.get("pull_requests") if isinstance(run, dict) else None
+    legacy_monthly_need(isinstance(links, list) and len(links) == 1 and type(links[0].get("number")) is int
+        and links[0]["number"] > 0, "CURRENT_TERM_CI_PR")
+    pr = get("pulls/" + str(links[0]["number"]))
+    head = get("git/commits/" + candidate)
+    parents = head.get("parents") if isinstance(head, dict) else None
+    legacy_monthly_need(isinstance(parents, list) and len(parents) == 1
+        and SHA40_RE.fullmatch(str(parents[0].get("sha", ""))) is not None, "CURRENT_TERM_CI_SOURCE")
+    source = get("git/commits/" + parents[0]["sha"])
+    merge_sha = pr.get("merge_commit_sha") if isinstance(pr, dict) else None
+    legacy_monthly_need(isinstance(merge_sha, str) and SHA40_RE.fullmatch(merge_sha) is not None, "CURRENT_TERM_CI_MERGE")
+    merge = get("git/commits/" + merge_sha)
+    proof = current_term_dev_ci_evidence(run, pr, head, source, merge, candidate)
+    legacy_monthly_need(proof["runId"] == matches[0]["id"], "CURRENT_TERM_CI_BINDING")
+    return proof
+
+
+def current_term_dev_target(env, get=None):
+    expected = env.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", "")
+    account, token = env.get("CLOUDFLARE_ACCOUNT_ID", ""), env.get("CLOUDFLARE_API_TOKEN", "")
+    legacy_monthly_need(SHA256_RE.fullmatch(expected) is not None and re.fullmatch(r"[a-f0-9]{32}", account) is not None
+        and bool(token) and sha256(account.encode("utf-8")) == expected, "CURRENT_TERM_ACCOUNT")
+    get, rollback = get or legacy_monthly_cloudflare_get, {}
+    for name in EXPECTED_PROJECTS:
+        result = get(account, token, "pages/projects/" + name).get("result")
+        domains = result.get("domains") if isinstance(result, dict) else None
+        legacy_monthly_need(isinstance(result, dict) and result.get("name") == name and result.get("production_branch") == "dev"
+            and result.get("subdomain") == EXPECTED_PROJECT_DOMAINS[name] and isinstance(domains, list)
+            and EXPECTED_PROJECT_DOMAINS[name] in domains and all(isinstance(d, str) for d in domains)
+            and not any(d in {"tennisnote-app.pages.dev", "tennisnote-admin.pages.dev"} for d in domains), "CURRENT_TERM_PROJECT")
+        rows = get(account, token, "pages/projects/" + name + "/deployments?env=production&per_page=1").get("result")
+        legacy_monthly_need(isinstance(rows, list), "CURRENT_TERM_ROLLBACK_SHAPE")
+        previous = rollback_proof(name, rows)
+        legacy_monthly_need(previous["commit_sha"] == CURRENT_TERM_DEV_BASE, "CURRENT_TERM_ROLLBACK_SOURCE")
+        rollback[name] = previous
+    legacy_monthly_need(len(rollback) == 2, "CURRENT_TERM_ROLLBACK_COUNT")
+    return sha256(json.dumps(rollback, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def current_term_dev_dispatch(args):
+    legacy_monthly_need(int(args.source_only) + int(args.live_preflight) + int(args.branch_preflight) == 1
+        and not args.branch_preflight, "CURRENT_TERM_ENTRY")
+    candidate = current_term_dev_context(dict(os.environ), run_git("rev-parse", "HEAD"))
+    legacy_monthly_need(isinstance(CURRENT_TERM_PRIVATE_SOURCE_COMMIT, str)
+        and SHA40_RE.fullmatch(CURRENT_TERM_PRIVATE_SOURCE_COMMIT) is not None, "CURRENT_TERM_PRIVATE_BINDING_PENDING")
+    try:
+        result = subprocess.run(["node", "scripts/check_r3_purchase_identity_admission.mjs", "--dev-source", "--current-term"],
+            cwd=ROOT, text=True, encoding="utf-8", capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        fail("CURRENT_TERM_SOURCE_PROCESS")
+    legacy_monthly_need(result.returncode == 0 and len(result.stdout) <= 64000, "CURRENT_TERM_SOURCE_PROCESS")
+    proof = current_term_dev_source_proof(json.loads(result.stdout), candidate)
+    ci = current_term_dev_ci(candidate)
+    legacy_monthly_need(proof["tree"] == ci["tree"] and proof["source"] == ci["source"], "CURRENT_TERM_SOURCE_CI_TREE")
+    if args.live_preflight:
+        legacy_monthly_artifacts(proof, Path("dist/member-dev"), Path("dist/admin-dev"))
+        states = read_live_dev_states(candidate)
+        current_term_dev_live_baseline(states)
+        for role in ("production_member_release", "production_admin_release", "production_pages_release"):
+            release = _http_read(role, candidate)
+            legacy_monthly_need(isinstance(release, dict) and release.get("version") == "1.0.561"
+                and release.get("releaseId") == "2026.10.30.01", "CURRENT_TERM_PROD_BASELINE")
+        verify_monotonic_release(proof["release"], 603, 576, states)
+        rollback = current_term_dev_target(dict(os.environ))
+        print("CURRENT_TERM_DEV_PREFLIGHT_PASS run_id=" + str(ci["runId"]) + " rollback_sha256=" + rollback)
+    else:
+        print("CURRENT_TERM_SOURCE_AND_CI_PASS run_id=" + str(ci["runId"]))
+# CURRENT_TERM_DEV_570_END
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -1002,6 +1168,14 @@ def main() -> int:
     parser.add_argument("--branch-preflight", action="store_true")
     args = parser.parse_args()
     try:
+        # CURRENT_TERM_DEV_570_ENTRY_BEGIN
+        if os.environ.get("GITHUB_REF") == "refs/heads/" + CURRENT_TERM_DEV_BRANCH:
+            try:
+                current_term_dev_dispatch(args)
+            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, KeyError, json.JSONDecodeError):
+                fail("CURRENT_TERM_PREFLIGHT_HOLD")
+            return 0
+        # CURRENT_TERM_DEV_570_ENTRY_END
         # ROW_SCOPE_DEV_569_ENTRY_BEGIN
         if os.environ.get("GITHUB_REF") == "refs/heads/" + ROW_SCOPE_DEV_BRANCH:
             row_scope_dispatch(args)
