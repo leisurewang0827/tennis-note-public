@@ -1053,8 +1053,199 @@ function summaryMain(args) {
 }
 // SUMMARY_LAYOUT_SUCCESSOR_END
 
+// CURRENT_TERM_PUBLIC_BEGIN
+export const CURRENT_TERM_PUBLIC_BASE = "436d11ac11fb31ff0d02a8f9de9233a71f0fe00f";
+export const CURRENT_TERM_PUBLIC_TREE = "d01f2d0903ed43ba8b1f9ac87820314f9515c4e2";
+export const CURRENT_TERM_PUBLIC_PARENT = "codex/tennisnote-r3-substitute-row-scope-dev569-20261030";
+export const CURRENT_TERM_PUBLIC_HEAD = "codex/tennisnote-r3-current-term-dev570-20261031";
+export const CURRENT_TERM_PUBLIC_TEST = "tests/r3-current-term-focused.test.js";
+export const CURRENT_TERM_PUBLIC_PRIVATE_LF = "69dd4cb4c6db3038b32455f4a1375cacda448a33960077cd43f96ef0667fe2ca";
+export const CURRENT_TERM_PUBLIC_PRIVATE_COMMIT = "5f6684792b83ca2a3f381517aab22e6be1e2c08a";
+export const CURRENT_TERM_PUBLIC_PRIVATE_TREE = "e7f4b8c5bb57fb1d860c46f34f3354c2c3b02d2c";
+export const CURRENT_TERM_PUBLIC_PINS = Object.freeze({
+  "app/admin/actions/coach.js": "97742728727914f9aa774c334d03507d63856cdea0ba6448f769adb23ba0c201",
+  "app/admin/domain/coaches.js": "67e5be0a0402027c330f0cb82f123c9d92aba7eabbc2bac99f35132d7929d354",
+  "app/admin/domain/members.js": "72779b96699f3f8281a7100c5986422d47b41877dee45760f6409b23a0535117",
+  "tests/r3-current-term-focused.test.js": "da92f36eb4f722149104c3a8f5570c5e99845fc0ed285dfe77441e0940c7b2e0",
+  "app/admin/index.html": "2cda791fa632a02f33215a0b07fae7b6e861fc51efd170a67f3f92926a72fb20",
+  "app/release.json": "5761ba84a181ede9781dc4832542fbb272ef2670da5e2c4433c026ae4b28761e",
+  "app/shared/tennisnote-release.js": "751eb751db87caa772a59afa205b3565d6c5f346a0f0f3115f821383b91f6769",
+  "app/tennis-note-coach-app/app.js": "44e15e09fd1c4dd06d4b8dc3fff7ce151140ec16bc6b14018d50697c260afe96",
+  "app/tennis-note-coach-app/domain/coaches.js": "1fa735b3c4603180d70bb4a616a081ea6ef144a9dcbb528f1d4cc6a686bb3666",
+  "app/tennis-note-coach-app/forms/common.js": "34446515f908686b3873f2c91820b85b689f71ee35ad8c773c3399d4a24585ba",
+  "app/tennis-note-coach-app/index.html": "4eba480068e639937969032b72c827f0a2bcea95d1d15d6e2e4033080f5963b4",
+  "app/tennis-note-coach-app/service-worker.js": "9abb2273f4ca8006a7825bf6efcdca401d257688d7cbfab4509f3a7c567c9cc7",
+  "app/tennis-note-member-app/app.js": "eb6d07275743af0e9b1edb66ef5c67d68b7188b9ceb293bcf70ae5a2c2469ad7",
+  "app/tennis-note-member-app/forms/common.js": "9ae595ab4d3e01b23bee0b5085afddc730425ba451a27174eb636c44ac040f27",
+  "app/tennis-note-member-app/index.html": "13a79bc90c8eae6b1adcba93db3b653ddb4c67fdf9216c6dd05feeb00f9d4165",
+  "app/tennis-note-member-app/service-worker.js": "acbadfce5a67c23e77a6b3f7940c9bd63ef32d5475dc73bbcd2c00120737ec60",
+  "app/tennis-note-member-app/ui/screens.js": "e98e61780d6ac19c68424dfe67a78f752b625b8b86bd232a72cf93a5b5d8ce6b",
+  "scripts/check_r3_dev_deployment.py": "82c5844e711d6d05119ceab031cd2545a019270763c68359af1213064254597c",
+  ".github/workflows/tennisnote-public-ci.yml": "ef74017550fb4c8f18142424792d81e3f953740bf9880366732b32a65d9ebccd"
+});
+export const CURRENT_TERM_PUBLIC_SEAL = "d0eedf3d166cde989dc935ff5955ec4d4cf45b2a495adf71f194a2c4493293a3";
+export const CURRENT_TERM_PUBLIC_BLOBS = Object.freeze([
+  ["583d8d0ca9f1143b01254b7ba368517b2dadfa1b",90460],
+  ["69b0b0fe7bbda4ebadd052d4ed91a5b42afee292",8245]
+]);
+export const currentTermPublicClaimed = (args,env) => args.includes("--current-term") ||
+  args.includes("--current-term-blob-transport") ||
+  env.GITHUB_EVENT_NAME === "pull_request" && (env.GITHUB_BASE_REF === CURRENT_TERM_PUBLIC_PARENT || env.GITHUB_HEAD_REF === CURRENT_TERM_PUBLIC_HEAD) ||
+  env.GITHUB_EVENT_NAME === "workflow_dispatch" && env.GITHUB_REF === "refs/heads/"+CURRENT_TERM_PUBLIC_HEAD;
+const ctNeed = (v,code)=>need(v,"CURRENT_TERM_"+code);
+const ctSha = s=>typeof s==="string" && /^[a-f0-9]{40}$/.test(s) && !/^0+$/.test(s);
+export function currentTermPublicBlob(payload,oid,size) {
+  ctNeed(payload && payload.sha===oid && payload.encoding==="base64" && payload.size===size &&
+    typeof payload.content==="string" && payload.content.length<=200000,"BLOB");
+  const encoded=payload.content.replace(/[\r\n]/g,"");
+  ctNeed(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded),"BLOB");
+  const bytes=Buffer.from(encoded,"base64");
+  ctNeed(bytes.length===size && bytes.toString("base64")===encoded &&
+    createHash("sha1").update(Buffer.from("blob "+size+"\0")).update(bytes).digest("hex")===oid,"BLOB");
+  return bytes;
+}
+export async function currentTermPublicTransport(get,write) {
+  ctNeed(typeof get==="function" && typeof write==="function","BLOB");
+  const checked=[];
+  for(const [oid,size] of CURRENT_TERM_PUBLIC_BLOBS) checked.push([oid,currentTermPublicBlob(await get(oid),oid,size)]);
+  for(const [oid,bytes] of checked) ctNeed(await write(bytes)===oid,"BLOB");
+  return {status:"EXACT_TWO_BASE_BLOBS_PREPARED",count:2};
+}
+async function currentTermPublicHttp(oid) {
+  const response=await fetch("https://api.github.com/repos/leisurewang0827/tennis-note-public/git/blobs/"+oid,
+    {headers:{Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"},redirect:"error",signal:AbortSignal.timeout(15000)});
+  ctNeed(response.status===200 && response.body,"BLOB_HTTP");
+  const reader=response.body.getReader(),chunks=[];let length=0;
+  for(;;){const item=await reader.read();if(item.done)break;length+=item.value.length;ctNeed(length<=200000,"BLOB_HTTP");chunks.push(Buffer.from(item.value));}
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+async function currentTermPublicPrepare(args,env) {
+  ctNeed(same(args,["--current-term-blob-transport"]) && env.GITHUB_EVENT_NAME==="pull_request" &&
+    env.GITHUB_REPOSITORY===REPOSITORY && env.GITHUB_BASE_REF===CURRENT_TERM_PUBLIC_PARENT &&
+    env.GITHUB_HEAD_REF===CURRENT_TERM_PUBLIC_HEAD && env.GITHUB_WORKFLOW==="Tennis Note Public PWA CI" && env.GITHUB_RUN_ATTEMPT==="1","BLOB_CONTEXT");
+  const event=JSON.parse(readFileSync(env.GITHUB_EVENT_PATH,"utf8")),pr=event.pull_request;
+  ctNeed(event.repository?.full_name===REPOSITORY && pr?.base?.repo?.full_name===REPOSITORY &&
+    pr?.head?.repo?.full_name===REPOSITORY && pr?.base?.sha===CURRENT_TERM_PUBLIC_BASE &&
+    pr?.base?.ref===CURRENT_TERM_PUBLIC_PARENT && pr?.head?.ref===CURRENT_TERM_PUBLIC_HEAD &&
+    ctSha(pr?.head?.sha) && Number.isSafeInteger(event.number) && event.number>0 && event.number===pr?.number &&
+    env.GITHUB_REF==="refs/pull/"+event.number+"/merge" && env.GITHUB_WORKFLOW_SHA===env.GITHUB_SHA &&
+    env.GITHUB_WORKFLOW_REF===REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@"+env.GITHUB_REF,"BLOB_CONTEXT");
+  const git=(...args)=>execFileSync("git",args,{cwd:ROOT,encoding:"utf8",
+    env:{...env,GIT_NO_LAZY_FETCH:"1"},timeout:15000,maxBuffer:1000000,stdio:["ignore","pipe","pipe"]}).trim();
+  const parents=git("show","-s","--format=%P",pr.head.sha).split(" "),source=parents[0];
+  ctNeed(git("rev-parse","HEAD")===env.GITHUB_SHA && ctSha(env.GITHUB_SHA) && parents.length===1 && ctSha(source) &&
+    same(git("show","-s","--format=%P",source).split(" "),[CURRENT_TERM_PUBLIC_BASE]) &&
+    same(git("show","-s","--format=%P",env.GITHUB_SHA).split(" "),[CURRENT_TERM_PUBLIC_BASE,pr.head.sha]) &&
+    git("rev-parse",pr.head.sha+"^{tree}")===git("rev-parse",env.GITHUB_SHA+"^{tree}") &&
+    git("status","--porcelain","--untracked-files=all")==="" && git("diff","--cached","--name-only")==="","BLOB_CONTEXT");
+  const result=await currentTermPublicTransport(currentTermPublicHttp,
+    bytes=>execFileSync("git",["hash-object","-w","--stdin"],{cwd:ROOT,input:bytes,encoding:"utf8",
+      env:{...env,GIT_NO_LAZY_FETCH:"1"},timeout:15000,maxBuffer:1000,stdio:["pipe","pipe","pipe"]}).trim());
+  console.log(JSON.stringify(result));
+}
+export function currentTermPublicBoundary(s) {
+  const ci=s?.event==="pull_request", dev=s?.event==="workflow_dispatch";
+  ctNeed(s && (ci||dev) && s.repo===REPOSITORY && s.eventRepo===REPOSITORY
+    && s.base===CURRENT_TERM_PUBLIC_BASE && s.baseTree===CURRENT_TERM_PUBLIC_TREE && s.branch===CURRENT_TERM_PUBLIC_HEAD,"IDENTITY");
+  ctNeed(s.attempt==="1" && s.clean && s.indexClean && !s.symlinks && s.checkoutBranch==="","CLEAN");
+  ctNeed(ctSha(s.head) && ctSha(s.source) && ctSha(s.checkout) && ctSha(s.tree) && s.tree===s.checkoutTree &&
+    same(s.parents,[s.source]) && same(s.sourceParents,[CURRENT_TERM_PUBLIC_BASE]),"GRAPH");
+  if(ci) ctNeed(s.baseRepo===REPOSITORY && s.headRepo===REPOSITORY && s.target===CURRENT_TERM_PUBLIC_PARENT &&
+    same(s.mergeParents,[CURRENT_TERM_PUBLIC_BASE,s.head]) && Number.isSafeInteger(s.number) && s.number>0 &&
+    s.ref==="refs/pull/"+s.number+"/merge" && s.workflow==="Tennis Note Public PWA CI" &&
+    s.workflowSha===s.checkout && s.workflowRef===REPOSITORY+"/.github/workflows/tennisnote-public-ci.yml@"+s.ref && s.githubSha===s.checkout,"WORKFLOW");
+  else ctNeed(s.head===s.checkout && s.ref==="refs/heads/"+CURRENT_TERM_PUBLIC_HEAD && s.workflow==="Deploy Tennis Note development sites" &&
+    s.workflowSha===s.head && s.workflowRef===REPOSITORY+"/.github/workflows/deploy-cloudflare-pages-dev.yml@"+s.ref && s.githubSha===s.head,"WORKFLOW");
+  const allowed=[SELF,...Object.keys(CURRENT_TERM_PUBLIC_PINS)], found=new Set();
+  ctNeed(Array.isArray(s.rows) && s.rows.length===allowed.length,"PATHS");
+  for(const [status,path] of s.rows) {
+    ctNeed(allowed.includes(path) && !found.has(path) && status===(path===CURRENT_TERM_PUBLIC_TEST?"A":"M") && s.modes[path]==="100644","PATHS"); found.add(path);
+  }
+  const sourcePaths=allowed.filter(path=>!METADATA.includes(path));
+  ctNeed(Array.isArray(s.sourceRows) && s.sourceRows.length===sourcePaths.length
+    && Array.isArray(s.metadataRows) && s.metadataRows.length===METADATA.length,"LAYERS");
+  const checkRows=(rows,paths)=>ctNeed(rows.every(([status,path])=>paths.includes(path) &&
+    status===(path===CURRENT_TERM_PUBLIC_TEST?"A":"M")) && new Set(rows.map(x=>x[1])).size===paths.length,"LAYERS");
+  checkRows(s.sourceRows,sourcePaths); checkRows(s.metadataRows,METADATA);
+  return {status:"BOUNDARY_ONLY_NOT_ADMITTED"};
+}
+export function currentTermPublicValidate(s) {
+  currentTermPublicBoundary(s);
+  for(const [path,pin] of Object.entries(CURRENT_TERM_PUBLIC_PINS))
+    ctNeed(typeof s.bodies[path]==="string" && hash(lf(s.bodies[path]))===pin,"PIN");
+  const body=lf(s.bodies[SELF]), begin="// CURRENT_TERM_PUBLIC_BEGIN\n",end="// CURRENT_TERM_PUBLIC_END\n\n",a=body.indexOf(begin),b=body.indexOf(end,a);
+  ctNeed(a>=0 && b>a && body.indexOf(begin,a+1)<0 && body.indexOf(end,b+1)<0,"SEAL");
+  const block=body.slice(a,b+end.length), norm=block.replace(/^export const CURRENT_TERM_PUBLIC_SEAL = "(?:PENDING|[a-f0-9]{64})";$/m,'export const CURRENT_TERM_PUBLIC_SEAL = "PENDING";');
+  ctNeed(/^[a-f0-9]{64}$/.test(CURRENT_TERM_PUBLIC_SEAL) && hash(norm)===CURRENT_TERM_PUBLIC_SEAL,"SEAL");
+  const open='    if (currentTermPublicClaimed(process.argv.slice(2), process.env)) { if (process.argv[2]==="--current-term-blob-transport") await currentTermPublicPrepare(process.argv.slice(2),process.env); else currentTermPublicMain(process.argv.slice(2)); } else {\n', close='    } // CURRENT_TERM_PUBLIC_ENTRY_END\n';
+  const inverse=body.slice(0,a)+body.slice(b+end.length);
+  ctNeed(inverse.split(open).length===2 && inverse.split(close).length===2 && inverse.replace(open,"").replace(close,"")===lf(s.oldSelf),"INVERSE");
+  let wf=lf(s.bodies[".github/workflows/tennisnote-public-ci.yml"]);
+  const start="    steps:\n      - uses: actions/checkout@v7\n", first=wf.indexOf(start), receipt=wf.indexOf("      - name: Verify current-term admission receipt\n",first);
+  const next=wf.indexOf("      - uses: actions/checkout@v7\n",receipt);
+  ctNeed(first>=0 && receipt>first && next>receipt,"WORKFLOW_INVERSE");
+  wf=wf.slice(0,first)+"    steps:\n"+wf.slice(next);
+  const wrap=/^        if: steps\.current_term\.outputs\.scoped != 'true' && \((.*)\)$/gm;
+  ctNeed([...wf.matchAll(wrap)].length===10,"WORKFLOW_INVERSE");
+  wf=wf.replace(wrap,(_,c)=>"        if: "+c)
+    .replace(/^        if: (\!\(startsWith\(github\.head_ref[^\n]+)$/m,(_,c)=>"        if: ${{ "+c+" }}")
+    .replace("      - uses: actions/setup-python@v7\n        if: steps.current_term.outputs.scoped != 'true'\n", "      - uses: actions/setup-python@v7\n")
+    .replace("      - uses: actions/setup-node@v7\n        if: steps.current_term.outputs.scoped != 'true'\n", "      - uses: actions/setup-node@v7\n")
+    .replace("        id: display\n        if: steps.current_term.outputs.scoped != 'true'\n", "        id: display\n");
+  ctNeed(typeof s.oldWorkflow==="string" && wf===lf(s.oldWorkflow),"WORKFLOW_INVERSE");
+  const release=JSON.parse(s.bodies["app/release.json"]);
+  ctNeed(release.version==="1.0.570" && release.appSurfaceVersion==="1.0.570" && release.releaseId==="2026.10.31.01","RELEASE");
+  return {status:"SOURCE_ONLY_NOT_ADMITTED",privateSourceCommit:CURRENT_TERM_PUBLIC_PRIVATE_COMMIT,privateSourceTree:CURRENT_TERM_PUBLIC_PRIVATE_TREE,privateSourceLfSha256:CURRENT_TERM_PUBLIC_PRIVATE_LF};
+}
+export function currentTermPublicReceipt(out,count) {
+  ctNeed(typeof out==="string" && out.trim()==="focused current-term "+count+"/"+count+" PASS","RECEIPT");
+}
+export function currentTermPublicFocused(run) {
+  ctNeed(typeof run==="function","CHILD");
+  for(const [flags,count] of [[[],13],[["--consumer-only"],20]]) currentTermPublicReceipt(run(flags),count);
+}
+function currentTermPublicMain(args) {
+  const ci=same(args,["--ci-route","--current-term"]),dev=same(args,["--dev-source","--current-term"]);
+  ctNeed(ci||dev,"ARGS");
+  const env=process.env,event=JSON.parse(readFileSync(env.GITHUB_EVENT_PATH,"utf8")),pr=event.pull_request;
+  const raw=(...args)=>execFileSync("git",args,{cwd:ROOT,encoding:"utf8",env:{...env,GIT_NO_LAZY_FETCH:"1"},timeout:15000,maxBuffer:8*1024*1024});
+  const g=(...args)=>raw(...args).trimEnd(),head=ci?pr?.head?.sha:env.GITHUB_SHA,checkout=g("rev-parse","HEAD"),
+    parents=g("show","-s","--format=%P",head).split(" ").filter(Boolean),source=parents[0];
+  const s={event:env.GITHUB_EVENT_NAME,repo:env.GITHUB_REPOSITORY,eventRepo:event.repository?.full_name,baseRepo:pr?.base?.repo?.full_name,
+    headRepo:pr?.head?.repo?.full_name,base:ci?pr?.base?.sha:CURRENT_TERM_PUBLIC_BASE,baseTree:g("rev-parse",CURRENT_TERM_PUBLIC_BASE+"^{tree}"),target:pr?.base?.ref,branch:ci?pr?.head?.ref:CURRENT_TERM_PUBLIC_HEAD,
+    head,source,checkout,tree:g("rev-parse",head+"^{tree}"),checkoutTree:g("rev-parse",checkout+"^{tree}"),
+    parents,sourceParents:g("show","-s","--format=%P",source).split(" ").filter(Boolean),mergeParents:g("show","-s","--format=%P",checkout).split(" ").filter(Boolean),
+    clean:g("status","--porcelain","--untracked-files=all")==="",indexClean:g("diff","--cached","--name-only")==="",symlinks:false,checkoutBranch:g("branch","--show-current"),
+    attempt:env.GITHUB_RUN_ATTEMPT,number:event.number===pr?.number?event.number:null,ref:env.GITHUB_REF,workflow:env.GITHUB_WORKFLOW,workflowSha:env.GITHUB_WORKFLOW_SHA,
+    workflowRef:env.GITHUB_WORKFLOW_REF,githubSha:env.GITHUB_SHA,rows:g("diff","--no-renames","--name-status",CURRENT_TERM_PUBLIC_BASE,head).split("\n").filter(Boolean).map(x=>x.split("\t")),
+    sourceRows:g("diff","--no-renames","--name-status",CURRENT_TERM_PUBLIC_BASE,source).split("\n").filter(Boolean).map(x=>x.split("\t")),
+    metadataRows:g("diff","--no-renames","--name-status",source,head).split("\n").filter(Boolean).map(x=>x.split("\t")),modes:{},bodies:{}};
+  if(ci) ctNeed(env.GITHUB_HEAD_REF===CURRENT_TERM_PUBLIC_HEAD && env.GITHUB_BASE_REF===CURRENT_TERM_PUBLIC_PARENT,"IDENTITY");
+  for(const path of [SELF,...Object.keys(CURRENT_TERM_PUBLIC_PINS)]) {
+    s.modes[path]=g("ls-tree","--format=%(objectmode)",head,"--",path);
+    let item=ROOT; ctNeed(!lstatSync(item).isSymbolicLink(),"SYMLINK");
+    for(const part of path.split("/")) {item=resolve(item,part);ctNeed(!lstatSync(item).isSymbolicLink(),"SYMLINK");}
+    ctNeed(lstatSync(item).isFile(),"FILE");
+    s.bodies[path]=lf(readFileSync(item,"utf8")); ctNeed(s.bodies[path]===lf(raw("show",head+":"+path)),"BODY");
+  }
+  s.oldSelf=raw("show",CURRENT_TERM_PUBLIC_BASE+":"+SELF);
+  s.oldWorkflow=raw("show",CURRENT_TERM_PUBLIC_BASE+":.github/workflows/tennisnote-public-ci.yml");
+  currentTermPublicValidate(s);
+  if(ci) currentTermPublicFocused(flags=>execFileSync(process.execPath,[CURRENT_TERM_PUBLIC_TEST,...flags],{cwd:ROOT,encoding:"utf8",env:{...env,GIT_NO_LAZY_FETCH:"1"},timeout:30000,maxBuffer:1000000,stdio:["ignore","pipe","pipe"]}));
+  ctNeed(g("status","--porcelain","--untracked-files=all")==="" && g("rev-parse","HEAD")===checkout,"POST");
+  if(ci) appendFileSync(env.GITHUB_OUTPUT,"scoped=true\ncurrent_term_pass=true\n");
+  const release=JSON.parse(s.bodies["app/release.json"]);
+  console.log(JSON.stringify({contract:"r3-current-term-public/1",status:"SOURCE_PROVEN",base:CURRENT_TERM_PUBLIC_BASE,branch:CURRENT_TERM_PUBLIC_HEAD,
+    head:s.head,checkout:s.checkout,tree:s.tree,source:s.source,sourceFiles:s.sourceRows.length,metadataFiles:s.metadataRows.length,layers:2,
+    release:{...release,memberCache:"tennis-note-member-pwa-v603",coachCache:"tennis-note-coach-mode-v576"},
+    privateSourceCommit:CURRENT_TERM_PUBLIC_PRIVATE_COMMIT,privateSourceTree:CURRENT_TERM_PUBLIC_PRIVATE_TREE,
+    privateSourceLfSha256:CURRENT_TERM_PUBLIC_PRIVATE_LF,databaseActions:0,deploymentAdmitted:false,...(ci?{counts:[13,20]}:{})}));
+}
+// CURRENT_TERM_PUBLIC_END
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    if (currentTermPublicClaimed(process.argv.slice(2), process.env)) { if (process.argv[2]==="--current-term-blob-transport") await currentTermPublicPrepare(process.argv.slice(2),process.env); else currentTermPublicMain(process.argv.slice(2)); } else {
     if (rowScopeRequested(process.argv.slice(2), process.env)) { rowScopeMain(process.argv.slice(2)); } else {
     if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {
     if(process.argv[3]==='--legacy-monthly' || (process.argv[2]==='--ci-route' && process.env.GITHUB_EVENT_PATH && legacyMonthlyClaimed(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'))))){legacyMonthlyMain(process.argv[2]);}
@@ -1070,5 +1261,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     } // SUMMARY_ENTRY_END
     } // ROW_SCOPE_B2B_ENTRY_END
+    } // CURRENT_TERM_PUBLIC_ENTRY_END
   } catch { console.error("R3_PURCHASE_IDENTITY_HOLD"); process.exitCode = 2; }
 }
