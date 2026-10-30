@@ -560,8 +560,160 @@ function prodLegacyMain(mode) {
 }
 // PROD_LEGACY_SUCCESSOR_END
 
+// SUMMARY_LAYOUT_SUCCESSOR_BEGIN
+// 승인된 표시 hunk와 공식 버전층만 받습니다. 과거 source/검사 봉인은 그대로 보존합니다.
+export const SUMMARY_PROFILES = {
+  production: { base: "345d42765c6e786446e6cbb7eb1a03568665b15f", tree: "e4946727ac0ab3dc02524894914781416db260e7", branch: "codex/tennisnote-coach-settlement-summary-prod561-20261030", target: "main", previous: "1.0.560", version: "1.0.561", member: 594, coach: 567 },
+  development: { base: "a5503e5855d0b30e34e4992976e6303342c40f9b", tree: "39b6b126b7095ca4fde7c7d20851396d3a6832df", branch: "codex/tennisnote-coach-settlement-summary-dev568-20261030", target: "codex/tennisnote-r3-legacy-monthly-public-20261029", previous: "1.0.567", version: "1.0.568", member: 601, coach: 574 },
+};
+export const SUMMARY_UI = ["app/tennis-note-coach-app/views/settlement.js", "app/tennis-note-coach-app/styles.css"];
+export const SUMMARY_SEAL = "b1b9857559d64405fb811bb5e36b2191dff994ab38b01a2c775f09ce432a7175";
+export const SUMMARY_TEST_SUFFIX_HASH = "a075709641810478988b8c22b883a250784bfa57aa7ac6d5225cb331bf07d649";
+const summaryNeed = (ok, code) => { if (!ok) throw Error("SUMMARY_" + code); };
+const summarySha = s => /^[a-f0-9]{40}$/.test(s || "") && !/^0+$/.test(s);
+const SUMMARY_ENTRY = '    if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {\n';
+export const summaryPaths = profile => [...SUMMARY_UI, SELF, TEST, ...(profile === "development" ? ["scripts/check_r3_dev_deployment.py"] : [])];
+export function summaryOriginal(source) {
+  source = lf(source);
+  const begin = "// SUMMARY_LAYOUT_SUCCESSOR_BEGIN\n", end = "// SUMMARY_LAYOUT_SUCCESSOR_END\n\n";
+  const a = source.indexOf(begin), b = source.indexOf(end);
+  summaryNeed(a >= 0 && b > a && source.split(begin).length === 2 && source.split(end).length === 2, "MARKERS");
+  source = source.slice(0, a) + source.slice(b + end.length);
+  return once(once(source, SUMMARY_ENTRY, ""), '    } // SUMMARY_ENTRY_END\n', "");
+}
+export function summarySeal(source) {
+  source = lf(source);
+  const begin = source.indexOf("// SUMMARY_LAYOUT_SUCCESSOR_BEGIN\n"), end = source.indexOf("// SUMMARY_LAYOUT_SUCCESSOR_END\n\n");
+  summaryNeed(begin >= 0 && end > begin, "SEAL_MARKERS");
+  return hash(lf(source.slice(begin, end)).replace(/^export const SUMMARY_SEAL = "(?:PENDING|[a-f0-9]{64})";$/m, 'export const SUMMARY_SEAL = "PENDING";'));
+}
+export function summaryExpectedUi(p, source) {
+  if (p === SUMMARY_UI[0]) {
+    source = once(source, '  const status = $("#coachSettlementStatus");',
+      '  const countValue = monthlyOnly ? "횟수 미사용" : `${Number(settlement.settledSessions) || 0}회`;\n'
+      + '  const countDetail = monthlyOnly ? "월 결제 기준"\n'
+      + '    : settlement.sourceEvidenceLabel ? "정산 반영 · 과거 기록은 월 결제 기준"\n'
+      + '      : rows.some(monthlyRow) ? "정산 반영 · 완료·이관 수업 기준" : "완료·이관 수업 기준";\n'
+      + '  const status = $("#coachSettlementStatus");');
+    return once(source, '  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = unavailable ? "확인 필요" : countLabel;',
+      '  const settledCount = $("#coachSettledSessions");\n'
+      + '  if (settledCount) {\n'
+      + '    settledCount.textContent = unavailable ? "확인 필요" : countValue;\n'
+      + '    const countDescription = settledCount.parentElement?.querySelector("small");\n'
+      + '    if (countDescription) countDescription.textContent = unavailable ? "완료·이관 수업 기준" : countDetail;\n'
+      + '  }');
+  }
+  summaryNeed(p === SUMMARY_UI[1], "UI_PATH");
+  return once(source, '  .coach-settlement-summary article {\n    grid-template-columns: minmax(0, 1fr) auto;\n    align-items: center;\n  }\n',
+    '  .coach-settlement-summary article {\n    grid-template-columns: minmax(7em, 1fr) minmax(0, auto);\n    align-items: center;\n  }\n\n  .coach-settlement-summary article > span {\n    word-break: keep-all;\n  }\n');
+}
+export function summaryBoundary(s) {
+  const p = SUMMARY_PROFILES[s.profile]; summaryNeed(Boolean(p), "PROFILE");
+  const sourcePaths = summaryPaths(s.profile), local = s.event === "local";
+  summaryNeed(s.base === p.base && s.baseTree === p.tree && s.branch === p.branch, "BASE_BRANCH");
+  summaryNeed(s.repo === REPOSITORY && s.attempt === "1", "IDENTITY");
+  const paths = [...sourcePaths, ...(local ? [] : METADATA)].sort();
+  summaryNeed(same(s.rows.map(r => r[1]).sort(), paths) && s.rows.length === paths.length, "PATHS");
+  for (const r of s.rows) summaryNeed(r.length === 2 && r[0] === "M" && s.modes[r[1]] === "100644", "MODE");
+  if (local) {
+    summaryNeed(same(s.args, ["--local", "--summary-layout"]) && s.checkout === p.base && s.indexEmpty && !s.clean, "LOCAL");
+    return;
+  }
+  summaryNeed(s.clean && summarySha(s.head) && summarySha(s.sha) && s.checkout === s.sha && summarySha(s.tree) && s.tree === s.checkoutTree, "CLEAN_CHECKOUT");
+  const deploy = s.mode === "--production-source" || s.mode === "--dev-source";
+  summaryNeed((s.profile === "production" ? ["--ci-route", "--production-source"] : ["--ci-route", "--dev-source"]).includes(s.mode), "MODE");
+  const allowed = s.profile === "production" ? PRODUCTION_WORKFLOWS : { "Tennis Note Public PWA CI": WORKFLOWS[0], "Deploy Tennis Note development sites": WORKFLOWS[1] };
+  summaryNeed(Object.hasOwn(allowed, s.workflow) && s.workflowSha === s.sha && s.workflowRef === REPOSITORY + "/" + allowed[s.workflow] + "@" + s.ref && s.refType === "branch", "WORKFLOW");
+  summaryNeed(same(s.args, s.profile === "production" ? [s.mode, "--production"] : [s.mode, s.mode === "--dev-source" ? "--summary-layout" : "--checkout-mode"]), "ARGS");
+  if (s.event === "pull_request") {
+    summaryNeed(!deploy && s.mode === "--ci-route" && s.workflow === "Tennis Note Public PWA CI" && s.target === p.target && s.baseRepo === REPOSITORY && s.headRepo === REPOSITORY && s.number === s.prNumber && Number.isSafeInteger(s.number) && s.number > 0 && s.ref === "refs/pull/" + s.number + "/merge" && same(s.mergeParents, [p.base, s.head]), "PR");
+  } else if (s.profile === "production") {
+    summaryNeed(s.event === "push" && s.before === p.base && s.ref === "refs/heads/main" && s.head === s.sha && same(s.parents, [p.base]) && (deploy ? s.workflow !== "Tennis Note Public PWA CI" : s.workflow === "Tennis Note Public PWA CI"), "MAIN");
+  } else summaryNeed(s.event === "workflow_dispatch" && s.mode === "--dev-source" && s.workflow === "Deploy Tennis Note development sites" && s.ref === "refs/heads/" + p.branch && s.input === s.head && s.head === s.sha, "DEV_DISPATCH");
+  if (!(s.profile === "production" && s.event === "push")) {
+    summaryNeed(s.parents.length === 1 && summarySha(s.parents[0]) && s.parents[0] !== p.base && same(s.sourceParents, [p.base]), "TWO_LAYERS");
+    summaryNeed(same(s.sourceRows.map(r => r[1]).sort(), [...sourcePaths].sort()) && s.sourceRows.every(r => r.length === 2 && r[0] === "M"), "SOURCE_LAYER");
+    summaryNeed(same(s.metadataRows.map(r => r[1]).sort(), [...METADATA].sort()) && s.metadataRows.every(r => r.length === 2 && r[0] === "M"), "METADATA_LAYER");
+  }
+}
+export function summaryValidate(s) {
+  summaryBoundary(s);
+  const p = SUMMARY_PROFILES[s.profile];
+  for (const path of SUMMARY_UI) summaryNeed(s.bodies[path] === summaryExpectedUi(path, s.originals[path]), "UI_BYTES");
+  summaryNeed(summaryOriginal(s.bodies[SELF]) === s.originals[SELF] && summarySeal(s.bodies[SELF]) === SUMMARY_SEAL && /^[a-f0-9]{64}$/.test(SUMMARY_SEAL), "SELECTOR_INVERSE_SEAL");
+  const marker = "\n// SUMMARY_LAYOUT_TEST_BEGIN\n", testBody = s.bodies[TEST];
+  summaryNeed(testBody.split(marker).length === 2 && testBody.slice(0, testBody.indexOf(marker)) === s.originals[TEST] && hash(testBody.slice(testBody.indexOf(marker))) === SUMMARY_TEST_SUFFIX_HASH, "TEST_INVERSE");
+  if (s.profile === "development") summaryNeed(false, "DEV_HELPER_NOT_YET_REVIEWED");
+  if (s.event !== "local") {
+    const release = JSON.parse(s.bodies["app/release.json"]), normalized = { ...release, memberCache: "tennis-note-member-pwa-v" + p.member, coachCache: "tennis-note-coach-mode-v" + p.coach };
+    summaryNeed(release.version === p.version && release.appSurfaceVersion === p.version && /^2026\.10\.30\.[0-9]{2}$/.test(release.releaseId) && /^2026-10-30T/.test(release.deployedAt) && Number.isFinite(Date.parse(release.deployedAt)), "RELEASE");
+    for (const path of METADATA) summaryNeed(s.bodies[path] === expectedMetadata(path, s.originals[path], normalized, p.previous), "METADATA_BYTES");
+    if (!(s.profile === "production" && s.event === "push")) {
+      for (const path of summaryPaths(s.profile)) summaryNeed(s.sourceBodies[path] === s.bodies[path], "SOURCE_UNCHANGED");
+      for (const path of METADATA) summaryNeed(s.sourceBodies[path] === s.originals[path], "EARLY_METADATA");
+    }
+  }
+  return { contract: "r3-summary-public-source/1", status: s.event === "local" ? "LOCAL_SOURCE_ONLY" : "SOURCE_PROVEN", head: s.event === "local" ? null : s.head, checkout: s.event === "local" ? null : s.checkout, tree: s.event === "local" ? null : s.tree, base: p.base, profile: s.profile, files: s.rows.length, databaseActions: 0, browserRuns: 0, deploymentAdmitted: false };
+}
+export function summaryRequested(args, env) {
+  if (args.includes("--summary-layout")) return true;
+  if (!env.GITHUB_EVENT_PATH) return false;
+  const e = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  return Object.values(SUMMARY_PROFILES).some(p => e.pull_request?.head?.ref === p.branch || env.GITHUB_REF === "refs/heads/" + p.branch || env.GITHUB_EVENT_NAME === "push" && e.before === p.base);
+}
+export function summaryPacket(args) {
+  const local = args[0] === "--local", env = process.env, e = local ? {} : JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  const branch = local ? git("branch", "--show-current") : e.pull_request?.head?.ref || env.GITHUB_REF?.replace("refs/heads/", "");
+  const profile = Object.keys(SUMMARY_PROFILES).find(k => SUMMARY_PROFILES[k].branch === branch) || (e.before === SUMMARY_PROFILES.production.base ? "production" : null);
+  summaryNeed(Boolean(profile), "BRANCH"); const p = SUMMARY_PROFILES[profile];
+  const head = local ? p.base : e.pull_request?.head?.sha || env.GITHUB_SHA;
+  const s = { profile, event: local ? "local" : env.GITHUB_EVENT_NAME, mode: args[0], args, branch: local || e.pull_request ? branch : p.branch, base: local ? p.base : e.pull_request?.base?.sha || (profile === "production" ? e.before : p.base), baseTree: git("rev-parse", p.base + "^{tree}"), head, sha: env.GITHUB_SHA, checkout: git("rev-parse", "HEAD"), repo: local ? REPOSITORY : env.GITHUB_REPOSITORY, attempt: local ? "1" : env.GITHUB_RUN_ATTEMPT, workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF, workflowSha: env.GITHUB_WORKFLOW_SHA, ref: env.GITHUB_REF, refType: env.GITHUB_REF_TYPE, before: e.before, input: e.inputs?.candidate_sha,
+    number: e.number, prNumber: e.pull_request?.number, target: e.pull_request?.base?.ref, baseRepo: e.pull_request?.base?.repo?.full_name, headRepo: e.pull_request?.head?.repo?.full_name, clean: git("status", "--porcelain", "--untracked-files=all") === "", indexEmpty: git("diff", "--cached", "--name-only") === "", modes: {}, bodies: {}, originals: {}, sourceBodies: {} };
+  const delta = (a, b) => git("diff", "--no-renames", "--name-status", ...(b ? [a, b] : [])).split("\n").filter(Boolean).map(r => r.split("\t"));
+  s.rows = local ? [...delta(), ...git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean).map(v => ["A", v])] : delta(p.base, head);
+  if (!local) {
+    summaryNeed(summarySha(head) && summarySha(s.sha), "REF");
+    s.parents = git("show", "-s", "--format=%P", head).split(" ").filter(Boolean);
+    s.mergeParents = git("show", "-s", "--format=%P", s.sha).split(" ").filter(Boolean);
+    s.tree = git("rev-parse", head + "^{tree}"); s.checkoutTree = git("rev-parse", s.checkout + "^{tree}");
+    if (!(profile === "production" && s.event === "push")) {
+      summaryNeed(s.parents.length === 1 && summarySha(s.parents[0]), "PARENT_REF");
+      s.sourceParents = git("show", "-s", "--format=%P", s.parents[0]).split(" ").filter(Boolean);
+      s.sourceRows = delta(p.base, s.parents[0]); s.metadataRows = delta(s.parents[0], head);
+    }
+  }
+  for (const name of [...summaryPaths(profile), ...(local ? [] : METADATA)]) s.modes[name] = git("ls-tree", "--format=%(objectmode)", local ? p.base : head, "--", name);
+  summaryBoundary(s); // 범위 검증 전 candidate body나 실행 모듈은 읽지 않습니다.
+  const blob = (ref, name) => lf(execFileSync("git", ["show", ref + ":" + name], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 8000000 }));
+  for (const name of [...summaryPaths(profile), ...METADATA]) {
+    s.originals[name] = blob(p.base, name);
+    let value = ROOT; summaryNeed(!lstatSync(ROOT).isSymbolicLink(), "ROOT");
+    for (const part of name.split("/")) { value = resolve(value, part); summaryNeed(!lstatSync(value).isSymbolicLink(), "SYMLINK"); }
+    summaryNeed(lstatSync(value).isFile(), "REGULAR"); s.bodies[name] = lf(readFileSync(value, "utf8"));
+    if (!local) {
+      summaryNeed(s.bodies[name] === blob(s.checkout, name), "WORKTREE");
+      if (!(profile === "production" && s.event === "push")) s.sourceBodies[name] = blob(s.parents[0], name);
+    } else if (METADATA.includes(name)) summaryNeed(s.bodies[name] === s.originals[name], "LOCAL_METADATA_UNCHANGED");
+  }
+  return s;
+}
+function summaryMain(args) {
+  const initial = git("status", "--porcelain", "--untracked-files=all");
+  const s = summaryPacket(args), proof = summaryValidate(s);
+  // 새 이름만 실행합니다. 테스트는 pure 함수만 호출하며 이 CLI를 다시 실행하지 않습니다.
+  // 기존 eager DEV fixture 로딩만 비활성화합니다. 과거 테스트/결과 flag는 선택하지 않습니다.
+  const testOutput = execFileSync(process.execPath, ["--test", "--test-reporter=tap", "--test-name-pattern=^SUMMARY-LAYOUT:", TEST], { cwd: ROOT, encoding: "utf8", env: { ...process.env, R3_PRODUCTION_SELECTED: "1" }, stdio: ["ignore", "pipe", "pipe"], timeout: 30000, maxBuffer: 2000000 });
+  const newBoundaryCases = Number(testOutput.match(/^# pass (\d+)$/m)?.[1]);
+  summaryNeed(newBoundaryCases === 5 && /^# fail 0$/m.test(testOutput), "NEW_TEST_RECEIPT");
+  summaryNeed(git("status", "--porcelain", "--untracked-files=all") === initial, "POST_STATE");
+  if (args[0] === "--ci-route") appendFileSync(process.env.GITHUB_OUTPUT, "scoped=true\nsummary_source_only=true\n");
+  console.log(JSON.stringify({ ...proof, newBoundarySuiteExecuted: true, newBoundaryCases, previousBrowser112Reused: true }));
+}
+// SUMMARY_LAYOUT_SUCCESSOR_END
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {
     if (prodLegacyRequested(process.argv, process.env)) { prodLegacyMain(process.argv[2]); }
     else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
     else {
@@ -573,5 +725,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if(mode==="--ci-route"){need(proof.event==="pull_request","CI_PR_ONLY");appendFileSync(process.env.GITHUB_OUTPUT,checkout?"scoped=true\ncheckout_mode_only=true\n":term?"scoped=true\nterm_history_only=true\n":"scoped=true\npurchase_identity_only=true\n");}
     console.log(JSON.stringify(proof));
     }
+    } // SUMMARY_ENTRY_END
   } catch { console.error("R3_PURCHASE_IDENTITY_HOLD"); process.exitCode = 2; }
 }

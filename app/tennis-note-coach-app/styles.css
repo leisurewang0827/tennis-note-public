@@ -5639,8 +5639,12 @@ body.modal-open {
   }
 
   .coach-settlement-summary article {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(7em, 1fr) minmax(0, auto);
     align-items: center;
+  }
+
+  .coach-settlement-summary article > span {
+    word-break: keep-all;
   }
 
   .coach-settlement-summary article small {
