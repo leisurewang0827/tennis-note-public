@@ -610,6 +610,332 @@ export function summaryExpectedUi(p, source) {
   return once(source, '  .coach-settlement-summary article {\n    grid-template-columns: minmax(0, 1fr) auto;\n    align-items: center;\n  }\n',
     '  .coach-settlement-summary article {\n    grid-template-columns: minmax(7em, 1fr) minmax(0, auto);\n    align-items: center;\n  }\n\n  .coach-settlement-summary article > span {\n    word-break: keep-all;\n  }\n');
 }
+// ROW_SCOPE_PACKET_BEGIN: 이 경계는 소스 수집만 하며 배포 승인이 아닙니다.
+export const ROW_SCOPE_BASE = "d4ee449afcc5f442e5e98cc2792bff87146bffd1";
+export const ROW_SCOPE_BASE_TREE = "bc4ecf04a445e8be89f831c67c306b390ecaf33f";
+export const ROW_SCOPE_BRANCH = "codex/tennisnote-r3-substitute-row-scope-dev569-20261030";
+export const ROW_SCOPE_NEW = Object.freeze([
+  "tests/r3-substitute-policy-row-scope.test.cjs",
+  "tests/fixtures/r3-substitute-policy-private-reviewed.fragment.js",
+]);
+export const ROW_SCOPE_MODIFIED = Object.freeze([
+  "app/admin/data/billing.js", "app/admin/actions/billing.js", "app/admin/views/billing.js",
+  "scripts/verify.sh", "scripts/check_r3_purchase_identity_admission.mjs",
+  "scripts/check_r3_dev_deployment.py", ".github/workflows/tennisnote-public-ci.yml",
+]);
+const rowScopeNeed = (value, code) => { if (!value) throw Error("ROW_SCOPE_" + code); };
+const rowScopeId = (value) => typeof value === "string" && /^[a-f0-9]{40}$/.test(value) && !/^0+$/.test(value);
+const rowScopeSame = (a, b) => Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
+function rowScopeRows(rows, paths, newPaths) {
+  rowScopeNeed(Array.isArray(rows) && rows.length === paths.length, "PATH_COUNT");
+  const byPath = new Map();
+  for (const row of rows) {
+    rowScopeNeed(row && typeof row.path === "string" && !byPath.has(row.path) && paths.includes(row.path), "PATH");
+    const isNew = newPaths.includes(row.path);
+    rowScopeNeed(row.status === (isNew ? "A" : "M"), "STATUS");
+    rowScopeNeed(row.baseMode === (isNew ? "" : row.path === "scripts/verify.sh" ? "100755" : "100644"), "BASE_MODE");
+    const mode = row.path === "scripts/verify.sh" ? "100755" : "100644";
+    rowScopeNeed(row.sourceMode === mode && row.headMode === mode, "MODE");
+    byPath.set(row.path, row);
+  }
+  rowScopeNeed(paths.every((path) => byPath.has(path)), "MISSING_PATH");
+}
+export function rowScopeCiContext(p) {
+  const baseBranch = "codex/tennisnote-coach-settlement-summary-dev568-20261030";
+  rowScopeNeed(p && p.event === "pull_request" && p.repo === REPOSITORY && p.eventRepo === REPOSITORY && p.headRepo === REPOSITORY && p.baseRepo === REPOSITORY, "CI_REPOSITORY");
+  rowScopeNeed(p.baseRef === baseBranch && p.baseSha === ROW_SCOPE_BASE && p.headRef === ROW_SCOPE_BRANCH, "CI_BRANCH");
+  rowScopeNeed(rowScopeId(p.featureHead) && rowScopeId(p.mergeHead) && p.featureHead !== p.mergeHead, "CI_SHA");
+  rowScopeNeed(Number.isSafeInteger(p.number) && p.number > 0 && p.eventNumber === p.number, "CI_NUMBER");
+  const ref = "refs/pull/" + p.number + "/merge";
+  rowScopeNeed(p.ref === ref && p.refType === "branch" && p.attempt === "1" && p.checkoutBranch === "", "CI_REF");
+  rowScopeNeed(p.workflow === "Tennis Note Public PWA CI" && p.workflowRef === REPOSITORY + "/.github/workflows/tennisnote-public-ci.yml@" + ref, "CI_WORKFLOW");
+  rowScopeNeed(p.workflowSha === p.mergeHead && p.githubSha === p.mergeHead && p.checkout === p.mergeHead, "CI_CHECKOUT");
+  rowScopeNeed(rowScopeSame(p.mergeParents, [ROW_SCOPE_BASE, p.featureHead]), "CI_MERGE_PARENTS");
+  rowScopeNeed(rowScopeId(p.featureTree) && p.mergeTree === p.featureTree, "CI_MERGE_TREE");
+  return { status: "CI_CONTEXT_ONLY_NOT_ADMITTED", featureHead: p.featureHead, checkout: p.checkout };
+}
+export function rowScopeDevContext(p) {
+  const ref = "refs/heads/" + ROW_SCOPE_BRANCH;
+  rowScopeNeed(p && p.event === "workflow_dispatch" && p.repo === REPOSITORY && p.eventRepo === REPOSITORY, "DEV_REPOSITORY");
+  rowScopeNeed(p.ref === ref && p.refType === "branch" && p.attempt === "1" && p.checkoutBranch === "", "DEV_REF");
+  rowScopeNeed(p.workflow === "Deploy Tennis Note development sites"
+    && p.workflowRef === REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@" + ref, "DEV_WORKFLOW");
+  rowScopeNeed(rowScopeId(p.head) && p.input === p.head && p.githubSha === p.head && p.workflowSha === p.head
+    && p.checkout === p.head, "DEV_HEAD");
+  return { status: "DEV_CONTEXT_ONLY_NOT_ADMITTED", head: p.head, checkout: p.checkout };
+}
+export function rowScopeBoundary(s) {
+  rowScopeNeed(s && s.repo === REPOSITORY && s.branch === ROW_SCOPE_BRANCH, "IDENTITY");
+  rowScopeNeed(s.base === ROW_SCOPE_BASE && s.baseTree === ROW_SCOPE_BASE_TREE, "BASE");
+  rowScopeNeed(s.clean === true && s.indexClean === true && s.symlinks === false, "WORKTREE");
+  rowScopeNeed(rowScopeId(s.head) && rowScopeId(s.source) && s.head !== s.source && s.head !== s.base, "COMMIT");
+  if (s.ci) {
+    const proof = rowScopeCiContext(s.ci);
+    rowScopeNeed(proof.featureHead === s.head && proof.checkout === s.checkout && s.ci.featureTree === s.headTree, "CI_BOUNDARY");
+  } else if (s.dev) {
+    const proof = rowScopeDevContext(s.dev);
+    rowScopeNeed(proof.head === s.head && proof.checkout === s.checkout, "DEV_BOUNDARY");
+  } else rowScopeNeed(s.checkout === s.head, "CHECKOUT");
+  rowScopeNeed(rowScopeSame(s.headParents, [s.source]) && rowScopeSame(s.sourceParents, [s.base]), "TWO_LAYERS");
+  rowScopeNeed(rowScopeId(s.headTree) && rowScopeId(s.sourceTree), "TREE");
+  rowScopeRows(s.sourceRows, [...ROW_SCOPE_MODIFIED, ...ROW_SCOPE_NEW], ROW_SCOPE_NEW);
+  rowScopeRows(s.metadataRows, METADATA, []);
+  const all = [...s.sourceRows, ...s.metadataRows].map((row) => row.path);
+  rowScopeNeed(new Set(all).size === all.length, "OVERLAPPING_LAYERS");
+  return { status: "BOUNDARY_ONLY_NOT_ADMITTED", sourceFiles: s.sourceRows.length, metadataFiles: s.metadataRows.length };
+}
+export function rowScopePacket(root, head) {
+  rowScopeNeed(resolve(root) === ROOT && rowScopeId(head), "ROOT_OR_HEAD");
+  const env = { ...process.env, GIT_NO_LAZY_FETCH: "1" };
+  const call = (...args) => execFileSync("git", args, { cwd: ROOT, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 8 * 1024 * 1024 }).trimEnd();
+  const clean = call("status", "--porcelain", "--untracked-files=all") === "";
+  const indexClean = call("diff", "--cached", "--name-only") === "";
+  rowScopeNeed(clean && indexClean, "DIRTY");
+  const checkout = call("rev-parse", "HEAD"), actualBranch = call("branch", "--show-current");
+  let ci = null, dev = null, branch = actualBranch;
+  if (env.GITHUB_EVENT_NAME === "pull_request") {
+    rowScopeNeed(typeof env.GITHUB_EVENT_PATH === "string" && env.GITHUB_EVENT_PATH.length > 0, "CI_EVENT_PATH");
+    const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8")), pr = event.pull_request || {};
+    const mergeParents = call("show", "-s", "--format=%P", checkout).split(" ").filter(Boolean);
+    ci = { event: env.GITHUB_EVENT_NAME, repo: env.GITHUB_REPOSITORY, eventRepo: event.repository?.full_name, headRepo: pr.head?.repo?.full_name,
+      baseRepo: pr.base?.repo?.full_name, baseRef: pr.base?.ref, baseSha: pr.base?.sha, headRef: pr.head?.ref,
+      featureHead: pr.head?.sha, mergeHead: checkout, githubSha: env.GITHUB_SHA, workflowSha: env.GITHUB_WORKFLOW_SHA,
+      workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF, ref: env.GITHUB_REF, refType: env.GITHUB_REF_TYPE,
+      number: pr.number, eventNumber: event.number, attempt: env.GITHUB_RUN_ATTEMPT, checkout, checkoutBranch: actualBranch,
+      mergeParents, mergeTree: call("rev-parse", checkout + "^{tree}"), featureTree: call("rev-parse", head + "^{tree}") };
+    rowScopeCiContext(ci);
+    rowScopeNeed(ci.featureHead === head && env.GITHUB_HEAD_REF === ci.headRef && env.GITHUB_BASE_REF === ci.baseRef, "CI_EVENT_BINDING");
+    branch = ci.headRef;
+  } else if (env.GITHUB_EVENT_NAME === "workflow_dispatch") {
+    rowScopeNeed(typeof env.GITHUB_EVENT_PATH === "string" && env.GITHUB_EVENT_PATH.length > 0, "DEV_EVENT_PATH");
+    const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+    dev = { event: env.GITHUB_EVENT_NAME, repo: env.GITHUB_REPOSITORY, eventRepo: event.repository?.full_name,
+      ref: env.GITHUB_REF, refType: env.GITHUB_REF_TYPE, attempt: env.GITHUB_RUN_ATTEMPT, checkoutBranch: actualBranch,
+      workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF, workflowSha: env.GITHUB_WORKFLOW_SHA,
+      githubSha: env.GITHUB_SHA, input: event.inputs?.candidate_sha, head, checkout };
+    rowScopeDevContext(dev);
+    branch = ROW_SCOPE_BRANCH;
+  } else rowScopeNeed(checkout === head && actualBranch === ROW_SCOPE_BRANCH, "CHECKOUT");
+  const headParents = call("show", "-s", "--format=%P", head).split(" ").filter(Boolean);
+  rowScopeNeed(headParents.length === 1 && rowScopeId(headParents[0]), "HEAD_PARENT");
+  const source = headParents[0], sourceParents = call("show", "-s", "--format=%P", source).split(" ").filter(Boolean);
+  const delta = (a, b) => call("diff", "--no-renames", "--name-status", a, b).split("\n").filter(Boolean).map((line) => {
+    const parts = line.split("\t"); rowScopeNeed(parts.length === 2, "DELTA_FORMAT");
+    return { status: parts[0], path: parts[1] };
+  });
+  const sourceRows = delta(ROW_SCOPE_BASE, source), metadataRows = delta(source, head);
+  const allowed = [...ROW_SCOPE_MODIFIED, ...ROW_SCOPE_NEW, ...METADATA];
+  rowScopeNeed([...sourceRows, ...metadataRows].every((row) => allowed.includes(row.path)), "OUTSIDE_SCOPE");
+  const mode = (ref, path) => call("ls-tree", "--format=%(objectmode)", ref, "--", path);
+  let symlinks = lstatSync(ROOT).isSymbolicLink();
+  for (const row of [...sourceRows, ...metadataRows]) {
+    row.baseMode = mode(ROW_SCOPE_BASE, row.path); row.sourceMode = mode(source, row.path); row.headMode = mode(head, row.path);
+    let current = ROOT;
+    for (const part of row.path.split("/")) { current = resolve(current, part); symlinks ||= lstatSync(current).isSymbolicLink(); }
+    rowScopeNeed(lstatSync(current).isFile(), "NOT_FILE");
+  }
+  const s = { repo: REPOSITORY, branch, base: ROW_SCOPE_BASE, baseTree: call("rev-parse", ROW_SCOPE_BASE + "^{tree}"),
+    head, source, checkout, headParents, sourceParents, headTree: call("rev-parse", head + "^{tree}"),
+    sourceTree: call("rev-parse", source + "^{tree}"), clean, indexClean, symlinks, sourceRows, metadataRows, ci, dev };
+  rowScopeBoundary(s); // allowlist/mode 검사 전에는 후보 파일 본문을 읽지 않습니다.
+  const read = (ref, path) => execFileSync("git", ["show", ref + ":" + path], { cwd: ROOT, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
+  const bodies = {};
+  for (const row of [...sourceRows, ...metadataRows]) bodies[row.path] = {
+    base: row.baseMode ? read(ROW_SCOPE_BASE, row.path) : null,
+    source: read(source, row.path), head: read(head, row.path),
+  };
+  rowScopeNeed(call("status", "--porcelain", "--untracked-files=all") === "" && call("diff", "--cached", "--name-only") === ""
+    && call("rev-parse", "HEAD") === checkout && call("branch", "--show-current") === actualBranch, "POST_STATE");
+  return { ...s, bodies, status: "ROW_SCOPE_PACKET_COLLECTED_NOT_ADMITTED" };
+}
+// ROW_SCOPE_BODY_B2A_BEGIN
+export const ROW_SCOPE_BODY_SEAL = "211a150baed217f4b707735b8c2869f8f51ea5e26f92177d111f684b48788432";
+export const ROW_SCOPE_TEST_PIN = "390ca9a8d29d4776d02228f614c0ed7484a2595595d598e5b88e6e7d37d1d2b3";
+export const ROW_SCOPE_WORKFLOW_PIN = "2350d4cc5f7fb565894da4be9958e7df8fa1aa1c8938bdeabba0f127c80b79a0";
+export const ROW_SCOPE_CALLBACK_PINS = [
+  [
+    "local event parser retains numeric data-r3 names used by the real renderer",
+    "2d6fdfdb8e24e821596d733d2e8713455c939f2f3a2eb8763ef75e4f6cd457f8"
+  ],
+  [
+    "canonical item without coachRoleId is tagged only from validated envelope, without mutation",
+    "3be886ee4b4e1e59cb1cf6465ddf69bc6628943af279a7cbaace3c3019d21f97"
+  ],
+  [
+    "scoped preview and confirm preserve exact assignment/source/revision/operation",
+    "a2fb0dda4c6c7f1429c4dfb34ad08b939277b607861c2a523bec7bae4b68a84e"
+  ],
+  [
+    "same assignment under both coaches resolves chosen row, not an arbitrary flattened match",
+    "ed8df2b7b243eb61c8e553c6393d8aef36f3cfc4d8763758b1d39df8cb48998c"
+  ],
+  [
+    "duplicate within one row and missing or wrong row never call preview",
+    "a97869011204f2da2251d2ac026ac3466bd23dded2075e57c88ad5a73667b65e"
+  ],
+  [
+    "wrong branch/month, invalid actor, loading and busy remain fail closed",
+    "32506b6eeece7ea094474e9a80da363bf6ca5451f08b71a0ea7f244adb8ac601"
+  ],
+  [
+    "stale source/revision, changed month or role after preview blocks confirmation",
+    "3a60cb62f133b9d1989df849fdc217e024d43cad3feab28dcb0b9138005a5ac0"
+  ],
+  [
+    "gate OFF, chosen decision, invalid recipient and busy cannot confirm",
+    "7466187cedec9bfbfe96606580a490c975b7f11c6f75c50ae4da04650120222c"
+  ],
+  [
+    "a stale or wrong preview response never creates a chooser",
+    "52e322e31812fe07b3facf7d617c14b86e336f8c98c0974ef75959398f8d50e0"
+  ],
+  [
+    "double click while preview pending issues exactly one read RPC",
+    "efd0c62e9722cefd37b3c3f39754c1f51681cdb15b28fee3c2def347ba2de121"
+  ],
+  [
+    "actual renderer binds the second row and only its exact chooser, preserving rerender/back safety",
+    "0849709a15f7c139315b2de6e7ff1f7ccd4ee17bd000441df234c493d94bb56b"
+  ],
+  [
+    "tampered chooser row or assignment cannot mutate recipient or call save",
+    "8affbb935be1637b4d3ccf5cacac085ff89c65e0bed47e7fd0e4efb508ca4c1f"
+  ],
+  [
+    "response loss retains exact operation key for same payload without forced local success",
+    "3d4a1457766a62f86d53019bb445ac78aef0029140b5c2f9556922cebcd61a98"
+  ],
+  [
+    "private canonical fragment and modular candidate use the same repaired functions",
+    "e85fd18853731e1f6acfaa00a1300e22e7ff0f0fe5136de78d8f56e0eabd9ee7"
+  ],
+  [
+    "server gate rejection retains exact scoped operation and never reports local success",
+    "c469bbd00ceb2e704b910b78ff3a78dbec9d77c0cbcd38916fa19da073ead385"
+  ],
+  [
+    "wrong server preview branch, lesson revision or actual role cannot bind a decision",
+    "3b3de3c79b591cbf86463742c122bf9f527b1cfe89fdee79836a1acfbc05f6bb"
+  ],
+  [
+    "switching coach rows removes prior controls rather than saving an arbitrary duplicate",
+    "0bef4f413f08275f08314d6560ca67d892b6b2c7b82e214f01c365c8530e5c96"
+  ]
+];
+const rowScopeBodyHash = (value) => createHash("sha256").update(value.replace(/\r\n/g, "\n")).digest("hex");
+const rowScopeLf = (value) => { rowScopeNeed(typeof value === "string", "BODY"); return value.replace(/\r\n/g, "\n"); };
+function rowScopeRemoveBlock(text, begin, end) {
+  const start = text.indexOf(begin), finish = text.indexOf(end, start);
+  rowScopeNeed(start >= 0 && finish > start && text.indexOf(begin, start + 1) < 0 && text.indexOf(end, finish + 1) < 0, "INVERSE_MARKER");
+  return text.slice(0, start) + text.slice(finish);
+}
+export function rowScopeValidate(s) {
+  rowScopeBoundary(s);
+  rowScopeNeed(s.bodies && typeof s.bodies === "object", "BODIES");
+  const sourcePaths = [...ROW_SCOPE_MODIFIED, ...ROW_SCOPE_NEW];
+  for (const row of [...s.sourceRows, ...s.metadataRows]) {
+    const b = s.bodies[row.path]; rowScopeNeed(b && typeof b.source === "string" && typeof b.head === "string", "BODY_MISSING");
+    rowScopeNeed(row.status === "A" ? b.base === null : typeof b.base === "string", "BASE_BODY");
+    if (sourcePaths.includes(row.path)) rowScopeNeed(rowScopeLf(b.source) === rowScopeLf(b.head), "SOURCE_LAYER_CHANGED");
+    else rowScopeNeed(rowScopeLf(b.source) === rowScopeLf(b.base), "METADATA_EARLY_CHANGE");
+  }
+  const src = (path) => rowScopeLf(s.bodies[path].source);
+  const base = (path) => rowScopeLf(s.bodies[path].base);
+  const pins = {
+    "app/admin/data/billing.js": "fde08533a25c02eb875adf2dbe21d9676ae923149c2172a6c581fe526debf0ac",
+    "app/admin/actions/billing.js": "45655328b301b63d63d5a8d44c60b3015c7cff89aa644944dd0b3f10d14877ae",
+    "app/admin/views/billing.js": "36dec8b2e0a165cd338f763468cf08c62a974f67402be9c628223834f59d900f",
+    "tests/fixtures/r3-substitute-policy-private-reviewed.fragment.js": "61d8607c62a06d6a8c7262c3b3c2e6786948a296deb3b8839770d65d06ec963b",
+    "scripts/verify.sh": "aa65124fa1529730eb1251ad1b6229777e4d612fb960761d9f1d739f15ca291d",
+    "scripts/check_r3_dev_deployment.py": "ac5490b507fc7e23554a35ac7fe6756161b40deb9cf1fd0e269ab5897724008d",
+    ".github/workflows/tennisnote-public-ci.yml": ROW_SCOPE_WORKFLOW_PIN,
+    "tests/r3-substitute-policy-row-scope.test.cjs": ROW_SCOPE_TEST_PIN,
+  };
+  for (const [path, pin] of Object.entries(pins)) {
+    rowScopeNeed(/^[a-f0-9]{64}$/.test(pin) && rowScopeBodyHash(src(path)) === pin, "SOURCE_PIN");
+  }
+  const self = src(SELF), begin = "// ROW_SCOPE_PACKET_BEGIN: 이 경계는 소스 수집만 하며 배포 승인이 아닙니다.\n", end = "// ROW_SCOPE_PACKET_END\n\n";
+  const start = self.indexOf(begin), finish = self.indexOf(end, start);
+  rowScopeNeed(start >= 0 && finish > start && self.indexOf(begin, start + 1) < 0 && self.indexOf(end, finish + 1) < 0, "SELF_MARKERS");
+  const block = self.slice(start, finish + end.length);
+  const declarations = [...block.matchAll(/^export const ROW_SCOPE_BODY_SEAL = "([^"]*)";$/gm)];
+  rowScopeNeed(declarations.length === 1 && declarations[0][1] === ROW_SCOPE_BODY_SEAL, "SEAL_DECLARATION");
+  const normalized = block.replace(/^export const ROW_SCOPE_BODY_SEAL = "(?:PENDING|[a-f0-9]{64})";$/m, 'export const ROW_SCOPE_BODY_SEAL = "PENDING";');
+  rowScopeNeed(/^[a-f0-9]{64}$/.test(ROW_SCOPE_BODY_SEAL) && rowScopeBodyHash(normalized) === ROW_SCOPE_BODY_SEAL, "SELF_SEAL");
+  const entry = '    if (rowScopeRequested(process.argv.slice(2), process.env)) { rowScopeMain(process.argv.slice(2)); } else {\n';
+  const close = '    } // ROW_SCOPE_B2B_ENTRY_END\n';
+  let originalSelf = self.slice(0, start) + self.slice(finish + end.length);
+  rowScopeNeed(originalSelf.split(entry).length === 2 && originalSelf.split(close).length === 2, "SELF_ENTRY");
+  originalSelf = originalSelf.replace(entry, "").replace(close, "");
+  rowScopeNeed(originalSelf === base(SELF), "SELF_INVERSE");
+  const verifyBlock = '\n# 검수된 17개 제품 검사는 반복하지 않고 실제 경로 연결 차이만 확인합니다.\nif [[ "${1:-}" == "--r3-substitute-row-scope" ]]; then\n  [[ $# -eq 1 ]] || exit 2\n  node --test --test-name-pattern="^integration:" tests/r3-substitute-policy-row-scope.test.cjs\n  exit $?\nfi\n';
+  rowScopeNeed(src("scripts/verify.sh").split(verifyBlock).length === 2
+    && src("scripts/verify.sh").replace(verifyBlock, "") === base("scripts/verify.sh"), "VERIFY_INVERSE");
+  const helper = src("scripts/check_r3_dev_deployment.py"), hBegin = "def row_scope_validate_ci_evidence(", hEnd = "def main() -> int:";
+  const helperEntry = '        # ROW_SCOPE_DEV_569_ENTRY_BEGIN\n        if os.environ.get("GITHUB_REF") == "refs/heads/" + ROW_SCOPE_DEV_BRANCH:\n            row_scope_dispatch(args)\n            return 0\n        # ROW_SCOPE_DEV_569_ENTRY_END\n';
+  const helperInverse = rowScopeRemoveBlock(helper, hBegin, hEnd);
+  rowScopeNeed(helperInverse.split(helperEntry).length === 2
+    && helperInverse.replace(helperEntry, "") === base("scripts/check_r3_dev_deployment.py"), "HELPER_INVERSE");
+  const workflowPath = ".github/workflows/tennisnote-public-ci.yml";
+  const targetLine = '          R3_TARGET: \${{ github.base_ref || github.ref_name }}\n';
+  const claimLine = "          R3_ROW_SCOPE_CLAIMED: \${{ github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' }}\n";
+  const oldChoice = '          if [ "$R3_LEGACY_CLAIMED" = true ]; then\n';
+  const newChoice = '          if [ "$R3_ROW_SCOPE_CLAIMED" = true ]; then\n            node scripts/check_r3_purchase_identity_admission.mjs --ci-route --row-scope\n          elif [ "$R3_LEGACY_CLAIMED" = true ]; then\n';
+  let expectedWorkflow = base(workflowPath);
+  rowScopeNeed(expectedWorkflow.split(targetLine).length === 2 && expectedWorkflow.split(oldChoice).length === 2, "WORKFLOW_ANCHOR");
+  expectedWorkflow = expectedWorkflow.replace(targetLine, targetLine + claimLine).replace(oldChoice, newChoice);
+  rowScopeNeed(src(workflowPath) === expectedWorkflow, "WORKFLOW_INVERSE");
+  const testSource = src("tests/r3-substitute-policy-row-scope.test.cjs");
+  const matches = [...testSource.matchAll(/^test\("([^"\n]+)"[\s\S]*?^\}\);/gm)];
+  for (const [name, digest] of ROW_SCOPE_CALLBACK_PINS) {
+    const found = matches.filter((match) => match[1] === name);
+    rowScopeNeed(found.length === 1 && rowScopeBodyHash(found[0][0]) === digest, "CALLBACK_PIN");
+  }
+  rowScopeNeed(testSource.includes('path.join(root, counterpart.path)')
+    && testSource.includes('digest(frozen), counterpart.sha256')
+    && testSource.includes('Object.keys(reviewedSourcePins)'), "INDEPENDENT_LOADER");
+  let release; try { release = JSON.parse(rowScopeLf(s.bodies["app/release.json"].head)); } catch { throw Error("ROW_SCOPE_RELEASE_JSON"); }
+  rowScopeNeed(release.version === "1.0.569" && release.appSurfaceVersion === "1.0.569"
+    && release.releaseId === "2026.10.30.02" && /^2026-10-30T/.test(release.deployedAt)
+    && Number.isFinite(Date.parse(release.deployedAt)), "RELEASE");
+  const normalizedRelease = { ...release, memberCache: "tennis-note-member-pwa-v602", coachCache: "tennis-note-coach-mode-v575" };
+  for (const path of METADATA) rowScopeNeed(rowScopeLf(s.bodies[path].head) === expectedMetadata(path, base(path), normalizedRelease, "1.0.568"), "METADATA_CONTENT");
+  return { status: "SOURCE_BODY_VALID_LOCAL_ONLY_NOT_ADMITTED", sourceFiles: sourcePaths.length, metadataFiles: METADATA.length, workflowRoutePending: false, deploymentAdmitted: false };
+}
+export function rowScopeRequested(args, env) {
+  return args.includes("--row-scope") || env.GITHUB_HEAD_REF === ROW_SCOPE_BRANCH
+    || env.GITHUB_EVENT_NAME === "workflow_dispatch" && env.GITHUB_REF === "refs/heads/" + ROW_SCOPE_BRANCH;
+}
+export function rowScopeMain(args) {
+  rowScopeNeed(rowScopeSame(args, ["--ci-route", "--row-scope"]) || rowScopeSame(args, ["--dev-source", "--row-scope"]), "ARGS");
+  const env = process.env, isCi = args[0] === "--ci-route";
+  rowScopeNeed(isCi ? env.GITHUB_EVENT_NAME === "pull_request" : env.GITHUB_EVENT_NAME === "workflow_dispatch", "EVENT");
+  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  const head = isCi ? event.pull_request?.head?.sha : env.GITHUB_SHA;
+  const packet = rowScopePacket(ROOT, head);
+  rowScopeNeed(isCi ? Boolean(packet.ci) : Boolean(packet.dev), "CONTEXT_KIND");
+  const evidence = rowScopeValidate(packet);
+  rowScopeNeed(evidence.status === "SOURCE_BODY_VALID_LOCAL_ONLY_NOT_ADMITTED", "SOURCE_RESULT");
+  if (isCi) {
+    const output = execFileSync(process.execPath, ["--test", "--test-reporter=tap", "--test-name-pattern=^integration: B2b route", ROW_SCOPE_NEW[0]],
+      { cwd: ROOT, encoding: "utf8", env: { ...env, GIT_NO_LAZY_FETCH: "1" }, timeout: 30000, maxBuffer: 2000000 });
+    rowScopeNeed(/^# pass 1$/m.test(output) && /^# fail 0$/m.test(output) && /^ok \d+ - integration: B2b route/m.test(output), "FOCUSED_RECEIPT");
+  }
+  const check = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", env: { ...env, GIT_NO_LAZY_FETCH: "1" }, timeout: 15000, maxBuffer: 8 * 1024 * 1024 }).trimEnd();
+  rowScopeNeed(check("status", "--porcelain", "--untracked-files=all") === "" && check("diff", "--cached", "--name-only") === ""
+    && check("rev-parse", "HEAD") === packet.checkout, "POST_STATE");
+  const release = JSON.parse(rowScopeLf(packet.bodies["app/release.json"].head));
+  const proof = { contract: "r3-substitute-row-scope-public/1", status: "SOURCE_PROVEN", base: ROW_SCOPE_BASE,
+    branch: ROW_SCOPE_BRANCH, head: packet.head, checkout: packet.checkout, tree: packet.headTree, sourceFiles: evidence.sourceFiles,
+    metadataFiles: evidence.metadataFiles, layers: 2, release: { ...release, memberCache: "tennis-note-member-pwa-v602", coachCache: "tennis-note-coach-mode-v575" },
+    databaseActions: 0, deploymentAdmitted: false };
+  if (isCi) appendFileSync(env.GITHUB_OUTPUT, "scoped=true\nrow_scope_only=true\n");
+  console.log(JSON.stringify(proof));
+  return proof;
+}
+// ROW_SCOPE_BODY_B2A_END
+// ROW_SCOPE_PACKET_END
+
 export function summaryBoundary(s) {
   const p = SUMMARY_PROFILES[s.profile]; summaryNeed(Boolean(p), "PROFILE");
   const sourcePaths = summaryPaths(s.profile), local = s.event === "local";
@@ -729,6 +1055,7 @@ function summaryMain(args) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    if (rowScopeRequested(process.argv.slice(2), process.env)) { rowScopeMain(process.argv.slice(2)); } else {
     if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {
     if(process.argv[3]==='--legacy-monthly' || (process.argv[2]==='--ci-route' && process.env.GITHUB_EVENT_PATH && legacyMonthlyClaimed(process.env,JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'))))){legacyMonthlyMain(process.argv[2]);}
     else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}
@@ -742,5 +1069,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(JSON.stringify(proof));
     }
     } // SUMMARY_ENTRY_END
+    } // ROW_SCOPE_B2B_ENTRY_END
   } catch { console.error("R3_PURCHASE_IDENTITY_HOLD"); process.exitCode = 2; }
 }

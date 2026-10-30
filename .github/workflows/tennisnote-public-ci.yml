@@ -104,9 +104,12 @@ jobs:
         id: display
         env:
           R3_TARGET: ${{ github.base_ref || github.ref_name }}
+          R3_ROW_SCOPE_CLAIMED: ${{ github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' }}
           R3_LEGACY_CLAIMED: ${{ startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4') }}
         run: |
-          if [ "$R3_LEGACY_CLAIMED" = true ]; then
+          if [ "$R3_ROW_SCOPE_CLAIMED" = true ]; then
+            node scripts/check_r3_purchase_identity_admission.mjs --ci-route --row-scope
+          elif [ "$R3_LEGACY_CLAIMED" = true ]; then
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --legacy-monthly
           elif [ "$R3_TARGET" = main ]; then
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --production
