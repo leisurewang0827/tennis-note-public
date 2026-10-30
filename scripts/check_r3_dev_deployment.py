@@ -711,6 +711,123 @@ def legacy_monthly_dispatch(args) -> None:
 # LEGACY_MONTHLY_567_END
 
 
+# SUMMARY_LAYOUT_568_BEGIN
+# 기존567의 source/runtime/rollback 증거를 바꾸지 않는 새 표시 후보 경계입니다.
+def summary_layout_claimed() -> bool:
+    return os.environ.get("GITHUB_REF", "").startswith("refs/heads/codex/tennisnote-coach-settlement-summary-")
+
+
+def summary_layout_context(env: dict[str, str], head: str) -> str:
+    branch = "refs/heads/codex/tennisnote-coach-settlement-summary-dev568-20261030"
+    candidate = env.get("TENNISNOTE_CANDIDATE_SHA", "")
+    legacy_monthly_need(
+        env.get("GITHUB_REPOSITORY") == EXPECTED_REPOSITORY and env.get("GITHUB_RUN_ATTEMPT") == "1"
+        and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and env.get("GITHUB_REF_TYPE") == "branch"
+        and env.get("GITHUB_REF") == branch and env.get("GITHUB_WORKFLOW") == EXPECTED_WORKFLOW_NAME
+        and env.get("GITHUB_WORKFLOW_REF") == EXPECTED_REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@" + branch
+        and env.get("TENNISNOTE_WORKFLOW_REF") == env.get("GITHUB_WORKFLOW_REF")
+        and SHA40_RE.fullmatch(candidate) is not None
+        and candidate == head == env.get("GITHUB_SHA") == env.get("GITHUB_WORKFLOW_SHA"), "SUMMARY_CONTEXT",
+    )
+    url = env.get("TENNISNOTE_SUPABASE_URL", "")
+    legacy_monthly_need(
+        env.get("TENNISNOTE_ENVIRONMENT") == "development"
+        and re.fullmatch(r"https://[a-z0-9]+\.supabase\.co", url) is not None
+        and project_fingerprint(url) == EXPECTED_DEV_PROJECT_FINGERPRINT
+        and bool(env.get("TENNISNOTE_SUPABASE_PUBLISHABLE_KEY"))
+        and env.get("TENNISNOTE_PAYMENTS_ENABLED") == "false" and env.get("TENNISNOTE_PAYMENT_MODE") == "disabled"
+        and env.get("TENNISNOTE_ALLOWED_PAYMENT_METHODS", "") == ""
+        and env.get("TENNISNOTE_BANK_TRANSFER_ENABLED") == "false", "SUMMARY_ENVIRONMENT",
+    )
+    return candidate
+
+
+def summary_layout_proof(proof: object, candidate: str) -> dict[str, object]:
+    legacy_monthly_need(isinstance(proof, dict), "SUMMARY_PROOF_SHAPE")
+    release, private = proof.get("release") or {}, proof.get("privateSource") or {}
+    legacy_monthly_need(isinstance(release, dict) and isinstance(private, dict), "SUMMARY_PROOF_SHAPE")
+    legacy_monthly_need(
+        proof.get("contract") == "r3-summary-public-source/1" and proof.get("status") == "SOURCE_PROVEN"
+        and proof.get("head") == proof.get("checkout") == candidate
+        and proof.get("base") == "a5503e5855d0b30e34e4992976e6303342c40f9b"
+        and SHA40_RE.fullmatch(str(proof.get("tree", ""))) is not None
+        and proof.get("profile") == "development" and proof.get("files") == 18 and proof.get("layers") == 2
+        and proof.get("admissionRoute") == "summary-layout-dev568-manual"
+        and private.get("commit") == "a8da7b7c25f5f47c27cc5d12dcb3fc46b41d26f2"
+        and private.get("tree") == "c26e11ee4444eade7e756cfd570bdafdc4827fff"
+        and release.get("version") == release.get("appSurfaceVersion") == "1.0.568"
+        and re.fullmatch(r"2026\.10\.30\.[0-9]{2}", str(release.get("releaseId", ""))) is not None
+        and release.get("memberCache") == "tennis-note-member-pwa-v601"
+        and release.get("coachCache") == "tennis-note-coach-mode-v574"
+        and proof.get("databaseActions") == 0 and proof.get("browserRuns") == 0, "SUMMARY_SOURCE_PROOF",
+    )
+    return proof
+
+
+def summary_layout_source() -> dict[str, object]:
+    candidate = summary_layout_context(dict(os.environ), run_git("rev-parse", "HEAD"))
+    try:
+        result = subprocess.run(["node", "scripts/check_r3_purchase_identity_admission.mjs", "--dev-source", "--summary-layout"],
+                                cwd=ROOT, text=True, encoding="utf-8", capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        fail("SUMMARY_SOURCE_PROCESS")
+    legacy_monthly_need(result.returncode == 0 and len(result.stdout) <= 64000, "SUMMARY_SOURCE_PROCESS")
+    try:
+        proof = json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        fail("SUMMARY_SOURCE_JSON")
+    return summary_layout_proof(proof, candidate)
+
+
+def summary_layout_live(proof: dict[str, object], read_states=None, read_http=None) -> None:
+    states = (read_states or read_live_dev_states)(proof["head"])
+    legacy_monthly_need(len(states) == 2, "SUMMARY_LIVE_COUNT")
+    for state in states:
+        release = state.get("release") or {}
+        legacy_monthly_need(release.get("version") == "1.0.567" and release.get("releaseId") == "2026.10.29.01"
+                            and state.get("member_cache") == 600 and state.get("coach_cache") == 573, "SUMMARY_LIVE_BASELINE")
+    for role in ("production_member_release", "production_admin_release", "production_pages_release"):
+        release = (read_http or _http_read)(role, proof["head"])
+        legacy_monthly_need(isinstance(release, dict) and release.get("version") == "1.0.560"
+                            and release.get("releaseId") == "2026.10.29.02", "SUMMARY_PROD_BASELINE")
+    verify_monotonic_release(proof["release"], 601, 574, states)
+    legacy_monthly_need(601 > max(600, 593) and 574 > max(573, 566), "SUMMARY_CACHE_FLOOR")
+
+
+def summary_layout_target(env: dict[str, str], get=None) -> str:
+    expected, account, token = env.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", ""), env.get("CLOUDFLARE_ACCOUNT_ID", ""), env.get("CLOUDFLARE_API_TOKEN", "")
+    legacy_monthly_need(SHA256_RE.fullmatch(expected) is not None and re.fullmatch(r"[a-f0-9]{32}", account) is not None
+                        and bool(token) and sha256(account.encode("utf-8")) == expected, "SUMMARY_TARGET_ACCOUNT")
+    get, rollback = get or legacy_monthly_cloudflare_get, {}
+    for name in EXPECTED_PROJECTS:
+        result = get(account, token, "pages/projects/" + name).get("result")
+        domains = result.get("domains") if isinstance(result, dict) else None
+        legacy_monthly_need(isinstance(result, dict) and result.get("name") == name and result.get("production_branch") == "dev"
+                            and result.get("subdomain") == EXPECTED_PROJECT_DOMAINS[name] and isinstance(domains, list)
+                            and all(isinstance(d, str) for d in domains) and EXPECTED_PROJECT_DOMAINS[name] in domains
+                            and not any(d in {"tennisnote-app.pages.dev", "tennisnote-admin.pages.dev"} for d in domains), "SUMMARY_TARGET_PROJECT")
+        rows = get(account, token, "pages/projects/" + name + "/deployments?env=production&per_page=1").get("result")
+        legacy_monthly_need(isinstance(rows, list), "SUMMARY_ROLLBACK_SHAPE")
+        previous = rollback_proof(name, rows)
+        legacy_monthly_need(previous["commit_sha"] == "a5503e5855d0b30e34e4992976e6303342c40f9b", "SUMMARY_ROLLBACK_SOURCE")
+        rollback[name] = previous
+    return sha256(json.dumps(rollback, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def summary_layout_dispatch(args) -> None:
+    legacy_monthly_need(int(args.source_only) + int(args.live_preflight) + int(args.branch_preflight) == 1
+                        and not args.branch_preflight, "SUMMARY_ENTRY")
+    proof = summary_layout_source()
+    if args.live_preflight:
+        # 동일 runtime/asset 검증 함수를 새568 proof에 적용; 과거567 source proof는 사용하지 않습니다.
+        legacy_monthly_artifacts(proof, Path("dist/member-dev"), Path("dist/admin-dev"))
+        summary_layout_live(proof)
+        print("SUMMARY_LAYOUT_DEV_PREFLIGHT_PASS rollback_sha256=" + summary_layout_target(dict(os.environ)))
+    else:
+        print("SUMMARY_LAYOUT_SOURCE_PASS source_files=18 database_actions=0")
+# SUMMARY_LAYOUT_568_END
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-only", action="store_true")
@@ -718,6 +835,11 @@ def main() -> int:
     parser.add_argument("--branch-preflight", action="store_true")
     args = parser.parse_args()
     try:
+        # SUMMARY_LAYOUT_ENTRY_BEGIN
+        if summary_layout_claimed():
+            summary_layout_dispatch(args)
+            return 0
+        # SUMMARY_LAYOUT_ENTRY_END
         # LEGACY_MONTHLY_ENTRY_BEGIN
         if legacy_monthly_claimed():
             legacy_monthly_dispatch(args)
