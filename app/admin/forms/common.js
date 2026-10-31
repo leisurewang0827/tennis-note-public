@@ -444,6 +444,12 @@ function memberManagementSelectedDays(form) {
     .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
 }
 
+function normalizeMemberCreatePartnerPayload(payload, product) {
+  if (!payload || Number(product?.group_size) !== 1 || payload.lessonType !== "one_on_one") return;
+  ["partnerUserId", "partnerMode", "partnerName", "partnerPhone", "partnerBirthYear", "partnerGender"]
+    .forEach((key) => { payload[key] = null; });
+}
+
 function memberManagementDatabasePayload(form, member, ticket, reason) {
   const record = memberDatabaseRecord(member, ticket);
   const hasControl = (name) => Boolean(form.elements.namedItem(name));
