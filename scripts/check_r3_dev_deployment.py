@@ -1510,13 +1510,196 @@ def phone_dev_dispatch(args):
     else:
         print("PHONE_SOURCE_AND_CI_PASS run_id=" + str(ci["runId"]))
 
+# Exact DEV572 -> DEV573 personal-create successor. Historical admissions above
+# remain unchanged; this is a separate opt-in, never a generic fallback.
+PERSONAL573_BRANCH = 'codex/tennisnote-personal-create-partner-scope-20261101'
+PERSONAL573_BASE = 'e1e5d778ea9ea06d90091b8ad28139d3bf31aa66'
+PERSONAL573_BASE_BRANCH = 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+PERSONAL573_PATHS = frozenset({
+    '.github/workflows/tennisnote-public-ci.yml', 'scripts/check_r3_dev_deployment.py',
+    'tests/r3-personal-create-dev573-admission.test.py', 'tests/admin-personal-create-partner-scope.test.js',
+    'app/admin/forms/common.js', 'app/admin/actions/member.js', 'app/admin/index.html',
+    'app/release.json', 'app/shared/tennisnote-release.js',
+    'app/tennis-note-member-app/index.html', 'app/tennis-note-member-app/service-worker.js',
+    'app/tennis-note-member-app/app.js', 'app/tennis-note-member-app/forms/common.js',
+    'app/tennis-note-member-app/ui/screens.js', 'app/tennis-note-coach-app/index.html',
+    'app/tennis-note-coach-app/service-worker.js', 'app/tennis-note-coach-app/app.js',
+    'app/tennis-note-coach-app/domain/coaches.js', 'app/tennis-note-coach-app/forms/common.js',
+})
+PERSONAL573_PRODUCT_PINS = {
+    '.github/workflows/tennisnote-public-ci.yml': 'c2ef45bca5aca021ec268569e670300fd84fd1793e9e0b60e94d241d86be6cdc',
+    'tests/r3-personal-create-dev573-admission.test.py': 'c73eab94cbf6c2d1988279b3c7ddef4914fec3e444a35831b7a28f9852069b95',
+    'app/admin/forms/common.js': '2cb6af086a122e56a325aa6f89f0dda63e1b30968775e33ea0b161a54b2bfbac',
+    'app/admin/actions/member.js': '3c8e2b28192ba3c1ce362456960618d3714e06d061e37ada49f02448da33e5fc',
+    'tests/admin-personal-create-partner-scope.test.js': '43deb6755b9c8b20a73744c2b3e6ff6effee13ec0fe7735386c0fdd516345acf',
+    'app/admin/index.html': '8e8203dc424fa7702ebfb793db495e2ffc803ea0af7367321ba171f87040ed6c',
+    'app/release.json': '258837889264ac889b7600f7ece700b070ff044d8ad7f39017751b4c3a6b39bf',
+    'app/shared/tennisnote-release.js': '42487efd3ed1196cee7d9c777186c904dafcad79e5631c35cc3f6af10f8aab2a',
+    'app/tennis-note-coach-app/app.js': 'ed55637a453dbb8ecfdf20c79f81bfcbd1d072f830f0b84e734c41fa5f396a5e',
+    'app/tennis-note-coach-app/domain/coaches.js': 'b13f69f02c15c46fc3a0f91d9f1473ab398ec079ed2e72ef3c04e2b50f5fe0c4',
+    'app/tennis-note-coach-app/forms/common.js': 'a70c28fc171e3a503cd9415022f7204f10e5b669bf0c3febc07568652d9c666d',
+    'app/tennis-note-coach-app/index.html': '5199af175021a48d49fbc9ecc42b34c64ccf8ac6a834d657d16429414242a098',
+    'app/tennis-note-coach-app/service-worker.js': 'ba4cbeb6333a960777414ac6eb007192f3e6fd7df8876b882874df01bb99723d',
+    'app/tennis-note-member-app/app.js': 'ad40d38a4b78b00c082f0f5ff464f00df31585db14c998cc2fbbcf243f00b49b',
+    'app/tennis-note-member-app/forms/common.js': '5c0cdecd2489d68d9a78a34550b05f8f5bc16573b986bc179b7aeaa4982cfefa',
+    'app/tennis-note-member-app/index.html': 'a392efc73e3836fa9019dabaeb0c97622c178e981de8a85c015dc3cb36beed8c',
+    'app/tennis-note-member-app/service-worker.js': 'da511e8aabc59961fa4a475b4640d852c60efaf1967d72148f8e4171247d2339',
+    'app/tennis-note-member-app/ui/screens.js': '64ad0065b17b727f55f2c593972d492233f49be50772ed6369fef73ff33acfd6',
+}
+
+def personal573_context(env, head):
+    candidate = env.get('TENNISNOTE_CANDIDATE_SHA', '')
+    legacy_monthly_need(env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+        and env.get('GITHUB_REPOSITORY') == EXPECTED_REPOSITORY
+        and env.get('GITHUB_REF') == 'refs/heads/' + PERSONAL573_BRANCH
+        and env.get('GITHUB_REF_TYPE') == 'branch'
+        and env.get('GITHUB_WORKFLOW') == EXPECTED_WORKFLOW_NAME
+        and env.get('GITHUB_RUN_ATTEMPT') == '1'
+        and env.get('TENNISNOTE_WORKFLOW_REF') == EXPECTED_REPOSITORY + '/.github/workflows/deploy-cloudflare-pages-dev.yml@refs/heads/' + PERSONAL573_BRANCH
+        and SHA40_RE.fullmatch(candidate or '') is not None
+        and candidate == env.get('GITHUB_SHA') == head, 'PERSONAL573_CONTEXT')
+    return candidate
+
+def personal573_ci_pr(event, env):
+    pr = event.get('pull_request') if isinstance(event, dict) else None
+    legacy_monthly_need(env.get('GITHUB_EVENT_NAME') == 'pull_request'
+        and env.get('GITHUB_REPOSITORY') == EXPECTED_REPOSITORY
+        and env.get('GITHUB_RUN_ATTEMPT') == '1' and isinstance(pr, dict)
+        and (pr.get('base') or {}).get('sha') == PERSONAL573_BASE
+        and (pr.get('base') or {}).get('ref') == PERSONAL573_BASE_BRANCH
+        and ((pr.get('base') or {}).get('repo') or {}).get('full_name') == EXPECTED_REPOSITORY
+        and (pr.get('head') or {}).get('ref') == PERSONAL573_BRANCH
+        and ((pr.get('head') or {}).get('repo') or {}).get('full_name') == EXPECTED_REPOSITORY, 'PERSONAL573_EVENT')
+    candidate = (pr['head'] or {}).get('sha', '')
+    merge = env.get('GITHUB_SHA', '')
+    legacy_monthly_need(SHA40_RE.fullmatch(candidate or '') is not None
+        and SHA40_RE.fullmatch(merge or '') is not None and merge != candidate
+        and run_git('rev-parse', 'HEAD') == merge
+        and run_git('show', '-s', '--format=%P', merge) == PERSONAL573_BASE + ' ' + candidate,
+        'PERSONAL573_EVENT_MERGE')
+    personal573_source(candidate, merge)
+    return candidate
+
+def personal573_source(candidate, checkout_head=None):
+    checkout_head = candidate if checkout_head is None else checkout_head
+    legacy_monthly_need(run_git('rev-parse', 'HEAD') == checkout_head
+        and run_git('show', '-s', '--format=%P', candidate) == PERSONAL573_BASE
+        and run_git('rev-parse', checkout_head + '^{tree}') == run_git('rev-parse', candidate + '^{tree}')
+        and run_git('status', '--porcelain', '--untracked-files=all') == ''
+        and run_git('diff', '--cached', '--name-only') == '', 'PERSONAL573_GRAPH')
+    rows = [line.split('\t') for line in run_git('diff', '--no-renames', '--name-status', PERSONAL573_BASE, candidate).splitlines()]
+    legacy_monthly_need(len(rows) == len(PERSONAL573_PATHS)
+        and all(len(row) == 2 and row[0] in ('A', 'M') for row in rows)
+        and {row[1] for row in rows} == PERSONAL573_PATHS, 'PERSONAL573_PATHS')
+    personal573_verify_pins(PERSONAL573_PRODUCT_PINS, ROOT)
+    release = json.loads((ROOT / 'app/release.json').read_text(encoding='utf-8'))
+    legacy_monthly_need(release.get('version') == release.get('appSurfaceVersion') == '1.0.573'
+        and release.get('releaseId') == '2026.11.01.01', 'PERSONAL573_RELEASE')
+    legacy_monthly_need(_cache_counter((ROOT / 'app/tennis-note-member-app/service-worker.js').read_text(encoding='utf-8'), 'tennis-note-member-pwa-') == 606
+        and _cache_counter((ROOT / 'app/tennis-note-coach-app/service-worker.js').read_text(encoding='utf-8'), 'tennis-note-coach-mode-') == 579, 'PERSONAL573_CACHE')
+    return release
+
+def personal573_verify_pins(pins, root):
+    for name, expected in pins.items():
+        path = root / name
+        legacy_monthly_need(path.is_file() and not path.is_symlink()
+            and sha256(normalize_text(path.read_bytes())) == expected, 'PERSONAL573_PRODUCT')
+
+def personal573_ci(candidate):
+    listing = status_dev_github_get('actions/workflows/tennisnote-public-ci.yml/runs?head_sha=' + candidate + '&event=pull_request&per_page=100')
+    runs = listing.get('workflow_runs') if isinstance(listing, dict) else None
+    legacy_monthly_need(isinstance(runs, list) and len(runs) == 1, 'PERSONAL573_CI_COUNT')
+    run = runs[0]
+    links = run.get('pull_requests') or []
+    legacy_monthly_need(len(links) == 1 and type(links[0].get('number')) is int and links[0]['number'] > 0, 'PERSONAL573_PR_COUNT')
+    pr = status_dev_github_get('pulls/' + str(links[0]['number']))
+    legacy_monthly_need(pr.get('state') == 'open' and (pr.get('head') or {}).get('sha') == candidate
+        and (pr.get('head') or {}).get('ref') == PERSONAL573_BRANCH
+        and (pr.get('base') or {}).get('sha') == PERSONAL573_BASE
+        and (pr.get('base') or {}).get('ref') == PERSONAL573_BASE_BRANCH
+        and ((pr.get('head') or {}).get('repo') or {}).get('full_name') == EXPECTED_REPOSITORY
+        and ((pr.get('base') or {}).get('repo') or {}).get('full_name') == EXPECTED_REPOSITORY
+        and pr.get('mergeable') is True and pr.get('mergeable_state') == 'clean', 'PERSONAL573_PR')
+    head = status_dev_github_get('git/commits/' + candidate)
+    merge = status_dev_github_get('git/commits/' + str(pr.get('merge_commit_sha', '')))
+    tree = (head.get('tree') or {}).get('sha')
+    legacy_monthly_need(head.get('sha') == candidate and [x.get('sha') for x in head.get('parents', [])] == [PERSONAL573_BASE]
+        and SHA40_RE.fullmatch(str(tree or '')) is not None and merge.get('sha') == pr.get('merge_commit_sha')
+        and [x.get('sha') for x in merge.get('parents', [])] == [PERSONAL573_BASE, candidate]
+        and (merge.get('tree') or {}).get('sha') == tree, 'PERSONAL573_VIRTUAL_MERGE')
+    legacy_monthly_need(run.get('workflow_id') == 329932540 and run.get('head_sha') == candidate
+        and run.get('event') == 'pull_request' and run.get('run_attempt') == 1
+        and run.get('status') == 'completed' and run.get('conclusion') == 'success'
+        and (run.get('repository') or {}).get('full_name') == EXPECTED_REPOSITORY
+        and (run.get('head_repository') or {}).get('full_name') == EXPECTED_REPOSITORY
+        and len(run.get('pull_requests') or []) == 1 and run['pull_requests'][0].get('number') == pr['number']
+        and (run['pull_requests'][0].get('head') or {}).get('sha') == candidate
+        and (run['pull_requests'][0].get('base') or {}).get('sha') == PERSONAL573_BASE, 'PERSONAL573_CI')
+    jobs = status_dev_github_jobs(run['id'])
+    entries = jobs.get('jobs') if isinstance(jobs, dict) else None
+    legacy_monthly_need(isinstance(entries, list) and len(entries) == 1
+        and entries[0].get('conclusion') == 'success'
+        and any(s.get('name') == 'Verify DEV573 successor contract' and s.get('conclusion') == 'success' for s in entries[0].get('steps', []))
+        and any(s.get('name') == 'Verify DEV573 personal creation' and s.get('conclusion') == 'success' for s in entries[0].get('steps', [])), 'PERSONAL573_CI_STEPS')
+    return run['id']
+
+def personal573_target(env):
+    expected, account, token = env.get('EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT', ''), env.get('CLOUDFLARE_ACCOUNT_ID', ''), env.get('CLOUDFLARE_API_TOKEN', '')
+    legacy_monthly_need(SHA256_RE.fullmatch(expected) is not None and re.fullmatch(r'[a-f0-9]{32}', account) is not None
+        and bool(token) and sha256(account.encode('utf-8')) == expected, 'PERSONAL573_ACCOUNT')
+    result = {}
+    for name in EXPECTED_PROJECTS:
+        project = legacy_monthly_cloudflare_get(account, token, 'pages/projects/' + name).get('result')
+        legacy_monthly_need(isinstance(project, dict) and project.get('name') == name and project.get('production_branch') == 'dev'
+            and project.get('subdomain') == EXPECTED_PROJECT_DOMAINS[name] and EXPECTED_PROJECT_DOMAINS[name] in (project.get('domains') or [])
+            and not any(d in {'tennisnote-app.pages.dev', 'tennisnote-admin.pages.dev'} for d in project.get('domains') or []), 'PERSONAL573_TARGET')
+        rows = legacy_monthly_cloudflare_get(account, token, 'pages/projects/' + name + '/deployments?env=production&per_page=1').get('result')
+        legacy_monthly_need(isinstance(rows, list), 'PERSONAL573_ROLLBACK')
+        result[name] = rollback_proof(name, rows)
+        legacy_monthly_need(result[name]['commit_sha'] == PERSONAL573_BASE, 'PERSONAL573_ROLLBACK_SOURCE')
+    return sha256(json.dumps(result, sort_keys=True, separators=(',', ':')).encode('utf-8'))
+
+def personal573_dispatch(args):
+    env = dict(os.environ)
+    legacy_monthly_need(int(args.source_only) + int(args.live_preflight) == 1 and not args.branch_preflight, 'PERSONAL573_MODE')
+    os.environ['GIT_NO_LAZY_FETCH'] = '1'
+    candidate = personal573_context(env, run_git('rev-parse', 'HEAD'))
+    release = personal573_source(candidate)
+    ci = personal573_ci(candidate)
+    if args.live_preflight:
+        legacy_monthly_artifacts({'release': release}, Path('dist/member-dev'), Path('dist/admin-dev'))
+        for name in ('forms/common.js', 'actions/member.js'):
+            legacy_monthly_need(normalize_text((ROOT / 'dist/admin-dev' / name).read_bytes())
+                == normalize_text((ROOT / 'app/admin' / name).read_bytes()), 'PERSONAL573_ARTIFACT')
+        states = read_live_dev_states(candidate)
+        for state in states:
+            prior = state.get('release') or {}
+            legacy_monthly_need(prior.get('version') == '1.0.572' and prior.get('releaseId') == '2026.10.31.03'
+                and state.get('member_cache') == 605 and state.get('coach_cache') == 578, 'PERSONAL573_LIVE')
+        verify_monotonic_release(release, 606, 579, states)
+        print('PERSONAL573_PREFLIGHT_PASS run_id=' + str(ci) + ' rollback_sha256=' + personal573_target(env))
+    else:
+        print('PERSONAL573_SOURCE_CI_PASS run_id=' + str(ci))
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-only", action="store_true")
     parser.add_argument("--live-preflight", action="store_true")
     parser.add_argument("--branch-preflight", action="store_true")
+    parser.add_argument('--ci-personal', action='store_true')
     args = parser.parse_args()
     try:
+        if args.ci_personal:
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight), 'PERSONAL573_MODE')
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            personal573_ci_pr(event, dict(os.environ))
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write('scoped=true\n')
+            print('PERSONAL573_CI_ADMISSION_PASS')
+            return 0
+        if os.environ.get('GITHUB_REF') == 'refs/heads/' + PERSONAL573_BRANCH:
+            personal573_dispatch(args)
+            return 0
         if os.environ.get("GITHUB_REF") == "refs/heads/" + STATUS_DEV_BRANCH:
             candidate = os.environ.get("TENNISNOTE_CANDIDATE_SHA", "")
             if SHA40_RE.fullmatch(candidate or "") and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_BLOBLESS_BASE:

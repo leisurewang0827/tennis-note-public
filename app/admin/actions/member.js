@@ -701,6 +701,7 @@ async function submitMemberManagementForm(event) {
   let reenrollVerificationPayload = null;
   const selectedManagementProduct = (adminLiveDataState.products || [])
     .find((item) => item.id === form.elements.productId?.value);
+  if (isCreate) normalizeMemberCreatePartnerPayload(managementPayload, selectedManagementProduct);
   if (managementPayload && ["create", "assign", "correct"].includes(action)) {
     normalizeMemberManagementTicketPayload(managementPayload);
   }
