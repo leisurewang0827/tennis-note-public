@@ -6,6 +6,12 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, phoneGithubJson } = require("../scripts/collect_r3_response_label_pr.cjs");
+
+test("phone corrective diagnostics allow only fixed redacted codes", () => {
+  assert.equal(safeHold(Error("PHONE_API_HTTP")).reason, "PHONE_API_HTTP");
+  assert.equal(safeHold(Error("STATUS_SUCCESSOR_HOLD")).reason, "STATUS_SUCCESSOR_HOLD");
+  assert.equal(safeHold(Error("PHONE_API_HTTP raw private detail")).reason, "COLLECTION_HOLD");
+});
 const { CORRECTIVE } = require("../scripts/check_r3_response_label_successor.cjs");
 const { createHash } = require("node:crypto");
 test("phone successor workflow is the exact additive wrapper around the predecessor", () => {

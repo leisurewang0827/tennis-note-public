@@ -13,6 +13,22 @@ spec.loader.exec_module(module)
 
 
 class StatusDeploy(unittest.TestCase):
+    def test_phone_corrective_live_shape(self):
+        values = self.fixture()
+        run, pr, head, merge, jobs, candidate = values[0], values[1], values[2], values[6], values[7], values[8]
+        run["pull_requests"][0]["number"] = 228
+        pr["number"] = 228
+        head["parents"] = [{"sha": module.PHONE_DEV_CORRECTIVE_BASE}]
+        prior = copy.deepcopy(run)
+        prior.update({"id": module.PHONE_DEV_PREDECESSOR_RUN, "head_sha": module.PHONE_DEV_PREDECESSOR})
+        arguments = [run, pr, head, merge, jobs, prior, copy.deepcopy(jobs), candidate]
+        self.assertEqual(module.phone_dev_ci_evidence(*arguments)["runId"], 123)
+        for index, field, value in [(5, "head_sha", candidate), (1, "number", 229)]:
+            bad = copy.deepcopy(arguments); bad[index][field] = value
+            with self.assertRaises(RuntimeError): module.phone_dev_ci_evidence(*bad)
+        bad = copy.deepcopy(arguments); bad[5]["pull_requests"][0]["head"]["sha"] = "4" * 40
+        with self.assertRaises(RuntimeError): module.phone_dev_ci_evidence(*bad)
+
     def test_phone_dispatch_rejects_wrong_context_before_external_access(self):
         args = type("Args", (), {"source_only": True, "live_preflight": False, "branch_preflight": False})()
         with mock.patch.dict(module.os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=True), \
@@ -28,10 +44,10 @@ class StatusDeploy(unittest.TestCase):
         run, pr, head, merge, jobs, candidate = old[0], old[1], old[2], old[6], old[7], old[8]
         run["pull_requests"][0]["number"] = 228
         pr["number"] = 228
-        head["parents"] = [{"sha": module.PHONE_DEV_PREDECESSOR}]
+        head["parents"] = [{"sha": module.PHONE_DEV_CORRECTIVE_BASE}]
         prior = copy.deepcopy(run)
         prior.update({"id": module.PHONE_DEV_PREDECESSOR_RUN, "head_sha": module.PHONE_DEV_PREDECESSOR})
-        prior["pull_requests"][0]["head"]["sha"] = module.PHONE_DEV_PREDECESSOR
+        prior["pull_requests"][0]["head"]["sha"] = candidate
         args = [run, pr, head, merge, jobs, prior, copy.deepcopy(jobs), candidate]
         self.assertEqual(module.phone_dev_ci_evidence(*args)["runId"], 123)
         for index, field, value in [(0, "run_attempt", 2), (1, "number", 229),

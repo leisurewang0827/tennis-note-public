@@ -1364,6 +1364,7 @@ def status_dev_dispatch(args):
 
 # The 572 phone successor is separate from the immutable 571 validators above.
 PHONE_DEV_PREDECESSOR = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37"
+PHONE_DEV_CORRECTIVE_BASE = "328a174047651a839910e2f678d9471bc762cdb0"
 PHONE_DEV_PREDECESSOR_RUN = 41166580662
 
 def phone_dev_ci_evidence(run, pr, head, merge, jobs, prior, prior_jobs, candidate):
@@ -1386,7 +1387,7 @@ def phone_dev_ci_evidence(run, pr, head, merge, jobs, prior, prior_jobs, candida
         and (links[0].get("head") or {}).get("sha") == candidate and (links[0].get("base") or {}).get("sha") == STATUS_DEV_BASE, "PHONE_CI_PR")
     tree = (head.get("tree") or {}).get("sha") if isinstance(head, dict) else None
     legacy_monthly_need(isinstance(head, dict) and isinstance(merge, dict) and head.get("sha") == candidate
-        and [x.get("sha") for x in head.get("parents", [])] == [PHONE_DEV_PREDECESSOR]
+        and [x.get("sha") for x in head.get("parents", [])] == [PHONE_DEV_CORRECTIVE_BASE]
         and merge.get("sha") == pr.get("merge_commit_sha")
         and [x.get("sha") for x in merge.get("parents", [])] == [STATUS_DEV_BASE, candidate]
         and SHA40_RE.fullmatch(str(tree or "")) is not None and tree == (merge.get("tree") or {}).get("sha"), "PHONE_CI_GRAPH")
@@ -1409,13 +1410,14 @@ def phone_dev_ci_evidence(run, pr, head, merge, jobs, prior, prior_jobs, candida
         and (prior.get("repository") or {}).get("full_name") == repo
         and (prior.get("head_repository") or {}).get("full_name") == repo
         and isinstance(prior_links, list) and len(prior_links) == 1 and prior_links[0].get("number") == 228
-        and (prior_links[0].get("head") or {}).get("sha") == PHONE_DEV_PREDECESSOR
+        and (prior_links[0].get("head") or {}).get("sha") == candidate
         and (prior_links[0].get("base") or {}).get("sha") == STATUS_DEV_BASE and admitted_job(prior_jobs), "PHONE_PRIOR_CI")
     return {"runId": run["id"], "tree": tree}
 
 def phone_dev_source(candidate):
     legacy_monthly_need(run_git("rev-parse", "HEAD") == candidate
-        and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_PREDECESSOR
+        and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_CORRECTIVE_BASE
+        and run_git("show", "-s", "--format=%P", PHONE_DEV_CORRECTIVE_BASE) == PHONE_DEV_PREDECESSOR
         and run_git("status", "--porcelain", "--untracked-files=all") == ""
         and run_git("diff", "--cached", "--name-only") == "", "PHONE_SOURCE_GRAPH")
     raw = subprocess.check_output(["node", "-e", "const a=require('./scripts/check_r3_response_label_successor.cjs');const b=require('./scripts/collect_r3_response_label_pr.cjs');process.stdout.write(JSON.stringify({pin:a.PHONE_PIN,wire:b.PHONE_WIRING}))"], cwd=ROOT, text=True, timeout=15)
@@ -1515,7 +1517,7 @@ def main() -> int:
     try:
         if os.environ.get("GITHUB_REF") == "refs/heads/" + STATUS_DEV_BRANCH:
             candidate = os.environ.get("TENNISNOTE_CANDIDATE_SHA", "")
-            if SHA40_RE.fullmatch(candidate or "") and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_PREDECESSOR:
+            if SHA40_RE.fullmatch(candidate or "") and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_CORRECTIVE_BASE:
                 phone_dev_dispatch(args)
             else:
                 status_dev_dispatch(args)

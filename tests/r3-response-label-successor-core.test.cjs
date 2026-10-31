@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { validateLocalScope, validatePrBoundary, PIN, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
-  PHONE_PREDECESSOR, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
+  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
   validatePhonePriorJobs, validatePhoneDeltaRows } = require("../scripts/check_r3_response_label_successor.cjs");
 
 test("phone successor jobs and exact delta reject missing or extra evidence", () => {
@@ -29,23 +29,34 @@ test("phone successor graph: exact predecessor CI and PR metadata fail closed", 
   const run = { id: 41166580662, head_sha: PHONE_PREDECESSOR, event: "pull_request", run_attempt: 1,
     status: "completed", conclusion: "success", name: "Tennis Note Public PWA CI", workflow_id: 329932540,
     path: ".github/workflows/tennisnote-public-ci.yml", repository: { full_name: repo }, head_repository: { full_name: repo },
-    pull_requests: [{ number: 228, head: { sha: PHONE_PREDECESSOR }, base: { sha: BASE } }] };
-  assert.equal(validatePhonePriorRun(run).deploymentAdmitted, false);
+    pull_requests: [{ number: 228, head: { sha: head }, base: { sha: BASE } }] };
+  assert.equal(validatePhonePriorRun(run, head).deploymentAdmitted, false);
   for (const change of [{ head_sha: head }, { run_attempt: 2 }, { conclusion: "failure" }, { workflow_id: 1 },
     { repository: { full_name: "other" } }, { head_repository: null }, { pull_requests: [] }]) {
-    assert.throws(() => validatePhonePriorRun({ ...run, ...change }), /STATUS_SUCCESSOR_HOLD/);
+    assert.throws(() => validatePhonePriorRun({ ...run, ...change }, head), /STATUS_SUCCESSOR_HOLD/);
   }
   const s = { event: "pull_request", repo, baseRepo: repo, headRepo: repo, base: BASE,
     baseRef: "codex/tennisnote-r3-current-term-dev570-20261031", headRef: BRANCH,
     attempt: 1, number: 228, ref: "refs/pull/228/merge", workflow: "Tennis Note Public PWA CI",
     workflowRef: `${repo}/.github/workflows/tennisnote-public-ci.yml@refs/pull/228/merge`,
-    head, merge, headTree: head, mergeTree: head, headParents: [PHONE_PREDECESSOR], mergeParents: [BASE, head],
+    head, merge, headTree: head, mergeTree: head, headParents: [PHONE_CORRECTIVE_BASE], correctiveParents: [PHONE_PREDECESSOR], mergeParents: [BASE, head],
     githubSha: merge, workflowSha: merge, clean: true, indexClean: true };
   assert.equal(validatePhonePrGraph(s).status, "PHONE_PR_METADATA_ONLY_NOT_ADMITTED");
   for (const change of [{ number: 229 }, { base: head }, { headRepo: "other" }, { attempt: 2 },
     { headParents: [CORRECTIVE] }, { mergeParents: [head, BASE] }, { mergeTree: merge }, { clean: false }]) {
     assert.throws(() => validatePhonePrGraph({ ...s, ...change }), /STATUS_SUCCESSOR_HOLD/);
   }
+});
+
+test("phone corrective prior immutable head and current PR head stay distinct", () => {
+  const repo = "leisurewang0827/tennis-note-public", current = "1".repeat(40);
+  const run = { id: 41166580662, head_sha: PHONE_PREDECESSOR, event: "pull_request", run_attempt: 1,
+    status: "completed", conclusion: "success", name: "Tennis Note Public PWA CI", workflow_id: 329932540,
+    path: ".github/workflows/tennisnote-public-ci.yml", repository: { full_name: repo }, head_repository: { full_name: repo },
+    pull_requests: [{ number: 228, head: { sha: current }, base: { sha: BASE } }] };
+  assert.equal(validatePhonePriorRun(run, current).deploymentAdmitted, false);
+  assert.throws(() => validatePhonePriorRun({ ...run, head_sha: current }, current));
+  assert.throws(() => validatePhonePriorRun(run, "2".repeat(40)));
 });
 
 test("phone successor: exact new scope stays separate from old pins", () => {

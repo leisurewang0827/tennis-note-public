@@ -74,6 +74,7 @@ function validatePrBoundary(s) {
 
 // Independent 572 successor. The 571 pins and validators above remain unchanged.
 const PHONE_PREDECESSOR = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37";
+const PHONE_CORRECTIVE_BASE = "328a174047651a839910e2f678d9471bc762cdb0";
 const PHONE_PIN = Object.freeze({
   "app/admin/domain/coaches.js": "bba3e4430b43a293197f83c1a5b6f607acb2098712f95bef19147d98fd3b52ac",
   "app/admin/index.html": "44cae729bd125f3eb539e3ac9d07c8b84738c36902d85143043e68e5d7dedc21",
@@ -108,7 +109,7 @@ function validatePhoneLocalScope(s) {
   return Object.freeze({ status: "LOCAL_SCOPE_ONLY_NOT_DEPLOYABLE", files: expected.length });
 }
 
-function validatePhonePriorRun(run) {
+function validatePhonePriorRun(run, currentHead) {
   need(run && run.id === 41166580662 && run.head_sha === PHONE_PREDECESSOR
     && run.event === "pull_request" && run.run_attempt === 1 && run.status === "completed"
     && run.conclusion === "success" && run.name === "Tennis Note Public PWA CI"
@@ -116,7 +117,8 @@ function validatePhonePriorRun(run) {
     && run.repository?.full_name === "leisurewang0827/tennis-note-public"
     && run.head_repository?.full_name === "leisurewang0827/tennis-note-public"
     && Array.isArray(run.pull_requests) && run.pull_requests.length === 1
-    && run.pull_requests[0].number === 228 && run.pull_requests[0].head?.sha === PHONE_PREDECESSOR
+    && /^[a-f0-9]{40}$/.test(currentHead || "")
+    && run.pull_requests[0].number === 228 && run.pull_requests[0].head?.sha === currentHead
     && run.pull_requests[0].base?.sha === BASE);
   return Object.freeze({ status: "PREDECESSOR_RUN_METADATA_ONLY", deploymentAdmitted: false });
 }
@@ -130,7 +132,8 @@ function validatePhonePrGraph(s) {
     && s.ref === "refs/pull/228/merge" && s.workflow === "Tennis Note Public PWA CI"
     && s.workflowRef === `${repo}/.github/workflows/tennisnote-public-ci.yml@${s.ref}`
     && sha(s.head) && sha(s.merge) && sha(s.headTree) && s.headTree === s.mergeTree
-    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === PHONE_PREDECESSOR
+    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === PHONE_CORRECTIVE_BASE
+    && Array.isArray(s.correctiveParents) && s.correctiveParents.length === 1 && s.correctiveParents[0] === PHONE_PREDECESSOR
     && Array.isArray(s.mergeParents) && s.mergeParents.length === 2
     && s.mergeParents[0] === BASE && s.mergeParents[1] === s.head
     && s.githubSha === s.merge && s.workflowSha === s.merge && s.clean === true && s.indexClean === true);
@@ -157,5 +160,5 @@ function validatePhoneDeltaRows(rows, wiring) {
 }
 
 module.exports = { validateLocalScope, validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
-  PHONE_PREDECESSOR, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
+  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
   validatePhonePriorJobs, validatePhoneDeltaRows };

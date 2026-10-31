@@ -114,11 +114,11 @@ jobs:
           STATUS_GITHUB_TOKEN: ${{ github.token }}
           PHONE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37" ]; then
+          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "328a174047651a839910e2f678d9471bc762cdb0" ]; then
             node scripts/collect_r3_response_label_pr.cjs --phone
-            node --test --test-name-pattern='^phone successor' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
+            node --test --test-name-pattern='^phone (successor|corrective)' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
             node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
-            python tests/r3-response-label-deploy.test.py StatusDeploy.test_phone_successor_scope StatusDeploy.test_phone_dispatch_rejects_wrong_context_before_external_access
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_phone_successor_scope StatusDeploy.test_phone_dispatch_rejects_wrong_context_before_external_access StatusDeploy.test_phone_corrective_live_shape
           else
             node scripts/collect_r3_response_label_pr.cjs --prepare-base
             if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then
