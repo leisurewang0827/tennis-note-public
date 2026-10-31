@@ -58,8 +58,81 @@ jobs:
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay,kakaopay
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
+      - name: Check out response-label successor
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /app/admin/views/billing.js
+            /app/admin/domain/coaches.js
+            /app/admin/domain/common.js
+            /app/admin/domain/values.js
+            /app/admin/actions/coach.js
+            /app/admin/data/common.js
+            /app/admin/data/schedule.js
+            /app/admin/forms/coach.js
+            /app/admin/views/settings.js
+            /tests/coach-staff-settlement-readback.test.js
+            /tests/r3-admin-response-label.test.js
+            /app/admin/index.html
+            /app/release.json
+            /app/shared/tennisnote-release.js
+            /app/tennis-note-coach-app/app.js
+            /app/tennis-note-coach-app/domain/coaches.js
+            /app/tennis-note-coach-app/forms/common.js
+            /app/tennis-note-coach-app/index.html
+            /app/tennis-note-coach-app/service-worker.js
+            /app/tennis-note-member-app/app.js
+            /app/tennis-note-member-app/forms/common.js
+            /app/tennis-note-member-app/index.html
+            /app/tennis-note-member-app/service-worker.js
+            /app/tennis-note-member-app/ui/screens.js
+            /scripts/check_r3_response_label_successor.cjs
+            /tests/r3-response-label-successor-core.test.cjs
+            /scripts/collect_r3_response_label_pr.cjs
+            /tests/r3-response-label-collector.test.cjs
+            /tests/r3-response-label-deploy.test.py
+            /.github/workflows/tennisnote-public-ci.yml
+            /.github/workflows/deploy-cloudflare-pages-dev.yml
+            /scripts/check_r3_dev_deployment.py
+            /tests/fixtures/r3-dev-cache-floors.json
+      - uses: actions/setup-node@v7
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v7
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        with:
+          python-version: "3.12"
+      - name: Admit exact response-label successor
+        id: response_label
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        env:
+          STATUS_GITHUB_TOKEN: ${{ github.token }}
+          PHONE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "c52e19fa704fc57fa60eb3abdb60475b7aa131d3" ]; then
+            node scripts/collect_r3_response_label_pr.cjs --phone
+            node --test --test-name-pattern='^phone (successor|corrective)' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
+            node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_phone_successor_scope StatusDeploy.test_phone_dispatch_rejects_wrong_context_before_external_access StatusDeploy.test_phone_corrective_live_shape
+          else
+            node scripts/collect_r3_response_label_pr.cjs --prepare-base
+            if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then
+              node scripts/collect_r3_response_label_pr.cjs --show-hold "$RUNNER_TEMP/r3-status-source-receipt.json"
+              exit 1
+            fi
+            node scripts/collect_r3_response_label_pr.cjs --verify-receipt "$RUNNER_TEMP/r3-status-source-receipt.json"
+            node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs
+            node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph
+          fi
+          echo 'scoped=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
-        if: github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031')
+        if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -86,25 +159,25 @@ jobs:
             /scripts/check_r3_dev_deployment.py
             /.github/workflows/tennisnote-public-ci.yml
       - uses: actions/setup-node@v7
-        if: github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031')
+        if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))
         with:
           node-version: "22"
       - name: Prepare two pinned current-term base blobs
-        if: github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031')
+        if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))
         run: node scripts/check_r3_purchase_identity_admission.mjs --current-term-blob-transport
       - name: Admit current-term successor
         id: current_term
-        if: github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031')
+        if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))
         run: node scripts/check_r3_purchase_identity_admission.mjs --ci-route --current-term
       - name: Verify current-term admission receipt
-        if: steps.current_term.outputs.scoped == 'true'
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped == 'true')
         run: test '${{ steps.current_term.outputs.current_term_pass }}' = 'true'
       - uses: actions/checkout@v7
-        if: steps.current_term.outputs.scoped != 'true' && (!(startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')))
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (!(startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4'))))
         with:
           fetch-depth: 0
       - uses: actions/checkout@v7
-        if: steps.current_term.outputs.scoped != 'true' && (startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4'))
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4')))
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -136,16 +209,16 @@ jobs:
             /app/tennis-note-member-app/service-worker.js
             /app/tennis-note-member-app/ui/screens.js
       - uses: actions/setup-python@v7
-        if: steps.current_term.outputs.scoped != 'true'
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true')
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v7
-        if: steps.current_term.outputs.scoped != 'true'
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true')
         with:
           node-version: "22"
       - name: Admit exact reviewed display and release source
         id: display
-        if: steps.current_term.outputs.scoped != 'true'
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true')
         env:
           R3_TARGET: ${{ github.base_ref || github.ref_name }}
           R3_ROW_SCOPE_CLAIMED: ${{ github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' }}
@@ -161,36 +234,36 @@ jobs:
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
       - name: Legacy monthly source linkage only; reviewed product evidence is not repeated
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.legacy_monthly_only == 'true' && github.event_name == 'pull_request')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.legacy_monthly_only == 'true' && github.event_name == 'pull_request'))
         run: ./scripts/verify.sh --r3-legacy-monthly
       - name: Canonical production selection and forward recovery delta only
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.production_only == 'true' && github.event_name == 'pull_request')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.production_only == 'true' && github.event_name == 'pull_request'))
         env:
           R3_PRODUCTION_SELECTED: "1"
         run: |
           node --test --test-name-pattern='^PROD559:' tests/r3-purchase-identity-admission.test.mjs
           python -B tests/r3-production-runtime-order.test.py
       - name: New source merge and collector cases only
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.display_only == 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.display_only == 'true'))
         run: node --test tests/r3-display-source.test.mjs
       - name: DEV564 purchase identity and successor linkage only
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.purchase_identity_only == 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.purchase_identity_only == 'true'))
         run: |
           node --test tests/r3-purchase-identity-admission.test.mjs tests/admin-purchase-identity-wiring.test.js
           python -B tests/r3-purchase-identity-dev.test.py
       - name: DEV565 term history public functions and admission delta only
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.term_history_only == 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.term_history_only == 'true'))
         run: |
           node --test --test-name-pattern='^DEV565 term-history:' tests/r3-purchase-identity-admission.test.mjs
           python -B tests/r3-purchase-identity-dev.test.py TermHistory
       - name: DEV566 checkout policy public function and admission delta only
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.checkout_mode_only == 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.checkout_mode_only == 'true'))
         run: |
           node --test --test-name-pattern='^DEV566 checkout-mode:' tests/r3-purchase-identity-admission.test.mjs
           python -B tests/r3-purchase-identity-dev.test.py CheckoutMode
       # 고정 운영 기준 blob과 로컬 검사에 쓰인 동일 브라우저 런타임을 준비한다.
       - name: Prepare pinned browser runtime
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.scoped != 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.scoped != 'true'))
         run: |
           npm install --prefix "$RUNNER_TEMP/tennisnote-browser" --no-save --package-lock=false playwright@1.62.1
           echo "NODE_PATH=$RUNNER_TEMP/tennisnote-browser/node_modules" >> "$GITHUB_ENV"
@@ -198,5 +271,5 @@ jobs:
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify
-        if: steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.scoped != 'true')
+        if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.scoped != 'true'))
         run: ./scripts/verify.sh
