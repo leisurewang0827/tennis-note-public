@@ -48,6 +48,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Admit exact manual R3 candidate
         if: github.event_name == 'workflow_dispatch'
         run: python scripts/check_r3_dev_deployment.py --source-only

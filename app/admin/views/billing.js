@@ -753,13 +753,19 @@ function renderAdminSettlementHistory() {
     ["계산 계약", snapshot.calculationVersion === "r3_monthly_settlement_v1" ? "기존 v1 계산본" : "적용일별 v2 계산본"],
     ["계산본", `revision ${snapshot.revision} · ${snapshot.sourceFingerprint.slice(0, 8)}`],
     ["확정 시각", new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value.confirmation.confirmedAt))],
-    ["코치 응답", value.reconciliation?.status === "ACKNOWLEDGED" ? "확인 완료" : value.reconciliation?.status === "DISPUTED" ? "이의 접수" : "응답 대기"],
+    ["코치 응답", adminSettlementResponseLabel(value.reconciliation)],
   ];
   if (value.reconciliation?.reason) rows.push(["이의 사유", normalizeAdminHistoryReason(value.reconciliation.reason)]);
   for (const [label, content] of rows) {
     const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
   }
   renderAdminR3SettlementWriter();
+}
+
+function adminSettlementResponseLabel(reconciliation) {
+  if (reconciliation == null) return "응답 대기";
+  const status = String(reconciliation.status || "").toLowerCase();
+  return status === "acknowledged" ? "확인 완료" : status === "disputed" ? "이의 접수" : "상태 확인 필요";
 }
 
 function renderAdminR3SettlementWriter() {
