@@ -3,6 +3,8 @@
 // Pure local source-scope contract. This module does not authorize CI skips or deployment.
 // A reviewed workflow/CI/target binding must be added separately before any remote use.
 const BASE = "efc84a88a389b292ff226b760c935de19ac9f07b";
+const SOURCE = "fb4c6a6377c0efaf64d63fbfb219688b7bc0e9e4";
+const METADATA = "be29bbc2f7b18ba05eb8f943a0640cb9205c9578";
 const BRANCH = "codex/tennisnote-r3-admin-response-label-dev571-20261031";
 const PROJECT = "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
 const META = Object.freeze([
@@ -58,8 +60,9 @@ function validatePrBoundary(s) {
     && s.headRef === BRANCH && s.attempt === 1 && Number.isSafeInteger(s.number) && s.number > 0
     && s.ref === `refs/pull/${s.number}/merge` && s.workflow === "Tennis Note Public PWA CI"
     && s.workflowRef === `${repo}/.github/workflows/tennisnote-public-ci.yml@${s.ref}`
-    && sha(s.head) && sha(s.source) && sha(s.merge) && sha(s.headTree) && s.headTree === s.mergeTree
-    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === s.source
+    && sha(s.head) && s.source === SOURCE && s.metadata === METADATA && sha(s.merge) && sha(s.headTree) && s.headTree === s.mergeTree
+    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === METADATA
+    && Array.isArray(s.metadataParents) && s.metadataParents.length === 1 && s.metadataParents[0] === SOURCE
     && Array.isArray(s.sourceParents) && s.sourceParents.length === 1 && s.sourceParents[0] === BASE
     && Array.isArray(s.mergeParents) && s.mergeParents.length === 2
     && s.mergeParents[0] === BASE && s.mergeParents[1] === s.head
@@ -67,4 +70,4 @@ function validatePrBoundary(s) {
   return Object.freeze({ status: "PR_METADATA_ONLY_NOT_ADMITTED" });
 }
 
-module.exports = { validateLocalScope, validatePrBoundary, PIN, META, BASE, BRANCH, PROJECT };
+module.exports = { validateLocalScope, validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, BRANCH, PROJECT };

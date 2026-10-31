@@ -5,7 +5,8 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, BASE_BLOBS } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { createHash } = require("node:crypto");
 test("a real dirty checkout is held before CI environment or API access", () => {
   const root = path.join(__dirname, "..");
   const result = spawnSync(process.execPath, ["scripts/collect_r3_response_label_pr.cjs"], {
@@ -60,5 +61,53 @@ test("receipt requires exact source context and never authorizes deployment", ()
     { source: head }, { merge: head }, { tree: head }, { workflowSha: head }, { wiringLfSha256: "0".repeat(64) },
     { productFiles: 14 }, { wiringFiles: 7 }]) {
     assert.throws(() => verifyReceiptFields({ ...receipt, ...change }, context), /RECEIPT_HOLD/);
+  }
+});
+test("receipt pinned blob decoder rejects malformed data, wrong size and hashes", () => {
+  const bytes = Buffer.from("synthetic\n"), size = bytes.length;
+  const oid = createHash("sha1").update(Buffer.from(`blob ${size}\0`)).update(bytes).digest("hex");
+  const lf = createHash("sha256").update(bytes).digest("hex");
+  const payload = { sha: oid, size, encoding: "base64", content: bytes.toString("base64") };
+  assert.deepEqual(decodePinnedBlob(payload, oid, size, lf), bytes);
+  for (const bad of [{ ...payload, content: "???" }, { ...payload, size: size + 1 }, { ...payload, sha: "0".repeat(40) }]) {
+    assert.throws(() => decodePinnedBlob(bad, oid, size, lf), /BLOB_/);
+  }
+  assert.throws(() => decodePinnedBlob(payload, oid, size, "0".repeat(64)), /BLOB_IDENTITY/);
+});
+test("receipt corrective layer admits only the exact modified wiring paths", () => {
+  const rows = FIX.map((p) => ["M", p]);
+  assert.doesNotThrow(() => validateLayerRows(rows, FIX, () => "M"));
+  for (const bad of [rows.slice(1), [...rows.slice(1), ["M", "unknown"]], rows.map((r, i) => i ? r : ["A", r[1]])]) {
+    assert.throws(() => validateLayerRows(bad, FIX, () => "M"), /LAYER_SCOPE/);
+  }
+});
+test("receipt missing pinned blob is fetched once and verified after storing", async () => {
+  const bytes = Buffer.from("synthetic\n"), size = bytes.length;
+  const oid = createHash("sha1").update(Buffer.from(`blob ${size}\0`)).update(bytes).digest("hex");
+  const lf = createHash("sha256").update(bytes).digest("hex");
+  let stored = null, fetches = 0, writes = 0;
+  const result = await ensurePinnedBlobs([[oid, size, lf]], async () => stored,
+    async () => { fetches++; return { sha: oid, size, encoding: "base64", content: bytes.toString("base64") }; },
+    async (value) => { writes++; stored = value; return oid; });
+  assert.deepEqual(result, [true]); assert.equal(fetches, 1); assert.equal(writes, 1);
+  await assert.rejects(() => ensurePinnedBlobs([[oid, size, lf]], async () => null,
+    async () => ({ sha: oid, size, encoding: "base64", content: "!!!" }), async () => { throw Error("unexpected write"); }), /BLOB_ENCODING/);
+});
+test("receipt failure output only exposes allowlisted reason codes", () => {
+  assert.deepEqual(safeHold(Error("BLOB_IDENTITY")), { status: "HOLD", reason: "BLOB_IDENTITY", deploymentAdmitted: false });
+  for (const message of ["SECRET", "token=synthetic", "", "C:\\private\\path"]) {
+    assert.deepEqual(safeHold(Error(message)), { status: "HOLD", reason: "COLLECTION_HOLD", deploymentAdmitted: false });
+  }
+});
+test("receipt pinned base blobs match exact historical git bytes", () => {
+  const root = path.join(__dirname, ".."), base = "efc84a88a389b292ff226b760c935de19ac9f07b";
+  const paths = [".github/workflows/tennisnote-public-ci.yml", ".github/workflows/deploy-cloudflare-pages-dev.yml"];
+  assert.equal(BASE_BLOBS.length, paths.length);
+  for (let i = 0; i < paths.length; i++) {
+    const bytes = execFileSync("git", ["show", `${base}:${paths[i]}`], { cwd: root, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } });
+    const [oid, size, lf] = BASE_BLOBS[i];
+    assert.equal(bytes.length, size);
+    assert.equal(createHash("sha1").update(Buffer.from(`blob ${size}\0`)).update(bytes).digest("hex"), oid);
+    assert.equal(createHash("sha256").update(bytes.toString("utf8").replace(/\r\n/g, "\n")).digest("hex"), lf);
   }
 });
