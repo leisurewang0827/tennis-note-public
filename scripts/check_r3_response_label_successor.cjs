@@ -75,6 +75,7 @@ function validatePrBoundary(s) {
 // Independent 572 successor. The 571 pins and validators above remain unchanged.
 const PHONE_PREDECESSOR = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37";
 const PHONE_CORRECTIVE_BASE = "328a174047651a839910e2f678d9471bc762cdb0";
+const PHONE_BLOBLESS_BASE = "c52e19fa704fc57fa60eb3abdb60475b7aa131d3";
 const PHONE_PIN = Object.freeze({
   "app/admin/domain/coaches.js": "bba3e4430b43a293197f83c1a5b6f607acb2098712f95bef19147d98fd3b52ac",
   "app/admin/index.html": "44cae729bd125f3eb539e3ac9d07c8b84738c36902d85143043e68e5d7dedc21",
@@ -132,7 +133,8 @@ function validatePhonePrGraph(s) {
     && s.ref === "refs/pull/228/merge" && s.workflow === "Tennis Note Public PWA CI"
     && s.workflowRef === `${repo}/.github/workflows/tennisnote-public-ci.yml@${s.ref}`
     && sha(s.head) && sha(s.merge) && sha(s.headTree) && s.headTree === s.mergeTree
-    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === PHONE_CORRECTIVE_BASE
+    && Array.isArray(s.headParents) && s.headParents.length === 1 && s.headParents[0] === PHONE_BLOBLESS_BASE
+    && Array.isArray(s.bloblessParents) && s.bloblessParents.length === 1 && s.bloblessParents[0] === PHONE_CORRECTIVE_BASE
     && Array.isArray(s.correctiveParents) && s.correctiveParents.length === 1 && s.correctiveParents[0] === PHONE_PREDECESSOR
     && Array.isArray(s.mergeParents) && s.mergeParents.length === 2
     && s.mergeParents[0] === BASE && s.mergeParents[1] === s.head
@@ -160,5 +162,5 @@ function validatePhoneDeltaRows(rows, wiring) {
 }
 
 module.exports = { validateLocalScope, validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
-  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
+  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_BLOBLESS_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
   validatePhonePriorJobs, validatePhoneDeltaRows };

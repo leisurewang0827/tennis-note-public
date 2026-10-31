@@ -5,7 +5,21 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, phoneGithubJson } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, PHONE_HISTORICAL_WORKFLOW, phoneGithubJson } = require("../scripts/collect_r3_response_label_pr.cjs");
+
+test("phone corrective blobless history hydrates only exact pinned workflow", async () => {
+  const [oid, size] = PHONE_HISTORICAL_WORKFLOW;
+  const bytes = execFileSync("git", ["cat-file", "blob", oid], { cwd: path.join(__dirname, "..") });
+  let stored = null, fetches = 0, writes = 0;
+  const get = async () => stored;
+  const fetch = async () => { fetches++; return { sha: oid, size, encoding: "base64", content: bytes.toString("base64") }; };
+  const write = async (value) => { writes++; stored = value; return oid; };
+  assert.deepEqual(await ensurePinnedBlobs([PHONE_HISTORICAL_WORKFLOW], get, fetch, write), [true]);
+  assert.equal(fetches, 1); assert.equal(writes, 1); assert.deepEqual(stored, bytes);
+  await assert.rejects(() => ensurePinnedBlobs([PHONE_HISTORICAL_WORKFLOW], async () => null,
+    async () => ({ sha: oid, size, encoding: "base64", content: Buffer.alloc(size).toString("base64") }), write), /BLOB_IDENTITY/);
+  assert.equal(writes, 1);
+});
 
 test("phone corrective diagnostics allow only fixed redacted codes", () => {
   assert.equal(safeHold(Error("PHONE_API_HTTP")).reason, "PHONE_API_HTTP");

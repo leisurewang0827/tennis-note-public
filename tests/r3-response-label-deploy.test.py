@@ -18,7 +18,7 @@ class StatusDeploy(unittest.TestCase):
         run, pr, head, merge, jobs, candidate = values[0], values[1], values[2], values[6], values[7], values[8]
         run["pull_requests"][0]["number"] = 228
         pr["number"] = 228
-        head["parents"] = [{"sha": module.PHONE_DEV_CORRECTIVE_BASE}]
+        head["parents"] = [{"sha": module.PHONE_DEV_BLOBLESS_BASE}]
         prior = copy.deepcopy(run)
         prior.update({"id": module.PHONE_DEV_PREDECESSOR_RUN, "head_sha": module.PHONE_DEV_PREDECESSOR})
         arguments = [run, pr, head, merge, jobs, prior, copy.deepcopy(jobs), candidate]
@@ -44,7 +44,7 @@ class StatusDeploy(unittest.TestCase):
         run, pr, head, merge, jobs, candidate = old[0], old[1], old[2], old[6], old[7], old[8]
         run["pull_requests"][0]["number"] = 228
         pr["number"] = 228
-        head["parents"] = [{"sha": module.PHONE_DEV_CORRECTIVE_BASE}]
+        head["parents"] = [{"sha": module.PHONE_DEV_BLOBLESS_BASE}]
         prior = copy.deepcopy(run)
         prior.update({"id": module.PHONE_DEV_PREDECESSOR_RUN, "head_sha": module.PHONE_DEV_PREDECESSOR})
         prior["pull_requests"][0]["head"]["sha"] = candidate

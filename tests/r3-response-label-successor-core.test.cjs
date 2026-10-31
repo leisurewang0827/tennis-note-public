@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { validateLocalScope, validatePrBoundary, PIN, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
-  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
+  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_BLOBLESS_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePriorRun, validatePhonePrGraph,
   validatePhonePriorJobs, validatePhoneDeltaRows } = require("../scripts/check_r3_response_label_successor.cjs");
 
 test("phone successor jobs and exact delta reject missing or extra evidence", () => {
@@ -39,7 +39,7 @@ test("phone successor graph: exact predecessor CI and PR metadata fail closed", 
     baseRef: "codex/tennisnote-r3-current-term-dev570-20261031", headRef: BRANCH,
     attempt: 1, number: 228, ref: "refs/pull/228/merge", workflow: "Tennis Note Public PWA CI",
     workflowRef: `${repo}/.github/workflows/tennisnote-public-ci.yml@refs/pull/228/merge`,
-    head, merge, headTree: head, mergeTree: head, headParents: [PHONE_CORRECTIVE_BASE], correctiveParents: [PHONE_PREDECESSOR], mergeParents: [BASE, head],
+    head, merge, headTree: head, mergeTree: head, headParents: [PHONE_BLOBLESS_BASE], bloblessParents: [PHONE_CORRECTIVE_BASE], correctiveParents: [PHONE_PREDECESSOR], mergeParents: [BASE, head],
     githubSha: merge, workflowSha: merge, clean: true, indexClean: true };
   assert.equal(validatePhonePrGraph(s).status, "PHONE_PR_METADATA_ONLY_NOT_ADMITTED");
   for (const change of [{ number: 229 }, { base: head }, { headRepo: "other" }, { attempt: 2 },
@@ -57,6 +57,21 @@ test("phone corrective prior immutable head and current PR head stay distinct", 
   assert.equal(validatePhonePriorRun(run, current).deploymentAdmitted, false);
   assert.throws(() => validatePhonePriorRun({ ...run, head_sha: current }, current));
   assert.throws(() => validatePhonePriorRun(run, "2".repeat(40)));
+});
+
+test("phone corrective blobless lineage pins all three historical parents", () => {
+  const repo = "leisurewang0827/tennis-note-public", head = "1".repeat(40), merge = "2".repeat(40);
+  const s = { event: "pull_request", repo, baseRepo: repo, headRepo: repo, base: BASE,
+    baseRef: "codex/tennisnote-r3-current-term-dev570-20261031", headRef: BRANCH,
+    attempt: 1, number: 228, ref: "refs/pull/228/merge", workflow: "Tennis Note Public PWA CI",
+    workflowRef: `${repo}/.github/workflows/tennisnote-public-ci.yml@refs/pull/228/merge`,
+    head, merge, headTree: head, mergeTree: head, headParents: [PHONE_BLOBLESS_BASE],
+    bloblessParents: [PHONE_CORRECTIVE_BASE], correctiveParents: [PHONE_PREDECESSOR], mergeParents: [BASE, head],
+    githubSha: merge, workflowSha: merge, clean: true, indexClean: true };
+  assert.equal(validatePhonePrGraph(s).status, "PHONE_PR_METADATA_ONLY_NOT_ADMITTED");
+  for (const key of ["headParents", "bloblessParents", "correctiveParents"]) {
+    assert.throws(() => validatePhonePrGraph({ ...s, [key]: ["3".repeat(40)] }));
+  }
 });
 
 test("phone successor: exact new scope stays separate from old pins", () => {

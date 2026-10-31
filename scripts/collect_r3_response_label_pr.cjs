@@ -6,7 +6,7 @@ const { readFileSync, lstatSync } = require("node:fs");
 const { createHash } = require("node:crypto");
 const { resolve } = require("node:path");
 const { validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
-  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePrGraph,
+  PHONE_PREDECESSOR, PHONE_CORRECTIVE_BASE, PHONE_BLOBLESS_BASE, PHONE_PIN, validatePhoneLocalScope, validatePhonePrGraph,
   validatePhonePriorRun, validatePhonePriorJobs, validatePhoneDeltaRows } = require("./check_r3_response_label_successor.cjs");
 const ROOT = resolve(__dirname, "..");
 const REPO = "leisurewang0827/tennis-note-public";
@@ -35,6 +35,7 @@ const PHONE_WIRING = Object.freeze([
   "tests/r3-response-label-successor-core.test.cjs", "tests/r3-response-label-collector.test.cjs",
   "tests/r3-response-label-deploy.test.py",
 ]);
+const PHONE_HISTORICAL_WORKFLOW = Object.freeze(["d1830797fa866f2184d66e7468537276564e8d28", 15556, "bfd10c4afafb5f44209cbf830d3a3bf2260ef2341c4cb58efeadd39324353812"]);
 const BASE_BLOBS = Object.freeze([
   ["c3823d163e7e8acbb3e69c591273f586425bbcea", 11453, "ef74017550fb4c8f18142424792d81e3f953740bf9880366732b32a65d9ebccd"],
   ["c5c263549ee1961a3acf68565a9e23cb2ef67462", 3455, "2118c7c378086e74262b48b0a0495e42abe35f9e34f2e7d3f4f50f6762b3bdd9"],
@@ -75,11 +76,13 @@ function wrapDeployWorkflow(base) {
   return result.replace(liveStep, liveStep + "          STATUS_GITHUB_TOKEN: ${{ github.token }}\n");
 }
 const need = (value, code) => { if (!value) throw Error(code); };
+let phoneStage = null;
 function safeHold(error) {
   const message = String(error?.message || "");
   const allowed = new Set(["DIRTY_WORKTREE", "DIRTY_INDEX", "EVENT_CONTEXT", "PR_CONTEXT", "PR_READ_FAILED", "PR_READ_LIMIT", "PR_DRIFT", "SOURCE_PARENT", "WORKFLOW_INVERSE", "DEPLOY_WORKFLOW_INVERSE", "PATH_SCOPE", "LAYER_SCOPE", "FILE_MODE", "SYMLINK", "FILE_DRIFT", "PRODUCT_PIN", "POST_DRIFT", "RECEIPT_HOLD", "RECEIPT_CONTEXT", "RECEIPT_GRAPH", "ARGUMENT_HOLD", "PREP_CONTEXT", "PREP_GRAPH", "BLOB_SHAPE", "BLOB_ENCODING", "BLOB_IDENTITY", "BLOB_HTTP", "BLOB_HTTP_LIMIT", "BLOB_STORE", "BLOB_MISSING"]);
   const phoneCodes = new Set(["PHONE_API_SCOPE", "PHONE_API_HTTP", "PHONE_API_LIMIT", "PHONE_EVENT", "PHONE_PR_DRIFT", "PHONE_WORKFLOW_INVERSE", "PHONE_WORKFLOW_SPARSE", "PHONE_WORKFLOW_ANCHOR", "PHONE_WORKFLOW_OLD", "PHONE_MODE", "PHONE_SYMLINK", "PHONE_FILE_DRIFT", "STATUS_SUCCESSOR_HOLD"]);
-  return { status: "HOLD", reason: allowed.has(message) || phoneCodes.has(message) ? message : "COLLECTION_HOLD", deploymentAdmitted: false };
+  const phoneStages = new Set(["PHONE_STAGE_EVENT", "PHONE_STAGE_API", "PHONE_STAGE_PRIOR", "PHONE_STAGE_GRAPH", "PHONE_STAGE_BLOB", "PHONE_STAGE_WORKFLOW", "PHONE_STAGE_PATHS", "PHONE_STAGE_FILES", "PHONE_STAGE_RELEASE", "PHONE_STAGE_FINAL"]);
+  return { status: "HOLD", reason: allowed.has(message) || phoneCodes.has(message) ? message : (phoneStages.has(phoneStage) ? phoneStage : "COLLECTION_HOLD"), deploymentAdmitted: false };
 }
 function validateLayerRows(rows, paths, expectedStatus) {
   const sorted = [...paths].sort();
@@ -196,7 +199,7 @@ function verifyReceiptFile(file) {
 }
 
 async function phoneGithubJson(path, token) {
-  need(["pulls/228", "actions/runs/41166580662", "actions/runs/41166580662/jobs?per_page=100"].includes(path)
+  need(["pulls/228", "actions/runs/41166580662", "actions/runs/41166580662/jobs?per_page=100", `git/blobs/${PHONE_HISTORICAL_WORKFLOW[0]}`].includes(path)
     && typeof token === "string" && token.length > 0, "PHONE_API_SCOPE");
   const response = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", Authorization: `Bearer ${token}` },
@@ -236,7 +239,7 @@ function wrapPhoneWorkflow(previous) {
           echo 'scoped=true' >> "$GITHUB_OUTPUT"
 `;
   need(oldBlock === expectedOld, "PHONE_WORKFLOW_OLD");
-  const phoneCommands = `          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "${PHONE_CORRECTIVE_BASE}" ]; then
+  const phoneCommands = `          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "${PHONE_BLOBLESS_BASE}" ]; then
             node scripts/collect_r3_response_label_pr.cjs --phone
             node --test --test-name-pattern='^phone (successor|corrective)' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
             node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
@@ -252,32 +255,46 @@ function wrapPhoneWorkflow(previous) {
 }
 
 async function collectPhone() {
+  phoneStage = "PHONE_STAGE_EVENT";
   const env = process.env;
   need(git("status", "--porcelain", "--untracked-files=all") === "" && git("diff", "--cached", "--name-only") === "", "DIRTY_WORKTREE");
   need(env.GITHUB_EVENT_PATH && env.GITHUB_RUN_ATTEMPT === "1", "PHONE_EVENT");
   const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  phoneStage = "PHONE_STAGE_API";
   const [pr, priorRun, priorJobs] = await Promise.all([
     phoneGithubJson("pulls/228", env.STATUS_GITHUB_TOKEN),
     phoneGithubJson("actions/runs/41166580662", env.STATUS_GITHUB_TOKEN),
     phoneGithubJson("actions/runs/41166580662/jobs?per_page=100", env.STATUS_GITHUB_TOKEN),
   ]);
+  phoneStage = "PHONE_STAGE_PRIOR";
   const head = pr.head?.sha, merge = git("rev-parse", "HEAD");
   validatePhonePriorRun(priorRun, head); validatePhonePriorJobs(priorJobs);
   need(pr.state === "open" && pr.number === 228 && event.number === 228 && event.repository?.full_name === REPO
     && event.pull_request?.head?.sha === head && event.pull_request?.base?.sha === pr.base?.sha, "PHONE_PR_DRIFT");
+  phoneStage = "PHONE_STAGE_GRAPH";
   validatePhonePrGraph({ event: env.GITHUB_EVENT_NAME, repo: env.GITHUB_REPOSITORY,
     baseRepo: pr.base?.repo?.full_name, headRepo: pr.head?.repo?.full_name,
     base: pr.base?.sha, baseRef: pr.base?.ref, headRef: pr.head?.ref, attempt: Number(env.GITHUB_RUN_ATTEMPT),
     number: pr.number, ref: env.GITHUB_REF, workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF,
     head, merge, headTree: git("rev-parse", `${head}^{tree}`), mergeTree: git("rev-parse", `${merge}^{tree}`),
     headParents: git("show", "-s", "--format=%P", head).split(" ").filter(Boolean),
+    bloblessParents: git("show", "-s", "--format=%P", PHONE_BLOBLESS_BASE).split(" ").filter(Boolean),
     correctiveParents: git("show", "-s", "--format=%P", PHONE_CORRECTIVE_BASE).split(" ").filter(Boolean),
     mergeParents: git("show", "-s", "--format=%P", merge).split(" ").filter(Boolean),
     githubSha: env.GITHUB_SHA, workflowSha: env.GITHUB_WORKFLOW_SHA, clean: true, indexClean: true });
+  phoneStage = "PHONE_STAGE_BLOB";
+  need(git("rev-parse", `${PHONE_PREDECESSOR}:.github/workflows/tennisnote-public-ci.yml`) === PHONE_HISTORICAL_WORKFLOW[0], "BLOB_IDENTITY");
+  await ensurePinnedBlobs([PHONE_HISTORICAL_WORKFLOW],
+    async (oid) => { try { return execFileSync("git", ["cat-file", "blob", oid], { cwd: ROOT, env: { ...env, GIT_NO_LAZY_FETCH: "1" }, timeout: 15000, maxBuffer: 100000, stdio: ["ignore", "pipe", "pipe"] }); } catch { return null; } },
+    async (oid) => phoneGithubJson(`git/blobs/${oid}`, env.STATUS_GITHUB_TOKEN),
+    async (bytes) => execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: ROOT, input: bytes, encoding: "utf8", env: { ...env, GIT_NO_LAZY_FETCH: "1" }, timeout: 15000, maxBuffer: 1000, stdio: ["pipe", "pipe", "pipe"] }).trim());
+  phoneStage = "PHONE_STAGE_WORKFLOW";
   need(gitRaw("show", `${head}:.github/workflows/tennisnote-public-ci.yml`).replace(/\r\n/g, "\n")
     === wrapPhoneWorkflow(gitRaw("show", `${PHONE_PREDECESSOR}:.github/workflows/tennisnote-public-ci.yml`).replace(/\r\n/g, "\n")), "PHONE_WORKFLOW_INVERSE");
+  phoneStage = "PHONE_STAGE_PATHS";
   const rows = git("diff", "--no-renames", "--name-status", PHONE_PREDECESSOR, head).split("\n").filter(Boolean).map((x) => x.split("\t"));
   validatePhoneDeltaRows(rows, PHONE_WIRING);
+  phoneStage = "PHONE_STAGE_FILES";
   const hashes = {};
   for (const [, p] of rows) {
     need(git("ls-tree", "--format=%(objectmode)", head, "--", p) === "100644", "PHONE_MODE");
@@ -287,6 +304,7 @@ async function collectPhone() {
     need(text.replace(/\r\n/g, "\n") === gitRaw("show", `${head}:${p}`).replace(/\r\n/g, "\n"), "PHONE_FILE_DRIFT");
     if (Object.hasOwn(PHONE_PIN, p)) hashes[p] = digest(text);
   }
+  phoneStage = "PHONE_STAGE_RELEASE";
   const release = JSON.parse(readFileSync(resolve(ROOT, "app/release.json"), "utf8"));
   const member = readFileSync(resolve(ROOT, "app/tennis-note-member-app/service-worker.js"), "utf8");
   const coach = readFileSync(resolve(ROOT, "app/tennis-note-coach-app/service-worker.js"), "utf8");
@@ -296,6 +314,7 @@ async function collectPhone() {
     releaseId: release.releaseId, memberCache: number(member, "tennis-note-member-pwa-v"),
     coachCache: number(coach, "tennis-note-coach-mode-v"), nativeBuildChanged: false, databaseAction: false,
     paths: Object.keys(hashes), hashes });
+  phoneStage = "PHONE_STAGE_FINAL";
   need(git("status", "--porcelain", "--untracked-files=all") === "" && git("rev-parse", "HEAD") === merge, "POST_DRIFT");
   console.log(JSON.stringify({ contract: "r3-phone-successor-source/1", status: "SOURCE_SCOPE_PROVEN",
     head, merge, tree: git("rev-parse", `${head}^{tree}`), predecessor: PHONE_PREDECESSOR,
@@ -397,4 +416,4 @@ if (require.main === module) (async () => {
   console.log(JSON.stringify(safeHold(error)));
   process.exitCode = 1;
 });
-module.exports = { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, phoneGithubJson };
+module.exports = { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, PHONE_HISTORICAL_WORKFLOW, phoneGithubJson, collectPhone };

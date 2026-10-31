@@ -114,7 +114,7 @@ jobs:
           STATUS_GITHUB_TOKEN: ${{ github.token }}
           PHONE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "328a174047651a839910e2f678d9471bc762cdb0" ]; then
+          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "c52e19fa704fc57fa60eb3abdb60475b7aa131d3" ]; then
             node scripts/collect_r3_response_label_pr.cjs --phone
             node --test --test-name-pattern='^phone (successor|corrective)' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
             node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
