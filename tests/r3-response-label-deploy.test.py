@@ -4,6 +4,7 @@ import importlib.util
 import pathlib
 import unittest
 import urllib.error
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("status_deploy", ROOT / "scripts/check_r3_dev_deployment.py")
@@ -12,6 +13,36 @@ spec.loader.exec_module(module)
 
 
 class StatusDeploy(unittest.TestCase):
+    def test_phone_dispatch_rejects_wrong_context_before_external_access(self):
+        args = type("Args", (), {"source_only": True, "live_preflight": False, "branch_preflight": False})()
+        with mock.patch.dict(module.os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=True), \
+             mock.patch.object(module, "phone_dev_source") as source, \
+             mock.patch.object(module, "phone_dev_ci") as ci:
+            with self.assertRaisesRegex(RuntimeError, "PHONE_CONTEXT"):
+                module.phone_dev_dispatch(args)
+            source.assert_not_called()
+            ci.assert_not_called()
+
+    def test_phone_successor_scope(self):
+        old = self.fixture()
+        run, pr, head, merge, jobs, candidate = old[0], old[1], old[2], old[6], old[7], old[8]
+        run["pull_requests"][0]["number"] = 228
+        pr["number"] = 228
+        head["parents"] = [{"sha": module.PHONE_DEV_PREDECESSOR}]
+        prior = copy.deepcopy(run)
+        prior.update({"id": module.PHONE_DEV_PREDECESSOR_RUN, "head_sha": module.PHONE_DEV_PREDECESSOR})
+        prior["pull_requests"][0]["head"]["sha"] = module.PHONE_DEV_PREDECESSOR
+        args = [run, pr, head, merge, jobs, prior, copy.deepcopy(jobs), candidate]
+        self.assertEqual(module.phone_dev_ci_evidence(*args)["runId"], 123)
+        for index, field, value in [(0, "run_attempt", 2), (1, "number", 229),
+                                    (5, "head_sha", candidate), (5, "conclusion", "failure")]:
+            changed = copy.deepcopy(args)
+            changed[index][field] = value
+            with self.assertRaises(RuntimeError): module.phone_dev_ci_evidence(*changed)
+        changed = copy.deepcopy(args)
+        changed[6]["jobs"][0]["steps"] = []
+        with self.assertRaises(RuntimeError): module.phone_dev_ci_evidence(*changed)
+
     def fixture(self):
         repo = module.EXPECTED_REPOSITORY
         head, merge, tree, source = "1" * 40, "2" * 40, "3" * 40, module.STATUS_DEV_SOURCE

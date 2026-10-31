@@ -1362,6 +1362,150 @@ def status_dev_dispatch(args):
         print("STATUS_SOURCE_AND_CI_PASS run_id=" + str(ci["runId"]))
 
 
+# The 572 phone successor is separate from the immutable 571 validators above.
+PHONE_DEV_PREDECESSOR = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37"
+PHONE_DEV_PREDECESSOR_RUN = 41166580662
+
+def phone_dev_ci_evidence(run, pr, head, merge, jobs, prior, prior_jobs, candidate):
+    repo = EXPECTED_REPOSITORY
+    legacy_monthly_need(isinstance(candidate, str) and SHA40_RE.fullmatch(candidate) is not None
+        and isinstance(run, dict) and run.get("workflow_id") == 329932540
+        and run.get("path") == ".github/workflows/tennisnote-public-ci.yml"
+        and run.get("event") == "pull_request" and run.get("head_sha") == candidate
+        and run.get("run_attempt") == 1 and run.get("status") == "completed" and run.get("conclusion") == "success"
+        and (run.get("repository") or {}).get("full_name") == repo
+        and (run.get("head_repository") or {}).get("full_name") == repo
+        and type(run.get("id")) is int and run["id"] > 0, "PHONE_CI_RUN")
+    links = run.get("pull_requests")
+    legacy_monthly_need(isinstance(pr, dict) and pr.get("state") == "open" and pr.get("number") == 228
+        and (pr.get("head") or {}).get("sha") == candidate and (pr.get("head") or {}).get("ref") == STATUS_DEV_BRANCH
+        and ((pr.get("head") or {}).get("repo") or {}).get("full_name") == repo
+        and (pr.get("base") or {}).get("sha") == STATUS_DEV_BASE and (pr.get("base") or {}).get("ref") == STATUS_DEV_PARENT
+        and ((pr.get("base") or {}).get("repo") or {}).get("full_name") == repo
+        and isinstance(links, list) and len(links) == 1 and links[0].get("number") == 228
+        and (links[0].get("head") or {}).get("sha") == candidate and (links[0].get("base") or {}).get("sha") == STATUS_DEV_BASE, "PHONE_CI_PR")
+    tree = (head.get("tree") or {}).get("sha") if isinstance(head, dict) else None
+    legacy_monthly_need(isinstance(head, dict) and isinstance(merge, dict) and head.get("sha") == candidate
+        and [x.get("sha") for x in head.get("parents", [])] == [PHONE_DEV_PREDECESSOR]
+        and merge.get("sha") == pr.get("merge_commit_sha")
+        and [x.get("sha") for x in merge.get("parents", [])] == [STATUS_DEV_BASE, candidate]
+        and SHA40_RE.fullmatch(str(tree or "")) is not None and tree == (merge.get("tree") or {}).get("sha"), "PHONE_CI_GRAPH")
+    def admitted_job(data):
+        entries = data.get("jobs") if isinstance(data, dict) else None
+        if not isinstance(entries, list) or len(entries) != 1:
+            return False
+        job = entries[0]
+        steps = job.get("steps") if isinstance(job, dict) else None
+        return (job.get("name") == "build-and-check" and job.get("status") == "completed"
+            and job.get("conclusion") == "success" and isinstance(steps, list)
+            and sum(1 for step in steps if step.get("name") == "Admit exact response-label successor"
+                and step.get("status") == "completed" and step.get("conclusion") == "success") == 1)
+    legacy_monthly_need(admitted_job(jobs), "PHONE_CI_JOB")
+    prior_links = prior.get("pull_requests") if isinstance(prior, dict) else None
+    legacy_monthly_need(isinstance(prior, dict) and prior.get("id") == PHONE_DEV_PREDECESSOR_RUN
+        and prior.get("workflow_id") == 329932540 and prior.get("path") == ".github/workflows/tennisnote-public-ci.yml"
+        and prior.get("head_sha") == PHONE_DEV_PREDECESSOR and prior.get("event") == "pull_request"
+        and prior.get("run_attempt") == 1 and prior.get("status") == "completed" and prior.get("conclusion") == "success"
+        and (prior.get("repository") or {}).get("full_name") == repo
+        and (prior.get("head_repository") or {}).get("full_name") == repo
+        and isinstance(prior_links, list) and len(prior_links) == 1 and prior_links[0].get("number") == 228
+        and (prior_links[0].get("head") or {}).get("sha") == PHONE_DEV_PREDECESSOR
+        and (prior_links[0].get("base") or {}).get("sha") == STATUS_DEV_BASE and admitted_job(prior_jobs), "PHONE_PRIOR_CI")
+    return {"runId": run["id"], "tree": tree}
+
+def phone_dev_source(candidate):
+    legacy_monthly_need(run_git("rev-parse", "HEAD") == candidate
+        and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_PREDECESSOR
+        and run_git("status", "--porcelain", "--untracked-files=all") == ""
+        and run_git("diff", "--cached", "--name-only") == "", "PHONE_SOURCE_GRAPH")
+    raw = subprocess.check_output(["node", "-e", "const a=require('./scripts/check_r3_response_label_successor.cjs');const b=require('./scripts/collect_r3_response_label_pr.cjs');process.stdout.write(JSON.stringify({pin:a.PHONE_PIN,wire:b.PHONE_WIRING}))"], cwd=ROOT, text=True, timeout=15)
+    contract = json.loads(raw); pins, wiring = contract.get("pin"), contract.get("wire")
+    legacy_monthly_need(isinstance(pins, dict) and len(pins) == 15 and isinstance(wiring, list)
+        and len(wiring) == 7 and len(set(wiring)) == 7 and not set(wiring).intersection(pins), "PHONE_PINS")
+    rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", PHONE_DEV_PREDECESSOR, candidate).splitlines()]
+    allowed = set(pins) | set(wiring)
+    legacy_monthly_need(len(rows) == len(allowed) and all(len(r) == 2 and r[0] == "M" for r in rows)
+        and {r[1] for r in rows} == allowed, "PHONE_SOURCE_PATHS")
+    for _, name in rows:
+        file = ROOT / name
+        legacy_monthly_need(run_git("ls-tree", "--format=%(objectmode)", candidate, "--", name) == "100644"
+            and file.is_file() and not file.is_symlink()
+            and all(not p.is_symlink() for p in file.parents if p == ROOT or ROOT in p.parents), "PHONE_SOURCE_MODE")
+        if name in pins:
+            legacy_monthly_need(sha256(normalize_text(file.read_bytes())) == pins[name], "PHONE_SOURCE_HASH")
+    subprocess.check_call(["node", "-e", "const fs=require('fs'),cp=require('child_process'),c=require('./scripts/collect_r3_response_label_pr.cjs');const p=cp.execFileSync('git',['show','470a2b9427eaf29aff9e6dd9b89ab608145dfa37:.github/workflows/tennisnote-public-ci.yml'],{encoding:'utf8'}).replace(/\\r\\n/g,'\\n');if(c.wrapPhoneWorkflow(p)!==fs.readFileSync('.github/workflows/tennisnote-public-ci.yml','utf8').replace(/\\r\\n/g,'\\n'))process.exit(1)"], cwd=ROOT, timeout=15)
+    release = json.loads((ROOT / "app/release.json").read_text(encoding="utf-8"))
+    legacy_monthly_need(release.get("version") == release.get("appSurfaceVersion") == "1.0.572"
+        and release.get("releaseId") == "2026.10.31.03", "PHONE_RELEASE")
+    return release
+
+def phone_dev_ci(candidate):
+    listing = status_dev_github_get("actions/workflows/tennisnote-public-ci.yml/runs?head_sha=" + candidate + "&event=pull_request&per_page=100")
+    rows = listing.get("workflow_runs")
+    legacy_monthly_need(isinstance(rows, list) and len(rows) < 100, "PHONE_CI_LIST")
+    matches = [r for r in rows if isinstance(r, dict) and r.get("head_sha") == candidate
+        and r.get("event") == "pull_request" and r.get("workflow_id") == 329932540]
+    legacy_monthly_need(len(matches) == 1 and type(matches[0].get("id")) is int, "PHONE_CI_UNIQUE")
+    run = status_dev_github_get("actions/runs/" + str(matches[0]["id"]))
+    pr = status_dev_github_get("pulls/228")
+    head = status_dev_github_get("git/commits/" + candidate)
+    merge_sha = pr.get("merge_commit_sha")
+    legacy_monthly_need(isinstance(merge_sha, str) and SHA40_RE.fullmatch(merge_sha), "PHONE_CI_MERGE")
+    merge = status_dev_github_get("git/commits/" + merge_sha)
+    prior = status_dev_github_get("actions/runs/" + str(PHONE_DEV_PREDECESSOR_RUN))
+    return phone_dev_ci_evidence(run, pr, head, merge, status_dev_github_jobs(run["id"]),
+        prior, status_dev_github_jobs(PHONE_DEV_PREDECESSOR_RUN), candidate)
+
+def phone_dev_target(env):
+    expected, account, token = env.get("EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT", ""), env.get("CLOUDFLARE_ACCOUNT_ID", ""), env.get("CLOUDFLARE_API_TOKEN", "")
+    legacy_monthly_need(SHA256_RE.fullmatch(expected) is not None and re.fullmatch(r"[a-f0-9]{32}", account) is not None
+        and bool(token) and sha256(account.encode("utf-8")) == expected, "PHONE_ACCOUNT")
+    result = {}
+    for name in EXPECTED_PROJECTS:
+        project = legacy_monthly_cloudflare_get(account, token, "pages/projects/" + name).get("result")
+        legacy_monthly_need(isinstance(project, dict) and project.get("name") == name and project.get("production_branch") == "dev"
+            and project.get("subdomain") == EXPECTED_PROJECT_DOMAINS[name] and isinstance(project.get("domains"), list)
+            and all(isinstance(d, str) for d in project["domains"]) and EXPECTED_PROJECT_DOMAINS[name] in project["domains"]
+            and not any(d in {"tennisnote-app.pages.dev", "tennisnote-admin.pages.dev"} for d in project["domains"]), "PHONE_TARGET")
+        rows = legacy_monthly_cloudflare_get(account, token, "pages/projects/" + name + "/deployments?env=production&per_page=1").get("result")
+        legacy_monthly_need(isinstance(rows, list), "PHONE_ROLLBACK")
+        result[name] = rollback_proof(name, rows)
+        legacy_monthly_need(result[name]["commit_sha"] == PHONE_DEV_PREDECESSOR, "PHONE_ROLLBACK_SOURCE")
+    return sha256(json.dumps(result, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+def phone_dev_dispatch(args):
+    env = dict(os.environ); candidate = env.get("TENNISNOTE_CANDIDATE_SHA", "")
+    legacy_monthly_need(int(args.source_only) + int(args.live_preflight) == 1 and not args.branch_preflight
+        and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and env.get("GITHUB_REPOSITORY") == EXPECTED_REPOSITORY
+        and env.get("GITHUB_REF") == "refs/heads/" + STATUS_DEV_BRANCH and env.get("GITHUB_REF_TYPE") == "branch"
+        and env.get("GITHUB_WORKFLOW") == EXPECTED_WORKFLOW_NAME and env.get("GITHUB_RUN_ATTEMPT") == "1"
+        and env.get("TENNISNOTE_WORKFLOW_REF") == EXPECTED_REPOSITORY + "/.github/workflows/deploy-cloudflare-pages-dev.yml@refs/heads/" + STATUS_DEV_BRANCH
+        and SHA40_RE.fullmatch(candidate or "") is not None and candidate == env.get("GITHUB_SHA"), "PHONE_CONTEXT")
+    os.environ["GIT_NO_LAZY_FETCH"] = "1"
+    release = phone_dev_source(candidate)
+    ci = phone_dev_ci(candidate)
+    legacy_monthly_need(ci["tree"] == run_git("rev-parse", candidate + "^{tree}"), "PHONE_CI_TREE")
+    if args.live_preflight:
+        legacy_monthly_artifacts({"release": release}, Path("dist/member-dev"), Path("dist/admin-dev"))
+        legacy_monthly_need(normalize_text((ROOT / "dist/admin-dev/domain/coaches.js").read_bytes())
+            == normalize_text((ROOT / "app/admin/domain/coaches.js").read_bytes()), "PHONE_ARTIFACT_PRODUCT")
+        states = read_live_dev_states(candidate)
+        for state in states:
+            prior = state.get("release") or {}
+            legacy_monthly_need(prior.get("version") == "1.0.571" and prior.get("releaseId") == "2026.10.31.02"
+                and state.get("member_cache") == 604 and state.get("coach_cache") == 577, "PHONE_LIVE_BASELINE")
+        verify_monotonic_release(release, 605, 578, states)
+        for role in ("production_member_release", "production_admin_release", "production_pages_release"):
+            live = _http_read(role, candidate)
+            legacy_monthly_need(isinstance(live, dict) and live.get("version") == "1.0.561"
+                and live.get("releaseId") == "2026.10.30.01", "PHONE_PROD_BASELINE")
+        legacy_monthly_need(_cache_counter((ROOT / "dist/member-dev/service-worker.js").read_text(encoding="utf-8"), "tennis-note-member-pwa-") == 605
+            and _cache_counter((ROOT / "dist/member-dev/tennis-note-coach-app/service-worker.js").read_text(encoding="utf-8"), "tennis-note-coach-mode-") == 578, "PHONE_ARTIFACT_CACHE")
+        rollback = phone_dev_target(env)
+        print("PHONE_DEV_PREFLIGHT_PASS run_id=" + str(ci["runId"]) + " rollback_sha256=" + rollback)
+    else:
+        print("PHONE_SOURCE_AND_CI_PASS run_id=" + str(ci["runId"]))
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-only", action="store_true")
@@ -1370,7 +1514,11 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if os.environ.get("GITHUB_REF") == "refs/heads/" + STATUS_DEV_BRANCH:
-            status_dev_dispatch(args)
+            candidate = os.environ.get("TENNISNOTE_CANDIDATE_SHA", "")
+            if SHA40_RE.fullmatch(candidate or "") and run_git("show", "-s", "--format=%P", candidate) == PHONE_DEV_PREDECESSOR:
+                phone_dev_dispatch(args)
+            else:
+                status_dev_dispatch(args)
             return 0
         # CURRENT_TERM_DEV_570_ENTRY_BEGIN
         if os.environ.get("GITHUB_REF") == "refs/heads/" + CURRENT_TERM_DEV_BRANCH:

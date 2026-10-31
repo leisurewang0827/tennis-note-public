@@ -190,6 +190,7 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
     console,
     window: {},
     state: { view: "coaches" },
+    adminLocalDateKey: () => "2099-10-01",
     scheduleDays: ["월", "화", "수", "목", "금", "토", "일"],
     adminLiveDataState: { coachSettlementTerms: [row] },
       coaches: [{
@@ -198,14 +199,14 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
       }],
     coachSettlementRules: [displayedRule],
     coachStaffEditorState: {
-      mode: "edit", saving: false, message: "", settlementDetailsOpen: false,
+      mode: scenario.mode ?? "edit", saving: false, message: "", settlementDetailsOpen: false,
       draft: {
         coachId: "synthetic-local-coach",
         coachRoleId: roleId,
         availabilityRevision: 0,
         branchId,
         name: "Synthetic QA Coach",
-        phone: "",
+        phone: scenario.draftPhone ?? "",
         jobTitle: "레슨",
         bio: "",
         color: "#157a5b",
@@ -235,7 +236,7 @@ function publicSaveHarness(domainSource, actionSource, commonSource, scenario) {
         serverRoleId: item.id,
         branchId: item.branch_id,
         name: item.display_name,
-        phone: "",
+        phone: scenario.savedPhone ?? "",
         role: item.job_title,
         bio: "",
         approvalStatus: item.status,
@@ -498,6 +499,31 @@ test("settlement modal initial render disables inactive required controls before
   assert.equal(controlsByMethod.hourly.field.hidden, false);
   assert.equal(controlsByMethod.hourly.control.disabled, false);
   assert.equal(controlsByMethod.hourly.control.value, "43200", "tab re-entry preserves the hourly draft");
+});
+
+test("blank existing phone preserves server value without weakening other save checks", async () => {
+  const { domainSource, actionSource, commonSource, scheduleSource } = loadSourceBundle();
+  const cases = [
+    { name: "blank existing phone", scenario: { savedPhone: "01000000000" }, success: true, rpc: 1 },
+    { name: "matching entered phone", scenario: { draftPhone: "010-0000-0000", savedPhone: "01000000000" }, success: true, rpc: 1 },
+    { name: "different entered phone", scenario: { draftPhone: "01000000001", savedPhone: "01000000000" }, success: false, rpc: 1 },
+    { name: "nonempty nondigit text is not a preserve request", scenario: { draftPhone: "<redacted>", savedPhone: "01000000000" }, success: false, rpc: 1 },
+    { name: "blank phone still requires fresh exact term", scenario: { savedPhone: "01000000000", terms: [] }, success: false, rpc: 1 },
+    { name: "new coach requires a phone", scenario: { mode: "create", savedPhone: "01000000000" }, success: false, rpc: 0 },
+  ];
+  for (const item of cases) {
+    const h = publicSaveHarness(domainSource, actionSource, commonSource, { ...item.scenario, scheduleSource });
+    await h.context.saveCoachStaff();
+    assert.equal(h.counters.rpc, item.rpc, `${item.name}: exact RPC count`);
+    assert.equal(h.counters.close, item.success ? 1 : 0, `${item.name}: modal closes only on verified success`);
+    assert.equal(h.counters.toast, item.success ? 1 : 0, `${item.name}: success is not fabricated`);
+    if (!item.success) assert.equal(h.counters.scheduleUpdates + h.counters.scheduleInserts, 0);
+  }
+  const h = publicSaveHarness(domainSource, actionSource, commonSource, { savedPhone: "01000000000", scheduleSource });
+  await h.context.refreshCoachStaffData();
+  h.context.coachStaffEditorState.draft.coachRoleId = "different-role";
+  assert.equal(h.context.coachStaffServerMatches(h.context.coaches[0], h.context.coachStaffEditorState.draft), false,
+    "a different role cannot use blank-phone preservation");
 });
 
 test("actual public save -> refresh -> raw verifier blocks false-success in memory", async () => {

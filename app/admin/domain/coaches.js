@@ -914,7 +914,10 @@ function beginCoachStaffBlockEdit(type, blockId) {
 
 function coachStaffServerMatches(saved, draft, freshTerms = null) {
   if (!saved || saved.name !== draft.name || saved.approvalStatus !== draft.approvalStatus) return false;
-  if (normalizedMemberPhone(saved.phone) !== normalizedMemberPhone(draft.phone)) return false;
+  // Existing-coach saves preserve the server phone when the input is blank.
+  const preservesExistingPhone = Boolean(draft.coachRoleId)
+    && draft.coachRoleId === saved.serverRoleId && String(draft.phone || "").trim() === "";
+  if (!preservesExistingPhone && normalizedMemberPhone(saved.phone) !== normalizedMemberPhone(draft.phone)) return false;
   if ((saved.role || "레슨") !== (draft.jobTitle || "레슨")) return false;
   if ((saved.bio || "") !== (draft.bio || "")) return false;
   if ((saved.employmentStatus || "active") !== (draft.employmentStatus || "active")) return false;

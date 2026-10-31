@@ -5,9 +5,37 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, phoneGithubJson } = require("../scripts/collect_r3_response_label_pr.cjs");
 const { CORRECTIVE } = require("../scripts/check_r3_response_label_successor.cjs");
 const { createHash } = require("node:crypto");
+test("phone successor workflow is the exact additive wrapper around the predecessor", () => {
+  const root = path.join(__dirname, ".."), file = ".github/workflows/tennisnote-public-ci.yml";
+  const previous = execFileSync("git", ["show", `470a2b9427eaf29aff9e6dd9b89ab608145dfa37:${file}`],
+    { cwd: root, encoding: "utf8", env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).replace(/\r\n/g, "\n");
+  const current = fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
+  assert.equal(wrapPhoneWorkflow(previous), current);
+  assert.throws(() => wrapPhoneWorkflow(previous.replace("--prepare-base", "--wrong")), /PHONE_WORKFLOW_OLD/);
+  assert.throws(() => wrapPhoneWorkflow(previous.replace("/app/admin/views/billing.js", "/different")), /PHONE_WORKFLOW_SPARSE/);
+});
+test("phone successor collector allows only exact authenticated read endpoints", async () => {
+  const original = global.fetch, calls = [];
+  try {
+    global.fetch = async (url, options) => {
+      calls.push({ url, hasAuth: options.headers.Authorization === "Bearer synthetic-token", redirect: options.redirect });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+    assert.deepEqual(await phoneGithubJson("pulls/228", "synthetic-token"), { ok: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].hasAuth, true);
+    assert.equal(calls[0].redirect, "error");
+    await assert.rejects(phoneGithubJson("pulls/229", "synthetic-token"), /PHONE_API_SCOPE/);
+    await assert.rejects(phoneGithubJson("pulls/228", ""), /PHONE_API_SCOPE/);
+    assert.equal(calls.length, 1, "invalid input never reaches network");
+    global.fetch = async () => new Response("denied", { status: 403 });
+    await assert.rejects(phoneGithubJson("actions/runs/41166580662", "synthetic-token"), /PHONE_API_HTTP/);
+    assert.equal(new Set(PHONE_WIRING).size, PHONE_WIRING.length);
+  } finally { global.fetch = original; }
+});
 test("a real dirty checkout is held before CI environment or API access", () => {
   const root = path.join(__dirname, "..");
   const result = spawnSync(process.execPath, ["scripts/collect_r3_response_label_pr.cjs"], {

@@ -67,6 +67,15 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /app/admin/views/billing.js
+            /app/admin/domain/coaches.js
+            /app/admin/domain/common.js
+            /app/admin/domain/values.js
+            /app/admin/actions/coach.js
+            /app/admin/data/common.js
+            /app/admin/data/schedule.js
+            /app/admin/forms/coach.js
+            /app/admin/views/settings.js
+            /tests/coach-staff-settlement-readback.test.js
             /tests/r3-admin-response-label.test.js
             /app/admin/index.html
             /app/release.json
@@ -101,16 +110,26 @@ jobs:
       - name: Admit exact response-label successor
         id: response_label
         if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        env:
+          STATUS_GITHUB_TOKEN: ${{ github.token }}
+          PHONE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          node scripts/collect_r3_response_label_pr.cjs --prepare-base
-          if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then
-            node scripts/collect_r3_response_label_pr.cjs --show-hold "$RUNNER_TEMP/r3-status-source-receipt.json"
-            exit 1
+          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "470a2b9427eaf29aff9e6dd9b89ab608145dfa37" ]; then
+            node scripts/collect_r3_response_label_pr.cjs --phone
+            node --test --test-name-pattern='^phone successor' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
+            node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_phone_successor_scope StatusDeploy.test_phone_dispatch_rejects_wrong_context_before_external_access
+          else
+            node scripts/collect_r3_response_label_pr.cjs --prepare-base
+            if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then
+              node scripts/collect_r3_response_label_pr.cjs --show-hold "$RUNNER_TEMP/r3-status-source-receipt.json"
+              exit 1
+            fi
+            node scripts/collect_r3_response_label_pr.cjs --verify-receipt "$RUNNER_TEMP/r3-status-source-receipt.json"
+            node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs
+            node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph
           fi
-          node scripts/collect_r3_response_label_pr.cjs --verify-receipt "$RUNNER_TEMP/r3-status-source-receipt.json"
-          node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs
-          node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs
-          python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph
           echo 'scoped=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))

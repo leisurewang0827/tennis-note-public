@@ -5,7 +5,9 @@ const { execFileSync } = require("node:child_process");
 const { readFileSync, lstatSync } = require("node:fs");
 const { createHash } = require("node:crypto");
 const { resolve } = require("node:path");
-const { validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH } = require("./check_r3_response_label_successor.cjs");
+const { validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT,
+  PHONE_PREDECESSOR, PHONE_PIN, validatePhoneLocalScope, validatePhonePrGraph,
+  validatePhonePriorRun, validatePhonePriorJobs, validatePhoneDeltaRows } = require("./check_r3_response_label_successor.cjs");
 const ROOT = resolve(__dirname, "..");
 const REPO = "leisurewang0827/tennis-note-public";
 const BASE_REF = "codex/tennisnote-r3-current-term-dev570-20261031";
@@ -26,6 +28,13 @@ const FIX = Object.freeze([
   "tests/r3-response-label-deploy.test.py",
 ]);
 const AUTH_FIX = Object.freeze([...FIX, ".github/workflows/deploy-cloudflare-pages-dev.yml"]);
+// Exact 572 successor wiring; the previous 571 lists and validators remain unchanged.
+const PHONE_WIRING = Object.freeze([
+  ".github/workflows/tennisnote-public-ci.yml", "scripts/check_r3_dev_deployment.py",
+  "scripts/check_r3_response_label_successor.cjs", "scripts/collect_r3_response_label_pr.cjs",
+  "tests/r3-response-label-successor-core.test.cjs", "tests/r3-response-label-collector.test.cjs",
+  "tests/r3-response-label-deploy.test.py",
+]);
 const BASE_BLOBS = Object.freeze([
   ["c3823d163e7e8acbb3e69c591273f586425bbcea", 11453, "ef74017550fb4c8f18142424792d81e3f953740bf9880366732b32a65d9ebccd"],
   ["c5c263549ee1961a3acf68565a9e23cb2ef67462", 3455, "2118c7c378086e74262b48b0a0495e42abe35f9e34f2e7d3f4f50f6762b3bdd9"],
@@ -184,6 +193,113 @@ function verifyReceiptFile(file) {
     wiringLfSha256: wiringDigest() });
   console.log(JSON.stringify({ ...receipt, receiptVerified: true }));
 }
+
+async function phoneGithubJson(path, token) {
+  need(["pulls/228", "actions/runs/41166580662", "actions/runs/41166580662/jobs?per_page=100"].includes(path)
+    && typeof token === "string" && token.length > 0, "PHONE_API_SCOPE");
+  const response = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+    headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", Authorization: `Bearer ${token}` },
+    redirect: "error", signal: AbortSignal.timeout(15000),
+  });
+  need(response.ok && response.body, "PHONE_API_HTTP");
+  const reader = response.body.getReader(), chunks = []; let total = 0;
+  for (;;) { const next = await reader.read(); if (next.done) break; total += next.value.length;
+    need(total <= 1024 * 1024, "PHONE_API_LIMIT"); chunks.push(Buffer.from(next.value)); }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function wrapPhoneWorkflow(previous) {
+  const oldSparse = "            /app/admin/views/billing.js\n            /tests/r3-admin-response-label.test.js\n";
+  const newSparse = "            /app/admin/views/billing.js\n" + ["app/admin/domain/coaches.js", "app/admin/domain/common.js", "app/admin/domain/values.js",
+    "app/admin/actions/coach.js", "app/admin/data/common.js", "app/admin/data/schedule.js",
+    "app/admin/forms/coach.js", "app/admin/views/settings.js", "tests/coach-staff-settlement-readback.test.js"]
+    .map((p) => `            /${p}\n`).join("") + "            /tests/r3-admin-response-label.test.js\n";
+  need(previous.split(oldSparse).length === 2, "PHONE_WORKFLOW_SPARSE");
+  const anchor = "      - name: Admit exact response-label successor\n";
+  const end = "          echo 'scoped=true' >> \"$GITHUB_OUTPUT\"\n";
+  need(previous.split(anchor).length === 2 && previous.split(end).length === 2, "PHONE_WORKFLOW_ANCHOR");
+  const oldBlock = previous.slice(previous.indexOf(anchor), previous.indexOf(end) + end.length);
+  const expectedOld = `      - name: Admit exact response-label successor
+        id: response_label
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-admin-response-label-dev571-20261031'
+        run: |
+          node scripts/collect_r3_response_label_pr.cjs --prepare-base
+          if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then
+            node scripts/collect_r3_response_label_pr.cjs --show-hold "$RUNNER_TEMP/r3-status-source-receipt.json"
+            exit 1
+          fi
+          node scripts/collect_r3_response_label_pr.cjs --verify-receipt "$RUNNER_TEMP/r3-status-source-receipt.json"
+          node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs
+          node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs
+          python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph
+          echo 'scoped=true' >> "$GITHUB_OUTPUT"
+`;
+  need(oldBlock === expectedOld, "PHONE_WORKFLOW_OLD");
+  const phoneCommands = `          if [ "$(git show -s --format=%P "$PHONE_HEAD_SHA")" = "${PHONE_PREDECESSOR}" ]; then
+            node scripts/collect_r3_response_label_pr.cjs --phone
+            node --test --test-name-pattern='^phone successor' tests/r3-response-label-successor-core.test.cjs tests/r3-response-label-collector.test.cjs
+            node --test --test-name-pattern='^blank existing phone' tests/coach-staff-settlement-readback.test.js
+            python tests/r3-response-label-deploy.test.py StatusDeploy.test_phone_successor_scope StatusDeploy.test_phone_dispatch_rejects_wrong_context_before_external_access
+          else
+`;
+  const priorCommands = expectedOld.split("        run: |\n")[1].replace("          echo 'scoped=true' >> \"$GITHUB_OUTPUT\"\n", "")
+    .split("\n").filter(Boolean).map((line) => `  ${line}\n`).join("");
+  const newBlock = expectedOld.split("        run: |\n")[0]
+    + "        env:\n          STATUS_GITHUB_TOKEN: ${{ github.token }}\n          PHONE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n"
+    + "        run: |\n" + phoneCommands + priorCommands + "          fi\n" + end;
+  return previous.replace(oldSparse, newSparse).replace(oldBlock, newBlock);
+}
+
+async function collectPhone() {
+  const env = process.env;
+  need(git("status", "--porcelain", "--untracked-files=all") === "" && git("diff", "--cached", "--name-only") === "", "DIRTY_WORKTREE");
+  need(env.GITHUB_EVENT_PATH && env.GITHUB_RUN_ATTEMPT === "1", "PHONE_EVENT");
+  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  const [pr, priorRun, priorJobs] = await Promise.all([
+    phoneGithubJson("pulls/228", env.STATUS_GITHUB_TOKEN),
+    phoneGithubJson("actions/runs/41166580662", env.STATUS_GITHUB_TOKEN),
+    phoneGithubJson("actions/runs/41166580662/jobs?per_page=100", env.STATUS_GITHUB_TOKEN),
+  ]);
+  validatePhonePriorRun(priorRun); validatePhonePriorJobs(priorJobs);
+  const head = pr.head?.sha, merge = git("rev-parse", "HEAD");
+  need(pr.state === "open" && pr.number === 228 && event.number === 228 && event.repository?.full_name === REPO
+    && event.pull_request?.head?.sha === head && event.pull_request?.base?.sha === pr.base?.sha, "PHONE_PR_DRIFT");
+  validatePhonePrGraph({ event: env.GITHUB_EVENT_NAME, repo: env.GITHUB_REPOSITORY,
+    baseRepo: pr.base?.repo?.full_name, headRepo: pr.head?.repo?.full_name,
+    base: pr.base?.sha, baseRef: pr.base?.ref, headRef: pr.head?.ref, attempt: Number(env.GITHUB_RUN_ATTEMPT),
+    number: pr.number, ref: env.GITHUB_REF, workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF,
+    head, merge, headTree: git("rev-parse", `${head}^{tree}`), mergeTree: git("rev-parse", `${merge}^{tree}`),
+    headParents: git("show", "-s", "--format=%P", head).split(" ").filter(Boolean),
+    mergeParents: git("show", "-s", "--format=%P", merge).split(" ").filter(Boolean),
+    githubSha: env.GITHUB_SHA, workflowSha: env.GITHUB_WORKFLOW_SHA, clean: true, indexClean: true });
+  need(gitRaw("show", `${head}:.github/workflows/tennisnote-public-ci.yml`).replace(/\r\n/g, "\n")
+    === wrapPhoneWorkflow(gitRaw("show", `${PHONE_PREDECESSOR}:.github/workflows/tennisnote-public-ci.yml`).replace(/\r\n/g, "\n")), "PHONE_WORKFLOW_INVERSE");
+  const rows = git("diff", "--no-renames", "--name-status", PHONE_PREDECESSOR, head).split("\n").filter(Boolean).map((x) => x.split("\t"));
+  validatePhoneDeltaRows(rows, PHONE_WIRING);
+  const hashes = {};
+  for (const [, p] of rows) {
+    need(git("ls-tree", "--format=%(objectmode)", head, "--", p) === "100644", "PHONE_MODE");
+    let current = ROOT;
+    for (const part of p.split("/")) { current = resolve(current, part); need(!lstatSync(current).isSymbolicLink(), "PHONE_SYMLINK"); }
+    const text = readFileSync(current, "utf8");
+    need(text.replace(/\r\n/g, "\n") === gitRaw("show", `${head}:${p}`).replace(/\r\n/g, "\n"), "PHONE_FILE_DRIFT");
+    if (Object.hasOwn(PHONE_PIN, p)) hashes[p] = digest(text);
+  }
+  const release = JSON.parse(readFileSync(resolve(ROOT, "app/release.json"), "utf8"));
+  const member = readFileSync(resolve(ROOT, "app/tennis-note-member-app/service-worker.js"), "utf8");
+  const coach = readFileSync(resolve(ROOT, "app/tennis-note-coach-app/service-worker.js"), "utf8");
+  const number = (text, prefix) => Number(text.match(new RegExp(`const CACHE_NAME = "${prefix}(\\d+)"`))?.[1]);
+  validatePhoneLocalScope({ predecessor: PHONE_PREDECESSOR, branch: BRANCH, environment: "development",
+    projectFingerprint: PROJECT, rollbackCommit: PHONE_PREDECESSOR, version: release.version,
+    releaseId: release.releaseId, memberCache: number(member, "tennis-note-member-pwa-v"),
+    coachCache: number(coach, "tennis-note-coach-mode-v"), nativeBuildChanged: false, databaseAction: false,
+    paths: Object.keys(hashes), hashes });
+  need(git("status", "--porcelain", "--untracked-files=all") === "" && git("rev-parse", "HEAD") === merge, "POST_DRIFT");
+  console.log(JSON.stringify({ contract: "r3-phone-successor-source/1", status: "SOURCE_SCOPE_PROVEN",
+    head, merge, tree: git("rev-parse", `${head}^{tree}`), predecessor: PHONE_PREDECESSOR,
+    priorCiRun: 41166580662, productFiles: Object.keys(PHONE_PIN).length, wiringFiles: PHONE_WIRING.length,
+    deploymentAdmitted: false }));
+}
 async function collect() {
   // Check the actual index/worktree before event/API reads; local dirty candidates must not pass.
   need(git("status", "--porcelain", "--untracked-files=all") === "", "DIRTY_WORKTREE");
@@ -264,6 +380,7 @@ async function collect() {
     wiringFiles: WIRING.length, productionWrite: false, deploymentAdmitted: false }));
 }
 if (require.main === module) (async () => {
+  if (process.argv.length === 3 && process.argv[2] === "--phone") return collectPhone();
   if (process.argv.length === 4 && process.argv[2] === "--verify-receipt") return verifyReceiptFile(process.argv[3]);
   if (process.argv.length === 4 && process.argv[2] === "--show-hold") {
     let reason = "COLLECTION_HOLD";
@@ -278,4 +395,4 @@ if (require.main === module) (async () => {
   console.log(JSON.stringify(safeHold(error)));
   process.exitCode = 1;
 });
-module.exports = { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS };
+module.exports = { wrapWorkflow, wrapDeployWorkflow, wrapPhoneWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS, PHONE_WIRING, phoneGithubJson };
