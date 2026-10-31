@@ -1166,10 +1166,12 @@ STATUS_DEV_BASE = "efc84a88a389b292ff226b760c935de19ac9f07b"
 STATUS_DEV_PARENT = "codex/tennisnote-r3-current-term-dev570-20261031"
 STATUS_DEV_SOURCE = "fb4c6a6377c0efaf64d63fbfb219688b7bc0e9e4"
 STATUS_DEV_METADATA = "be29bbc2f7b18ba05eb8f943a0640cb9205c9578"
+STATUS_DEV_CORRECTIVE = "e760e655080466e436146c483dc249aca9213fc0"
 STATUS_DEV_FIX = {".github/workflows/tennisnote-public-ci.yml", "scripts/check_r3_dev_deployment.py",
     "scripts/check_r3_response_label_successor.cjs", "scripts/collect_r3_response_label_pr.cjs",
     "tests/r3-response-label-successor-core.test.cjs", "tests/r3-response-label-collector.test.cjs",
     "tests/r3-response-label-deploy.test.py"}
+STATUS_DEV_AUTH_FIX = STATUS_DEV_FIX | {".github/workflows/deploy-cloudflare-pages-dev.yml"}
 STATUS_WIRING = {
     "scripts/check_r3_response_label_successor.cjs", "tests/r3-response-label-successor-core.test.cjs",
     "scripts/collect_r3_response_label_pr.cjs", "tests/r3-response-label-collector.test.cjs",
@@ -1178,10 +1180,10 @@ STATUS_WIRING = {
     ".github/workflows/deploy-cloudflare-pages-dev.yml",
 }
 
-def status_dev_ci_evidence(run, pr, head, metadata_commit, source, merge, jobs, candidate):
+def status_dev_ci_evidence(run, pr, head, corrective, metadata_commit, source, merge, jobs, candidate):
     repo = EXPECTED_REPOSITORY
     links = run.get("pull_requests") if isinstance(run, dict) else None
-    legacy_monthly_need(isinstance(run, dict) and isinstance(pr, dict) and isinstance(head, dict) and isinstance(metadata_commit, dict) and isinstance(source, dict) and isinstance(merge, dict)
+    legacy_monthly_need(isinstance(run, dict) and isinstance(pr, dict) and isinstance(head, dict) and isinstance(corrective, dict) and isinstance(metadata_commit, dict) and isinstance(source, dict) and isinstance(merge, dict)
         and isinstance(candidate, str) and SHA40_RE.fullmatch(candidate) is not None
         and run.get("workflow_id") == 329932540 and run.get("path") == ".github/workflows/tennisnote-public-ci.yml"
         and run.get("event") == "pull_request" and run.get("head_sha") == candidate
@@ -1198,7 +1200,9 @@ def status_dev_ci_evidence(run, pr, head, metadata_commit, source, merge, jobs, 
     tree = (head.get("tree") or {}).get("sha")
     source_sha = source.get("sha")
     legacy_monthly_need(source_sha == STATUS_DEV_SOURCE and metadata_commit.get("sha") == STATUS_DEV_METADATA
-        and head.get("sha") == candidate and [x.get("sha") for x in head.get("parents", [])] == [STATUS_DEV_METADATA]
+        and corrective.get("sha") == STATUS_DEV_CORRECTIVE
+        and head.get("sha") == candidate and [x.get("sha") for x in head.get("parents", [])] == [STATUS_DEV_CORRECTIVE]
+        and [x.get("sha") for x in corrective.get("parents", [])] == [STATUS_DEV_METADATA]
         and [x.get("sha") for x in metadata_commit.get("parents", [])] == [source_sha]
         and [x.get("sha") for x in source.get("parents", [])] == [STATUS_DEV_BASE]
         and merge.get("sha") == pr.get("merge_commit_sha") and [x.get("sha") for x in merge.get("parents", [])] == [STATUS_DEV_BASE, candidate]
@@ -1212,43 +1216,66 @@ def status_dev_ci_evidence(run, pr, head, metadata_commit, source, merge, jobs, 
         and step.get("status") == "completed" and step.get("conclusion") == "success") == 1, "STATUS_CI_JOB")
     return {"runId": run["id"], "tree": tree, "source": source_sha}
 
+def status_dev_github_get(path, token=None, opener=None):
+    allowed = ((r"actions/workflows/tennisnote-public-ci\.yml/runs\?head_sha=[a-f0-9]{40}&event=pull_request&per_page=100", "RUN_LIST"),
+        (r"actions/runs/[1-9][0-9]*", "RUN"), (r"actions/runs/[1-9][0-9]*/jobs\?per_page=100", "JOBS"),
+        (r"pulls/[1-9][0-9]*", "PR"), (r"git/commits/[a-f0-9]{40}", "COMMIT"))
+    role = next((name for pattern, name in allowed if isinstance(path, str) and re.fullmatch(pattern, path)), None)
+    legacy_monthly_need(role is not None, "STATUS_GITHUB_PATH")
+    token = os.environ.get("STATUS_GITHUB_TOKEN", "") if token is None else token
+    legacy_monthly_need(isinstance(token, str) and bool(token), "STATUS_GITHUB_AUTH")
+    request = urllib.request.Request(ROW_SCOPE_API + path, headers={"Accept": "application/vnd.github+json",
+        "User-Agent": "TennisNote-DEV-source-check", "Authorization": "Bearer " + token})
+    try:
+        with (opener or urllib.request.build_opener(_NoRedirectHandler())).open(request, timeout=15) as response:
+            legacy_monthly_need(response.status == 200, "STATUS_GITHUB_HTTP")
+            data = response.read(1024 * 1024 + 1)
+    except urllib.error.HTTPError as exc:
+        status = int(exc.code); limited = status == 403 and exc.headers is not None and exc.headers.get("X-RateLimit-Remaining") == "0"; exc.close()
+        fail("STATUS_GITHUB_" + role + ("_RATE_LIMIT" if limited else "_HTTP_" + str(status)))
+    except (OSError, urllib.error.URLError, http.client.HTTPException):
+        fail("STATUS_GITHUB_" + role + "_NETWORK")
+    legacy_monthly_need(len(data) <= 1024 * 1024, "STATUS_GITHUB_SIZE")
+    try:
+        result = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeError):
+        fail("STATUS_GITHUB_JSON")
+    legacy_monthly_need(isinstance(result, dict), "STATUS_GITHUB_JSON")
+    return result
+
 def status_dev_github_jobs(run_id):
     legacy_monthly_need(type(run_id) is int and run_id > 0, "STATUS_JOB_ID")
-    request = urllib.request.Request(ROW_SCOPE_API + f"actions/runs/{run_id}/jobs?per_page=100",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "TennisNote-DEV-source-check"})
-    with urllib.request.build_opener(_NoRedirectHandler()).open(request, timeout=15) as response:
-        legacy_monthly_need(response.status == 200, "STATUS_JOB_HTTP")
-        data = response.read(1024 * 1024 + 1)
-    legacy_monthly_need(len(data) <= 1024 * 1024, "STATUS_JOB_SIZE")
-    return json.loads(data.decode("utf-8"))
+    return status_dev_github_get(f"actions/runs/{run_id}/jobs?per_page=100")
 
 def status_dev_ci(candidate):
-    listing = row_scope_github_get("actions/workflows/tennisnote-public-ci.yml/runs?head_sha=" + candidate + "&event=pull_request&per_page=100")
+    listing = status_dev_github_get("actions/workflows/tennisnote-public-ci.yml/runs?head_sha=" + candidate + "&event=pull_request&per_page=100")
     rows = listing.get("workflow_runs")
     legacy_monthly_need(isinstance(rows, list) and len(rows) < 100, "STATUS_CI_LIST")
     matches = [r for r in rows if isinstance(r, dict) and r.get("head_sha") == candidate and r.get("event") == "pull_request" and r.get("workflow_id") == 329932540]
     legacy_monthly_need(len(matches) == 1 and type(matches[0].get("id")) is int, "STATUS_CI_UNIQUE")
-    run = row_scope_github_get("actions/runs/" + str(matches[0]["id"]))
+    run = status_dev_github_get("actions/runs/" + str(matches[0]["id"]))
     links = run.get("pull_requests")
     legacy_monthly_need(isinstance(links, list) and len(links) == 1 and type(links[0].get("number")) is int, "STATUS_CI_LINK")
-    pr = row_scope_github_get("pulls/" + str(links[0]["number"]))
-    head = row_scope_github_get("git/commits/" + candidate)
+    pr = status_dev_github_get("pulls/" + str(links[0]["number"]))
+    head = status_dev_github_get("git/commits/" + candidate)
     parents = head.get("parents") if isinstance(head, dict) else None
     legacy_monthly_need(isinstance(parents, list) and len(parents) == 1
         and SHA40_RE.fullmatch(str(parents[0].get("sha", ""))) is not None, "STATUS_CI_SOURCE")
-    legacy_monthly_need(parents[0]["sha"] == STATUS_DEV_METADATA, "STATUS_CI_METADATA")
-    metadata_commit = row_scope_github_get("git/commits/" + STATUS_DEV_METADATA)
-    source = row_scope_github_get("git/commits/" + STATUS_DEV_SOURCE)
+    legacy_monthly_need(parents[0]["sha"] == STATUS_DEV_CORRECTIVE, "STATUS_CI_CORRECTIVE")
+    corrective = status_dev_github_get("git/commits/" + STATUS_DEV_CORRECTIVE)
+    metadata_commit = status_dev_github_get("git/commits/" + STATUS_DEV_METADATA)
+    source = status_dev_github_get("git/commits/" + STATUS_DEV_SOURCE)
     merge_sha = pr.get("merge_commit_sha")
     legacy_monthly_need(isinstance(merge_sha, str) and SHA40_RE.fullmatch(merge_sha), "STATUS_CI_MERGE")
-    merge = row_scope_github_get("git/commits/" + merge_sha)
-    return status_dev_ci_evidence(run, pr, head, metadata_commit, source, merge, status_dev_github_jobs(run["id"]), candidate)
+    merge = status_dev_github_get("git/commits/" + merge_sha)
+    return status_dev_ci_evidence(run, pr, head, corrective, metadata_commit, source, merge, status_dev_github_jobs(run["id"]), candidate)
 
 def status_dev_source(candidate):
-    metadata_commit = run_git("show", "-s", "--format=%P", candidate)
+    corrective = run_git("show", "-s", "--format=%P", candidate)
+    metadata_commit = run_git("show", "-s", "--format=%P", corrective)
     source = run_git("show", "-s", "--format=%P", metadata_commit)
     legacy_monthly_need(run_git("rev-parse", "HEAD") == candidate and run_git("status", "--porcelain", "--untracked-files=all") == ""
-        and run_git("diff", "--cached", "--name-only") == "" and metadata_commit == STATUS_DEV_METADATA and source == STATUS_DEV_SOURCE
+        and run_git("diff", "--cached", "--name-only") == "" and corrective == STATUS_DEV_CORRECTIVE and metadata_commit == STATUS_DEV_METADATA and source == STATUS_DEV_SOURCE
         and run_git("show", "-s", "--format=%P", source) == STATUS_DEV_BASE, "STATUS_SOURCE_GRAPH")
     raw = subprocess.check_output(["node", "-e", "const x=require('./scripts/check_r3_response_label_successor.cjs');process.stdout.write(JSON.stringify({pin:x.PIN,meta:x.META}))"], cwd=ROOT, text=True, timeout=15)
     contract = json.loads(raw); pins = contract.get("pin"); metadata = contract.get("meta")
@@ -1260,12 +1287,15 @@ def status_dev_source(candidate):
     source_paths = allowed - set(metadata)
     source_rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", STATUS_DEV_BASE, source).splitlines()]
     metadata_rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", source, metadata_commit).splitlines()]
-    fix_rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", metadata_commit, candidate).splitlines()]
+    fix_rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", metadata_commit, corrective).splitlines()]
+    auth_rows = [line.split("\t") for line in run_git("diff", "--no-renames", "--name-status", corrective, candidate).splitlines()]
     legacy_monthly_need(len(source_rows) == len(source_paths) and {r[1] for r in source_rows if len(r) == 2} == source_paths
         and len(metadata_rows) == len(metadata) and {r[1] for r in metadata_rows if len(r) == 2} == set(metadata)
         and all(len(r) == 2 and r[0] == "M" for r in metadata_rows)
         and len(fix_rows) == len(STATUS_DEV_FIX) and {r[1] for r in fix_rows if len(r) == 2} == STATUS_DEV_FIX
         and all(len(r) == 2 and r[0] == "M" for r in fix_rows)
+        and len(auth_rows) == len(STATUS_DEV_AUTH_FIX) and {r[1] for r in auth_rows if len(r) == 2} == STATUS_DEV_AUTH_FIX
+        and all(len(r) == 2 and r[0] == "M" for r in auth_rows)
         and {(r[0], r[1]) for r in source_rows} == {(r[0], r[1]) for r in rows if r[1] in source_paths}, "STATUS_SOURCE_LAYERS")
     for status, name in rows:
         added = name in {"tests/r3-admin-response-label.test.js", "scripts/check_r3_response_label_successor.cjs", "tests/r3-response-label-successor-core.test.cjs", "scripts/collect_r3_response_label_pr.cjs", "tests/r3-response-label-collector.test.cjs", "tests/r3-response-label-deploy.test.py"}

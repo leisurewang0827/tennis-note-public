@@ -108,10 +108,9 @@ jobs:
             exit 1
           fi
           node scripts/collect_r3_response_label_pr.cjs --verify-receipt "$RUNNER_TEMP/r3-status-source-receipt.json"
-          node --test tests/r3-admin-response-label.test.js
-          node --test --test-name-pattern='PR metadata|inherited hashes' tests/r3-response-label-successor-core.test.cjs
-          node --test --test-name-pattern='workflow wrapper|scoped signal|receipt' tests/r3-response-label-collector.test.cjs
-          python tests/r3-response-label-deploy.test.py
+          node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs
+          node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs
+          python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph
           echo 'scoped=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         if: steps.response_label.outputs.scoped != 'true' && (github.event_name == 'pull_request' && (github.base_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' || github.head_ref == 'codex/tennisnote-r3-current-term-dev570-20261031'))

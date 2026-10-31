@@ -5,7 +5,8 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, BASE_BLOBS } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS } = require("../scripts/collect_r3_response_label_pr.cjs");
+const { CORRECTIVE } = require("../scripts/check_r3_response_label_successor.cjs");
 const { createHash } = require("node:crypto");
 test("a real dirty checkout is held before CI environment or API access", () => {
   const root = path.join(__dirname, "..");
@@ -55,13 +56,28 @@ test("receipt requires exact source context and never authorizes deployment", ()
   const head = "1".repeat(40), source = "2".repeat(40), merge = "3".repeat(40), tree = "4".repeat(40), wire = "5".repeat(64);
   const context = { head, source, merge, tree, workflowSha: merge, wiringLfSha256: wire };
   const receipt = { contract: "r3-response-label-source/1", status: "SOURCE_SCOPE_PROVEN", ...context,
-    productFiles: 15, wiringFiles: 8, deploymentAdmitted: false };
+    productFiles: 15, wiringFiles: 8, priorHead: CORRECTIVE, priorCiRun: 41165808761, deploymentAdmitted: false };
   assert.equal(verifyReceiptFields(receipt, context), true);
   for (const change of [{ status: "FACTS_ONLY_NOT_ADMITTED" }, { deploymentAdmitted: true }, { head: source },
     { source: head }, { merge: head }, { tree: head }, { workflowSha: head }, { wiringLfSha256: "0".repeat(64) },
     { productFiles: 14 }, { wiringFiles: 7 }]) {
     assert.throws(() => verifyReceiptFields({ ...receipt, ...change }, context), /RECEIPT_HOLD/);
   }
+});
+test("auth fourth layer is exactly the prior seven wiring paths plus deployment workflow", () => {
+  const rows = AUTH_FIX.map((p) => ["M", p]);
+  assert.equal(AUTH_FIX.length, 8);
+  assert.deepEqual(new Set(AUTH_FIX), new Set([...FIX, ".github/workflows/deploy-cloudflare-pages-dev.yml"]));
+  assert.doesNotThrow(() => validateLayerRows(rows, AUTH_FIX, () => "M"));
+  assert.throws(() => validateLayerRows([...rows.slice(1), ["M", "unknown"]], AUTH_FIX, () => "M"), /LAYER_SCOPE/);
+});
+test("auth deploy wrapper adds token to exactly two preflight steps", () => {
+  const root = path.join(__dirname, ".."), file = ".github/workflows/deploy-cloudflare-pages-dev.yml";
+  const previous = execFileSync("git", ["show", `efc84a88a389b292ff226b760c935de19ac9f07b:${file}`], { cwd: root, encoding: "utf8", env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).replace(/\r\n/g, "\n");
+  const actual = fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
+  assert.equal(actual, wrapDeployWorkflow(previous));
+  assert.equal((actual.match(/STATUS_GITHUB_TOKEN:/g) || []).length, 2);
+  assert.ok(!actual.includes("actions: write"));
 });
 test("receipt pinned blob decoder rejects malformed data, wrong size and hashes", () => {
   const bytes = Buffer.from("synthetic\n"), size = bytes.length;

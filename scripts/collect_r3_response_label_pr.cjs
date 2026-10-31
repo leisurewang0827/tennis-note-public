@@ -5,7 +5,7 @@ const { execFileSync } = require("node:child_process");
 const { readFileSync, lstatSync } = require("node:fs");
 const { createHash } = require("node:crypto");
 const { resolve } = require("node:path");
-const { validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, BRANCH } = require("./check_r3_response_label_successor.cjs");
+const { validatePrBoundary, PIN, META, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH } = require("./check_r3_response_label_successor.cjs");
 const ROOT = resolve(__dirname, "..");
 const REPO = "leisurewang0827/tennis-note-public";
 const BASE_REF = "codex/tennisnote-r3-current-term-dev570-20261031";
@@ -25,6 +25,7 @@ const FIX = Object.freeze([
   "tests/r3-response-label-successor-core.test.cjs", "tests/r3-response-label-collector.test.cjs",
   "tests/r3-response-label-deploy.test.py",
 ]);
+const AUTH_FIX = Object.freeze([...FIX, ".github/workflows/deploy-cloudflare-pages-dev.yml"]);
 const BASE_BLOBS = Object.freeze([
   ["c3823d163e7e8acbb3e69c591273f586425bbcea", 11453, "ef74017550fb4c8f18142424792d81e3f953740bf9880366732b32a65d9ebccd"],
   ["c5c263549ee1961a3acf68565a9e23cb2ef67462", 3455, "2118c7c378086e74262b48b0a0495e42abe35f9e34f2e7d3f4f50f6762b3bdd9"],
@@ -48,12 +49,21 @@ function wrapWorkflow(base) {
   const original = '          node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"\n';
   need(INTRO.split(original).length === 2, "WORKFLOW_PREP_ANCHOR");
   const replacement = `          node scripts/collect_r3_response_label_pr.cjs --prepare-base\n          if ! node scripts/collect_r3_response_label_pr.cjs > "$RUNNER_TEMP/r3-status-source-receipt.json"; then\n            node scripts/collect_r3_response_label_pr.cjs --show-hold "$RUNNER_TEMP/r3-status-source-receipt.json"\n            exit 1\n          fi\n`;
-  return prefix + marker + INTRO.replace(original, replacement) + wrapped;
+  const priorTests = `          node --test tests/r3-admin-response-label.test.js\n          node --test --test-name-pattern='PR metadata|inherited hashes' tests/r3-response-label-successor-core.test.cjs\n          node --test --test-name-pattern='workflow wrapper|scoped signal|receipt' tests/r3-response-label-collector.test.cjs\n          python tests/r3-response-label-deploy.test.py\n`;
+  const authTests = `          node --test --test-name-pattern='fourth layer' tests/r3-response-label-successor-core.test.cjs\n          node --test --test-name-pattern='auth fourth|auth deploy' tests/r3-response-label-collector.test.cjs\n          python tests/r3-response-label-deploy.test.py StatusDeploy.test_authenticated_fixed_github_path_and_no_fallback StatusDeploy.test_authenticated_http_errors_are_role_coded_and_redacted StatusDeploy.test_auth_fourth_layer_graph\n`;
+  need(INTRO.split(priorTests).length === 2, "WORKFLOW_TEST_ANCHOR");
+  return prefix + marker + INTRO.replace(original, replacement).replace(priorTests, authTests) + wrapped;
 }
 function wrapDeployWorkflow(base) {
   const marker = "      - name: Admit exact manual R3 candidate\n";
   need(base.split(marker).length === 2, "DEPLOY_WORKFLOW_BASE");
-  return base.replace(marker, "      - uses: actions/setup-node@v7\n        with:\n          node-version: \"22\"\n\n" + marker);
+  let result = base.replace(marker, "      - uses: actions/setup-node@v7\n        with:\n          node-version: \"22\"\n\n" + marker);
+  const sourceStep = "      - name: Admit exact manual R3 candidate\n        if: github.event_name == 'workflow_dispatch'\n";
+  need(result.split(sourceStep).length === 2, "DEPLOY_SOURCE_ANCHOR");
+  result = result.replace(sourceStep, sourceStep + "        env:\n          STATUS_GITHUB_TOKEN: ${{ github.token }}\n");
+  const liveStep = "      - name: Verify exact existing development target and rollback before manual deploy\n        if: github.event_name == 'workflow_dispatch'\n        env:\n";
+  need(result.split(liveStep).length === 2, "DEPLOY_LIVE_ANCHOR");
+  return result.replace(liveStep, liveStep + "          STATUS_GITHUB_TOKEN: ${{ github.token }}\n");
 }
 const need = (value, code) => { if (!value) throw Error(code); };
 function safeHold(error) {
@@ -111,7 +121,8 @@ async function prepareBaseBlobs() {
     && env.GITHUB_SHA === merge && env.GITHUB_WORKFLOW_SHA === merge
     && env.GITHUB_WORKFLOW === "Tennis Note Public PWA CI"
     && env.GITHUB_WORKFLOW_REF === `${REPO}/.github/workflows/tennisnote-public-ci.yml@${env.GITHUB_REF}`
-    && git("show", "-s", "--format=%P", head) === METADATA
+    && git("show", "-s", "--format=%P", head) === CORRECTIVE
+    && git("show", "-s", "--format=%P", CORRECTIVE) === METADATA
     && git("show", "-s", "--format=%P", METADATA) === SOURCE
     && git("show", "-s", "--format=%P", SOURCE) === BASE
     && git("show", "-s", "--format=%P", merge) === `${BASE} ${head}`
@@ -151,6 +162,7 @@ function verifyReceiptFields(receipt, context) {
   const sha40 = (v) => typeof v === "string" && /^[a-f0-9]{40}$/.test(v) && !/^0+$/.test(v);
   need(receipt && receipt.contract === "r3-response-label-source/1" && receipt.status === "SOURCE_SCOPE_PROVEN"
     && receipt.deploymentAdmitted === false && receipt.productFiles === 15 && receipt.wiringFiles === WIRING.length
+    && receipt.priorHead === CORRECTIVE && receipt.priorCiRun === 41165808761
     && sha40(receipt.head) && sha40(receipt.source) && sha40(receipt.merge) && sha40(receipt.tree)
     && receipt.head === context.head && receipt.source === context.source && receipt.merge === context.merge
     && receipt.tree === context.tree && receipt.workflowSha === context.workflowSha
@@ -164,7 +176,8 @@ function verifyReceiptFile(file) {
   const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
   const receipt = JSON.parse(readFileSync(file, "utf8"));
   const head = event.pull_request?.head?.sha;
-  need(git("show", "-s", "--format=%P", head) === METADATA, "RECEIPT_GRAPH");
+  need(git("show", "-s", "--format=%P", head) === CORRECTIVE
+    && git("show", "-s", "--format=%P", CORRECTIVE) === METADATA, "RECEIPT_GRAPH");
   const source = git("show", "-s", "--format=%P", METADATA);
   verifyReceiptFields(receipt, { head, source, merge: git("rev-parse", "HEAD"),
     tree: git("rev-parse", "HEAD^{tree}"), workflowSha: env.GITHUB_WORKFLOW_SHA,
@@ -199,14 +212,14 @@ async function collect() {
   const pr = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   const head = pr.head?.sha, merge = git("rev-parse", "HEAD");
   const parents = git("show", "-s", "--format=%P", head).split(" ").filter(Boolean);
-  need(parents.length === 1 && parents[0] === METADATA, "SOURCE_PARENT");
+  need(parents.length === 1 && parents[0] === CORRECTIVE, "SOURCE_PARENT");
   const source = SOURCE, metadata = METADATA;
   const s = { event: env.GITHUB_EVENT_NAME, repo: env.GITHUB_REPOSITORY,
     baseRepo: pr.base?.repo?.full_name, headRepo: pr.head?.repo?.full_name,
     base: pr.base?.sha, baseRef: pr.base?.ref, headRef: pr.head?.ref, attempt: Number(env.GITHUB_RUN_ATTEMPT),
     number, ref: env.GITHUB_REF, workflow: env.GITHUB_WORKFLOW, workflowRef: env.GITHUB_WORKFLOW_REF,
-    head, source, metadata, merge, headTree: git("rev-parse", `${head}^{tree}`), mergeTree: git("rev-parse", `${merge}^{tree}`),
-    headParents: parents, metadataParents: git("show", "-s", "--format=%P", metadata).split(" ").filter(Boolean),
+    head, source, metadata, corrective: CORRECTIVE, merge, headTree: git("rev-parse", `${head}^{tree}`), mergeTree: git("rev-parse", `${merge}^{tree}`),
+    headParents: parents, correctiveParents: git("show", "-s", "--format=%P", CORRECTIVE).split(" ").filter(Boolean), metadataParents: git("show", "-s", "--format=%P", metadata).split(" ").filter(Boolean),
     sourceParents: git("show", "-s", "--format=%P", source).split(" ").filter(Boolean),
     mergeParents: git("show", "-s", "--format=%P", merge).split(" ").filter(Boolean),
     githubSha: env.GITHUB_SHA, workflowSha: env.GITHUB_WORKFLOW_SHA, clean: true, indexClean: true };
@@ -231,7 +244,8 @@ async function collect() {
   };
   layer(BASE, source, sourcePaths, expectedFileStatus);
   layer(source, metadata, META, () => "M");
-  layer(metadata, head, FIX, () => "M");
+  layer(metadata, CORRECTIVE, FIX, () => "M");
+  layer(CORRECTIVE, head, AUTH_FIX, () => "M");
   for (const [status, p] of changes) {
     need(status === expectedFileStatus(p) && git("ls-tree", "--format=%(objectmode)", head, "--", p) === "100644"
       && (!sourcePaths.includes(p) || git("ls-tree", "--format=%(objectmode)", source, "--", p) === "100644"), "FILE_MODE");
@@ -245,6 +259,7 @@ async function collect() {
     && git("diff", "--cached", "--name-only") === "" && git("rev-parse", "HEAD") === merge, "POST_DRIFT");
   console.log(JSON.stringify({ contract: "r3-response-label-source/1", status: "SOURCE_SCOPE_PROVEN",
     head, source, merge, tree: s.headTree, workflowSha: env.GITHUB_WORKFLOW_SHA,
+    priorHead: CORRECTIVE, priorCiRun: 41165808761,
     wiringLfSha256: wiringDigest(), productFiles: Object.keys(PIN).length,
     wiringFiles: WIRING.length, productionWrite: false, deploymentAdmitted: false }));
 }
@@ -263,4 +278,4 @@ if (require.main === module) (async () => {
   console.log(JSON.stringify(safeHold(error)));
   process.exitCode = 1;
 });
-module.exports = { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, BASE_BLOBS };
+module.exports = { wrapWorkflow, wrapDeployWorkflow, validateLayerRows, verifyReceiptFields, decodePinnedBlob, ensurePinnedBlobs, safeHold, FIX, AUTH_FIX, BASE_BLOBS };

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { validateLocalScope, validatePrBoundary, PIN, BASE, SOURCE, METADATA, BRANCH, PROJECT } = require("../scripts/check_r3_response_label_successor.cjs");
+const { validateLocalScope, validatePrBoundary, PIN, BASE, SOURCE, METADATA, CORRECTIVE, BRANCH, PROJECT } = require("../scripts/check_r3_response_label_successor.cjs");
 
 function candidate() {
   return { base: BASE, branch: BRANCH, environment: "development", projectFingerprint: PROJECT,
@@ -47,12 +47,24 @@ test("PR metadata and merge parent order fail closed without admitting CI", () =
     headRepo: "leisurewang0827/tennis-note-public", base: BASE, baseRef: "codex/tennisnote-r3-current-term-dev570-20261031",
     headRef: BRANCH, attempt: 1, number: 7, ref: "refs/pull/7/merge", workflow: "Tennis Note Public PWA CI",
     workflowRef: "leisurewang0827/tennis-note-public/.github/workflows/tennisnote-public-ci.yml@refs/pull/7/merge",
-    head, source, metadata: METADATA, merge, headTree: tree, mergeTree: tree, headParents: [METADATA], metadataParents: [source], sourceParents: [BASE], mergeParents: [BASE, head],
+    head, source, metadata: METADATA, corrective: CORRECTIVE, merge, headTree: tree, mergeTree: tree, headParents: [CORRECTIVE], correctiveParents: [METADATA], metadataParents: [source], sourceParents: [BASE], mergeParents: [BASE, head],
     githubSha: merge, workflowSha: merge, clean: true, indexClean: true };
   assert.equal(validatePrBoundary(s).status, "PR_METADATA_ONLY_NOT_ADMITTED");
   for (const change of [{ event: "push" }, { repo: "unknown" }, { headRepo: "fork" }, { base: head },
     { attempt: 2 }, { ref: "refs/heads/main" }, { mergeParents: [head, BASE] }, { mergeTree: head },
-    { headParents: [merge] }, { metadataParents: [head] }, { sourceParents: [head] }, { sourceParents: [BASE, merge] }, { workflowSha: head }, { clean: false }, { indexClean: false }]) {
+    { headParents: [merge] }, { correctiveParents: [head] }, { metadataParents: [head] }, { sourceParents: [head] }, { sourceParents: [BASE, merge] }, { workflowSha: head }, { clean: false }, { indexClean: false }]) {
     assert.throws(() => validatePrBoundary({ ...s, ...change }), /STATUS_SUCCESSOR_HOLD/);
+  }
+});
+test("fourth layer keeps the previously verified corrective parent", () => {
+  const head = "1".repeat(40), merge = "2".repeat(40), tree = "3".repeat(40);
+  const s = { event: "pull_request", repo: "leisurewang0827/tennis-note-public", baseRepo: "leisurewang0827/tennis-note-public", headRepo: "leisurewang0827/tennis-note-public",
+    base: BASE, baseRef: "codex/tennisnote-r3-current-term-dev570-20261031", headRef: BRANCH, attempt: 1, number: 7,
+    ref: "refs/pull/7/merge", workflow: "Tennis Note Public PWA CI", workflowRef: "leisurewang0827/tennis-note-public/.github/workflows/tennisnote-public-ci.yml@refs/pull/7/merge",
+    head, source: SOURCE, metadata: METADATA, corrective: CORRECTIVE, merge, headTree: tree, mergeTree: tree,
+    headParents: [CORRECTIVE], correctiveParents: [METADATA], metadataParents: [SOURCE], sourceParents: [BASE], mergeParents: [BASE, head], githubSha: merge, workflowSha: merge, clean: true, indexClean: true };
+  assert.equal(validatePrBoundary(s).status, "PR_METADATA_ONLY_NOT_ADMITTED");
+  for (const bad of [{ headParents: [METADATA] }, { correctiveParents: [SOURCE] }, { corrective: "4".repeat(40) }]) {
+    assert.throws(() => validatePrBoundary({ ...s, ...bad }), /STATUS_SUCCESSOR_HOLD/);
   }
 });
