@@ -120,6 +120,11 @@ jobs:
         if: steps.display.outputs.production_legacy_only == 'true' && github.event_name == 'pull_request'
         run: ./scripts/verify.sh --r3-production-legacy
       # PROD_LEGACY_COLLECTOR_END
+      # R3_PROD_562_COLLECTOR_BEGIN
+      - name: Reviewed R3 562 candidate delta only
+        if: steps.display.outputs.production_562_only == 'true' && github.event_name == 'pull_request'
+        run: ./scripts/verify.sh --r3-production-562
+      # R3_PROD_562_COLLECTOR_END
       - name: Canonical production selection and forward recovery delta only
         if: steps.display.outputs.production_only == 'true' && github.event_name == 'pull_request'
         env:

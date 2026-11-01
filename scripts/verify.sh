@@ -20,6 +20,14 @@ if [[ "${1:-}" == "--r3-production-legacy" ]]; then
 fi
 # PROD_LEGACY_COLLECTOR_END
 
+# R3_PROD_562_COLLECTOR_BEGIN
+if [[ "${1:-}" == "--r3-production-562" ]]; then
+  [[ $# -eq 1 ]] || exit 2
+  node --test tests/r3-production-562-admission.test.mjs
+  exit $?
+fi
+# R3_PROD_562_COLLECTOR_END
+
 : "${TENNISNOTE_SUPABASE_URL:=https://example.supabase.co}"
 : "${TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:=test-publishable-key-for-ci-only}"
 : "${TENNISNOTE_PORTONE_STORE_ID:=test-store-id}"

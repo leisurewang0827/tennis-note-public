@@ -646,7 +646,7 @@ function renderEffectiveSettlementPreview() {
   if (!rows) return;
   const current = effectiveSettlementPreview;
   if ((current.context || current.results.length) && !effectiveSettlementPreviewContextIsCurrent(current.context)) {
-    Object.assign(r3SubstituteDecisionUi, { preview: null, context: null, recipient: "", operationKey: "", message: "" });
+    Object.assign(r3SubstituteDecisionUi, { preview: null, context: null, scope: null, recipient: "", operationKey: "", message: "" });
     invalidateEffectiveSettlementPreview();
   }
   if (current.error) {
@@ -674,13 +674,15 @@ function renderEffectiveSettlementPreview() {
         const candidates = errorCode === "settlement_hold_substitute_manual_approval_required"
           ? r3SubstituteDecisionCandidates(coach) : [];
         const actions = candidates.map((assignment, index) =>
-          `<button type="button" data-r3-policy-preview="${escapeHtml(assignment.id)}" ${r3SubstituteDecisionUi.busy ? "disabled" : ""}>대타 귀속 근거 ${index + 1} 확인</button>`).join(" ");
+          `<button type="button" data-r3-policy-preview="${escapeHtml(assignment.id)}" data-r3-policy-coach="${escapeHtml(coach.serverRoleId)}" ${r3SubstituteDecisionUi.busy ? "disabled" : ""}>대타 귀속 근거 ${index + 1} 확인</button>`).join(" ");
         const decision = r3SubstituteDecisionUi.preview;
-        const chooser = decision && candidates.some((assignment) => assignment.id === decision.assignmentId)
-          ? `<label>대타 정산 귀속 <select data-r3-policy-recipient ${decision.decisionEnabled && !decision.chosenRecipient && !r3SubstituteDecisionUi.busy ? "" : "disabled"}>
+        const chooser = decision && r3SubstituteDecisionUi.scope?.coachRoleId === coach.serverRoleId
+          && r3SubstituteDecisionCandidate(current.context, decision)
+          && candidates.some((assignment) => assignment.id === decision.assignmentId)
+          ? `<label>대타 정산 귀속 <select data-r3-policy-recipient data-r3-policy-coach="${escapeHtml(coach.serverRoleId)}" data-r3-policy-assignment="${escapeHtml(decision.assignmentId)}" ${decision.decisionEnabled && !decision.chosenRecipient && !r3SubstituteDecisionUi.busy ? "" : "disabled"}>
               <option value="">선택</option><option value="originalCoach" ${r3SubstituteDecisionUi.recipient === "originalCoach" ? "selected" : ""}>A 원 담당 코치</option>
               <option value="actualCoach" ${r3SubstituteDecisionUi.recipient === "actualCoach" ? "selected" : ""}>B 실제 대타 코치</option></select></label>
-              <button type="button" data-r3-policy-confirm ${decision.decisionEnabled && !decision.chosenRecipient && r3SubstituteDecisionUi.recipient && !r3SubstituteDecisionUi.busy ? "" : "disabled"}>귀속 확인 저장</button>` : "";
+              <button type="button" data-r3-policy-confirm data-r3-policy-coach="${escapeHtml(coach.serverRoleId)}" data-r3-policy-assignment="${escapeHtml(decision.assignmentId)}" ${decision.decisionEnabled && !decision.chosenRecipient && r3SubstituteDecisionUi.recipient && !r3SubstituteDecisionUi.busy ? "" : "disabled"}>귀속 확인 저장</button>` : "";
         return `<tr><td colspan="6">${escapeHtml(coach.name)} · ${escapeHtml(error)} ${actions} ${chooser}
           ${candidateLoadError ? `<small>${escapeHtml(candidateLoadError)}</small>` : ""}
           <small role="status">${escapeHtml(r3SubstituteDecisionUi.message)}</small></td></tr>`;
@@ -693,14 +695,25 @@ function renderEffectiveSettlementPreview() {
         <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;
     }).join("") || '<tr><td colspan="6">선택한 달의 계산 근거가 없습니다.</td></tr>';
   rows.querySelectorAll("[data-r3-policy-preview]").forEach((button) => button.addEventListener("click", () => {
-    void previewR3SubstituteDecision(button.dataset.r3PolicyPreview);
+    if (button.isConnected === false) return;
+    void previewR3SubstituteDecision(button.dataset.r3PolicyPreview, button.dataset.r3PolicyCoach);
   }));
-  rows.querySelector("[data-r3-policy-recipient]")?.addEventListener("change", (event) => {
+  rows.querySelectorAll("[data-r3-policy-recipient]").forEach((select) => select.addEventListener("change", (event) => {
+    const scope = r3SubstituteDecisionUi.scope;
+    if (select.isConnected === false || r3SubstituteDecisionUi.busy || !scope
+      || select.dataset.r3PolicyCoach !== scope.coachRoleId
+      || select.dataset.r3PolicyAssignment !== r3SubstituteDecisionUi.preview?.assignmentId
+      || !r3SubstituteDecisionCandidate(r3SubstituteDecisionUi.context, r3SubstituteDecisionUi.preview)
+      || !["", "originalCoach", "actualCoach"].includes(event.target.value)
+      || r3SubstituteDecisionUi.recipient === event.target.value) return;
     r3SubstituteDecisionUi.recipient = event.target.value;
     r3SubstituteDecisionUi.operationKey = "";
     renderEffectiveSettlementPreview();
-  });
-  rows.querySelector("[data-r3-policy-confirm]")?.addEventListener("click", () => void confirmR3SubstituteDecision());
+  }));
+  rows.querySelectorAll("[data-r3-policy-confirm]").forEach((button) => button.addEventListener("click", () => {
+    if (button.isConnected === false) return;
+    void confirmR3SubstituteDecision(button.dataset.r3PolicyCoach, button.dataset.r3PolicyAssignment);
+  }));
   renderDashboardPager("#coachSettlementPreviewPager", items.length, state.settlementPage, "settlement", billingPageSize);
 }
 function renderAdminSettlementHistory() {
@@ -740,13 +753,19 @@ function renderAdminSettlementHistory() {
     ["계산 계약", snapshot.calculationVersion === "r3_monthly_settlement_v1" ? "기존 v1 계산본" : "적용일별 v2 계산본"],
     ["계산본", `revision ${snapshot.revision} · ${snapshot.sourceFingerprint.slice(0, 8)}`],
     ["확정 시각", new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value.confirmation.confirmedAt))],
-    ["코치 응답", value.reconciliation?.status === "ACKNOWLEDGED" ? "확인 완료" : value.reconciliation?.status === "DISPUTED" ? "이의 접수" : "응답 대기"],
+    ["코치 응답", adminSettlementResponseLabel(value.reconciliation)],
   ];
   if (value.reconciliation?.reason) rows.push(["이의 사유", normalizeAdminHistoryReason(value.reconciliation.reason)]);
   for (const [label, content] of rows) {
     const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
   }
   renderAdminR3SettlementWriter();
+}
+
+function adminSettlementResponseLabel(reconciliation) {
+  if (reconciliation == null) return "응답 대기";
+  const status = String(reconciliation.status || "").toLowerCase();
+  return status === "acknowledged" ? "확인 완료" : status === "disputed" ? "이의 접수" : "상태 확인 필요";
 }
 
 function renderAdminR3SettlementWriter() {

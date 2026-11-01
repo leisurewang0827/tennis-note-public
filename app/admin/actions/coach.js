@@ -65,8 +65,16 @@ function applyServerCoachSnapshot({
       .map((item) => [item.user_id, item]),
   );
   const settlementTermByCoachRoleId = new Map();
+  const ambiguousCurrentTermRoles = new Set();
+  const settlementToday = adminLocalDateKey(new Date());
   serverSettlementTerms.forEach((term) => {
-    if (!settlementTermByCoachRoleId.has(term.coach_role_id)) {
+    if (!term.coach_role_id || !["active", "scheduled", "ended"].includes(term.status)
+      || !term.effective_from || term.effective_from > settlementToday
+      || (term.effective_to && term.effective_to < settlementToday)) return;
+    if (settlementTermByCoachRoleId.has(term.coach_role_id)) {
+      settlementTermByCoachRoleId.delete(term.coach_role_id);
+      ambiguousCurrentTermRoles.add(term.coach_role_id);
+    } else if (!ambiguousCurrentTermRoles.has(term.coach_role_id)) {
       settlementTermByCoachRoleId.set(term.coach_role_id, term);
     }
   });
@@ -130,6 +138,7 @@ function applyServerCoachSnapshot({
     const roleRate = Number(coach.settlementRate) > 1 ? Number(coach.settlementRate) / 100 : Number(coach.settlementRate);
     return {
       ...baseRule,
+      currentTermUnavailable: Boolean(coach.serverRoleId && !term),
       method: term?.settlement_type || coach.settlementType || baseRule.method,
       ratio: term?.settlement_type === "ratio" ? Number(term.coach_rate) : (coach.settlementType === "ratio" ? roleRate : 0),
       hourly: term?.settlement_type === "hourly" ? Number(term.hourly_rate) : (coach.settlementType === "hourly" ? Number(coach.hourlyRate) : 0),
