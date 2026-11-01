@@ -711,8 +711,118 @@ function summaryMain(args) {
 }
 // SUMMARY_LAYOUT_SUCCESSOR_END
 
+// R3_562_ADMISSION_BEGIN
+export const R562_BASE = "614702af02e1d31fcbfda3bbe9a5c680d22e5642";
+export const R562_BRANCH = "codex/tennisnote-r3-operating-public-20261101";
+export const R562_FIXTURE = "tests/fixtures/r3-production-562-selection.json";
+export const R562_TEST = "tests/r3-production-562-admission.test.mjs";
+export const R562_FIXTURE_SHA = "f364e1a43ee524c27fd2cd2453209c0f0892b51c2f5d2a6d0451d8d4137baeb0";
+export const R562_TEST_SHA = "82cdbe5ad561d4162786e55371e983d20906f5fe9be652a59c8d98df53e73f3a";
+export const R562_SELF_SEAL = "8269bcf9e81b80e1139345338ddc2153b7b36949b44417bf9e0fc240ef33ec63";
+const R562_CI = ".github/workflows/tennisnote-public-ci.yml";
+const R562_VERIFY = "scripts/verify.sh";
+const r562Need = (v, c) => { if (!v) throw Error("R562_" + c); };
+const r562Hash = s => hash(lf(s));
+const r562Sorted = xs => [...xs].sort();
+export function r562Validate(s) {
+  const f = s.fixture;
+  r562Need(f?.contract === "r3-production-562-selection/1" && f.base === R562_BASE && f.branch === R562_BRANCH &&
+    f.release?.version === "1.0.562" && f.release?.releaseId === "2026.11.01.01" &&
+    f.release?.memberCache === "tennis-note-member-pwa-v595" && f.release?.coachCache === "tennis-note-coach-mode-v568" &&
+    f.normalization === "utf8-lf" && Array.isArray(f.candidatePaths) && f.candidatePaths.length === 22, "FIXTURE");
+  const candidate = f.candidatePaths.map(x => x.path);
+  const expected = r562Sorted([...candidate, R562_CI, SELF, R562_VERIFY, R562_FIXTURE, R562_TEST]);
+  r562Need(new Set(expected).size === 27 && same(r562Sorted(s.paths), expected), "PATHS");
+  r562Need(f.candidatePaths.every(x => /^[a-f0-9]{64}$/.test(x.sha256) && s.hashes[x.path] === x.sha256), "CANDIDATE_HASH");
+  r562Need(s.controlsMatch && s.metadataMatch, "CONTROL");
+  r562Need(s.base === R562_BASE && s.branch === R562_BRANCH && s.repo === REPOSITORY &&
+    s.clean && s.attempt === "1" && /^[a-f0-9]{40}$/.test(s.targetSha || "") &&
+    s.checkoutTree === s.candidateTree && s.candidateParent === R562_BASE, "CONTEXT");
+  if (s.event === "pull_request") {
+    r562Need(s.mode === "--ci-route" && s.headRepo === REPOSITORY && s.target === "main" &&
+      s.workflow === "Tennis Note Public PWA CI" && Number.isSafeInteger(s.number) && s.number > 0 &&
+      s.number === s.prNumber && s.ref === "refs/pull/" + s.number + "/merge" &&
+      s.workflowRef === REPOSITORY + "/" + R562_CI + "@" + s.ref &&
+      same(s.mergeParents, [R562_BASE, s.targetSha]), "PR");
+  } else {
+    const deploy = s.mode === "--production-source";
+    r562Need(s.event === "push" && s.ref === "refs/heads/main" && s.before === R562_BASE &&
+      same(s.mergeParents, [R562_BASE]) &&
+      (deploy ? ["Deploy Tennis Note short URLs", "Deploy Tennis Note web beta"].includes(s.workflow) :
+        s.mode === "--ci-route" && s.workflow === "Tennis Note Public PWA CI") &&
+      s.workflowRef === REPOSITORY + "/" + (deploy ? (s.workflow === "Deploy Tennis Note short URLs" ?
+        ".github/workflows/deploy-cloudflare-pages.yml" : ".github/workflows/deploy-pages.yml") : R562_CI) + "@refs/heads/main", "MAIN");
+  }
+  return true;
+}
+const R562_ENTRY = '    if (r562Requested(process.argv.slice(2), process.env)) { r562Main(process.argv.slice(2)); } else\n';
+export function r562Controls(self, oldSelf, ci, oldCi, verify, oldVerify) {
+  const begin = "// R3_562_ADMISSION_BEGIN\n", end = "// R3_562_ADMISSION_END\n";
+  r562Need(self.split(begin).length === 2 && self.split(end).length === 2 && self.includes(R562_ENTRY), "SELF_MARKER");
+  const start = self.indexOf(begin), stop = self.indexOf(end) + end.length;
+  const block = self.slice(start,stop).replace(/export const R562_SELF_SEAL = "[^"]+";/, 'export const R562_SELF_SEAL = "PENDING";');
+  const inverse = (self.slice(0,start) + self.slice(stop)).replace(R562_ENTRY,"")
+    .replace("// SUMMARY_LAYOUT_SUCCESSOR_END\n\n\n", "// SUMMARY_LAYOUT_SUCCESSOR_END\n\n");
+  r562Need(r562Hash(block) === R562_SELF_SEAL && inverse === oldSelf, "SELF_INVERSE_SEAL");
+  for (const [p,s,old] of [[R562_CI,ci,oldCi],[R562_VERIFY,verify,oldVerify]]) {
+    const beginMark = p === R562_CI ? "      # R3_PROD_562_COLLECTOR_BEGIN\n" : "# R3_PROD_562_COLLECTOR_BEGIN\n";
+    const endMark = p === R562_CI ? "      # R3_PROD_562_COLLECTOR_END\n" : "# R3_PROD_562_COLLECTOR_END\n";
+    const expectedHash = p === R562_CI ? "093ab50d5d8da060e9c1d07b8ad2bd9a734b1a88fc7ee273c06ce345cde28e3e" : "45745e85d714beeca7c861dc8882103ab1852bb3148073741550f580dae1ee83";
+    r562Need(r562Hash(s) === expectedHash && s.split(beginMark).length === 2 && s.split(endMark).length === 2, "CONTROL_PIN");
+    let restored = s.slice(0,s.indexOf(beginMark)) + s.slice(s.indexOf(endMark)+endMark.length);
+    if (p === R562_VERIFY) restored = restored.replace("# PROD_LEGACY_COLLECTOR_END\n\n\n", "# PROD_LEGACY_COLLECTOR_END\n\n");
+    r562Need(restored === old, "CONTROL_INVERSE");
+  }
+  return true;
+}
+function r562Requested(args, env) {
+  if (!env.GITHUB_EVENT_PATH) return false;
+  const e = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  return e.pull_request?.head?.ref === R562_BRANCH || env.GITHUB_EVENT_NAME === "push" && e.before === R562_BASE;
+}
+function r562Main(args) {
+  r562Need(args.length === 2 && args[1] === "--production" && ["--ci-route","--production-source"].includes(args[0]), "ARGS");
+  const env = process.env, event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, "utf8"));
+  const pr = env.GITHUB_EVENT_NAME === "pull_request", ref = pr ? event.pull_request?.head?.sha : env.GITHUB_SHA;
+  r562Need(/^[a-f0-9]{40}$/.test(ref || "") && /^[a-f0-9]{40}$/.test(env.GITHUB_SHA || "") &&
+    git("rev-parse", "HEAD") === env.GITHUB_SHA && env.GITHUB_WORKFLOW_SHA === env.GITHUB_SHA, "SHA");
+  const baseTree = git("rev-parse", R562_BASE + "^{tree}");
+  r562Need(baseTree === "d69189f40912efbfded64a43a6de66efd985d1ca", "BASE_TREE");
+  const raw = p => lf(execFileSync("git", ["show", ref + ":" + p], {cwd:ROOT,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:15000,maxBuffer:8000000}));
+  const original = p => lf(execFileSync("git", ["show", R562_BASE + ":" + p], {cwd:ROOT,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:15000,maxBuffer:8000000}));
+  const fixtureRaw = raw(R562_FIXTURE), testRaw = raw(R562_TEST);
+  r562Need(r562Hash(fixtureRaw) === R562_FIXTURE_SHA && r562Hash(testRaw) === R562_TEST_SHA, "TEST_PIN");
+  const f = JSON.parse(fixtureRaw);
+  const rows = git("diff", "--no-renames", "--name-status", R562_BASE, ref).split("\n").filter(Boolean).map(x=>x.split("\t"));
+  r562Need(rows.every(x => x.length === 2 && ["M","A"].includes(x[0])), "DELTA");
+  const paths = rows.map(x=>x[1]);
+  const expectedAdded = new Set([R562_FIXTURE,R562_TEST,"tests/fixtures/r3-substitute-policy-private-reviewed.fragment.js","tests/r3-admin-response-label.test.js","tests/r3-current-term-focused.test.js","tests/r3-substitute-policy-row-scope.test.cjs"]);
+  r562Need(rows.every(([mode,p]) => mode === (expectedAdded.has(p) ? "A" : "M")), "MODES");
+  r562Controls(raw(SELF),original(SELF),raw(R562_CI),original(R562_CI),raw(R562_VERIFY),original(R562_VERIFY));
+  const release = JSON.parse(raw("app/release.json"));
+  const releaseSpec = {...release,memberCache:f.release.memberCache,coachCache:f.release.coachCache};
+  r562Need(METADATA.length === 13 && METADATA.every(p => raw(p) === expectedMetadata(p,original(p),releaseSpec,"1.0.561")), "METADATA");
+  const hashes = Object.fromEntries(f.candidatePaths.map(x=>[x.path,r562Hash(raw(x.path))]));
+  const mergeParents = git("show","-s","--format=%P",env.GITHUB_SHA).split(" ").filter(Boolean);
+  const parents = git("show","-s","--format=%P",ref).split(" ").filter(Boolean);
+  r562Need(parents.length === 1 && env.GITHUB_REF_TYPE === (pr ? undefined : "branch") || pr && parents.length === 1, "PARENT");
+  const s = {fixture:f,base:pr?event.pull_request?.base?.sha:event.before,branch:pr?event.pull_request?.head?.ref:R562_BRANCH,
+    mode:args[0],event:env.GITHUB_EVENT_NAME,repo:env.GITHUB_REPOSITORY,headRepo:event.pull_request?.head?.repo?.full_name,
+    target:event.pull_request?.base?.ref,workflow:env.GITHUB_WORKFLOW,workflowRef:env.GITHUB_WORKFLOW_REF,
+    clean:git("status","--porcelain","--untracked-files=all")==="",targetSha:ref,
+    checkoutTree:git("rev-parse",env.GITHUB_SHA+"^{tree}"),candidateTree:git("rev-parse",ref+"^{tree}"),
+    candidateParent:parents[0],mergeParents,number:event.number,prNumber:event.pull_request?.number,
+    ref:env.GITHUB_REF,attempt:env.GITHUB_RUN_ATTEMPT,before:event.before,paths,hashes,
+    controlsMatch:true,metadataMatch:true};
+  r562Validate(s);
+  if(args[0]==="--ci-route") appendFileSync(env.GITHUB_OUTPUT,"scoped=true\nproduction_562_only=true\n");
+  console.log(JSON.stringify({contract:"r3-production-562-selection/1",status:"SOURCE_PROVEN",source:ref,files:paths.length,runtimeVerified:false,deployed:false}));
+}
+// R3_562_ADMISSION_END
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    if (r562Requested(process.argv.slice(2), process.env)) { r562Main(process.argv.slice(2)); } else
     if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {
     if (prodLegacyRequested(process.argv, process.env)) { prodLegacyMain(process.argv[2]); }
     else if(process.argv[3]==='--production'){productionMain(process.argv[2]);}

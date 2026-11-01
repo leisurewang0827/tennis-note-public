@@ -1,27 +1,41 @@
-async function previewR3SubstituteDecision(assignmentId) {
-  if (r3SubstituteDecisionUi.busy || !adminApprovalReady()) return;
+async function previewR3SubstituteDecision(assignmentId, coachRoleId) {
+  if (r3SubstituteDecisionUi.busy || effectiveSettlementPreview.loading || !adminApprovalReady() || !coachRoleId) return;
   const context = effectiveSettlementPreview.context;
   if (!effectiveSettlementPreviewContextIsCurrent(context)) return;
-  const matches = effectiveSettlementPreview.results.flatMap((entry) => (entry.candidates || [])
+  const matches = effectiveSettlementPreview.results
+    .filter((entry) => entry.coach.serverRoleId === coachRoleId)
+    .flatMap((entry) => (entry.candidates || [])
     .filter((item) => item.id === assignmentId && entry.coach.serverRoleId === item.coachRoleId));
-  const candidate = matches.length === 1 ? matches[0] : null;
+  const candidate = matches.length === 1 ? { ...matches[0] } : null;
   if (!candidate || candidate.branchId !== activeOperationBranchId()
+    || ![candidate.originalCoachRoleId, candidate.actualCoachRoleId].includes(coachRoleId)
+    || String(candidate.settlementMonth || "").slice(0, 7) !== state.billingMonth
     || String(candidate.serviceDate || "").slice(0, 7) !== state.billingMonth) return;
+  const scope = Object.freeze({ branchId: candidate.branchId, coachRoleId,
+    settlementMonth: candidate.settlementMonth });
+  r3SubstituteDecisionUi.preview = null;
+  r3SubstituteDecisionUi.context = context;
+  r3SubstituteDecisionUi.scope = scope;
+  r3SubstituteDecisionUi.recipient = "";
+  r3SubstituteDecisionUi.operationKey = "";
   r3SubstituteDecisionUi.busy = true;
   r3SubstituteDecisionUi.message = "대타 귀속 근거를 확인하고 있습니다.";
   renderEffectiveSettlementPreview();
   try {
-    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)) return;
+    if (!adminApprovalReady() || r3SubstituteDecisionUi.scope !== scope
+      || effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)) return;
     const value = await context.client.rpc("tn_admin_preview_substitute_policy_decision", {
       target_branch_id: candidate.branchId, target_assignment_id: assignmentId,
     });
-    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
+    if (r3SubstituteDecisionUi.scope !== scope || !adminApprovalReady()
+      || effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
       || value.branchId !== candidate.branchId
       || value.assignmentId !== assignmentId || value.lessonId !== candidate.lessonId
       || Number(value.lessonRevision) !== Number(candidate.lessonRevision)
       || value.sourceFingerprint !== candidate.sourceFingerprint
       || value.originalCoachRoleId !== candidate.originalCoachRoleId
-      || value.actualCoachRoleId !== candidate.actualCoachRoleId) return;
+      || value.actualCoachRoleId !== candidate.actualCoachRoleId
+      || !r3SubstituteDecisionCandidate(context, value, scope)) return;
     r3SubstituteDecisionUi.preview = value;
     r3SubstituteDecisionUi.context = context;
     r3SubstituteDecisionUi.recipient = "";
@@ -38,11 +52,13 @@ async function previewR3SubstituteDecision(assignmentId) {
   }
 }
 
-async function confirmR3SubstituteDecision() {
+async function confirmR3SubstituteDecision(coachRoleId, assignmentId) {
   const decision = r3SubstituteDecisionUi.preview;
   const context = r3SubstituteDecisionUi.context;
   const recipient = r3SubstituteDecisionUi.recipient;
-  if (r3SubstituteDecisionUi.busy || !decision?.decisionEnabled || decision.chosenRecipient
+  const scope = r3SubstituteDecisionUi.scope;
+  if (r3SubstituteDecisionUi.busy || !adminApprovalReady() || !decision?.decisionEnabled || decision.chosenRecipient
+    || !scope || scope.coachRoleId !== coachRoleId || decision.assignmentId !== assignmentId
     || !["originalCoach", "actualCoach"].includes(recipient)
     || !r3SubstituteDecisionCandidate(context, decision)) return;
   const operationKey = r3SubstituteDecisionUi.operationKey || createAdminOperationKey("r3-substitute-decision");
@@ -50,7 +66,8 @@ async function confirmR3SubstituteDecision() {
   r3SubstituteDecisionUi.busy = true;
   renderEffectiveSettlementPreview();
   try {
-    if (r3SubstituteDecisionUi.preview !== decision || r3SubstituteDecisionUi.context !== context
+    if (!adminApprovalReady() || r3SubstituteDecisionUi.scope !== scope
+      || r3SubstituteDecisionUi.preview !== decision || r3SubstituteDecisionUi.context !== context
       || r3SubstituteDecisionUi.recipient !== recipient || r3SubstituteDecisionUi.operationKey !== operationKey
       || !r3SubstituteDecisionCandidate(context, decision)) return;
     const result = await context.client.rpc("tn_admin_confirm_substitute_policy_decision", {
@@ -59,10 +76,14 @@ async function confirmR3SubstituteDecision() {
       target_chosen_recipient: recipient,
       target_operation_key: operationKey,
     });
-    if (effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
+    if (r3SubstituteDecisionUi.scope !== scope
+      || effectiveSettlementPreview.context !== context || !effectiveSettlementPreviewContextIsCurrent(context)
       || result?.ok !== true) return;
     r3SubstituteDecisionUi.preview = null;
     r3SubstituteDecisionUi.context = null;
+    r3SubstituteDecisionUi.scope = null;
+    r3SubstituteDecisionUi.recipient = "";
+    r3SubstituteDecisionUi.operationKey = "";
     r3SubstituteDecisionUi.message = "대타 귀속을 기록했습니다. 서버 정산을 다시 확인합니다.";
     void refreshEffectiveSettlementPreview(effectiveSettlementPreviewSignature());
   } catch (error) {

@@ -761,6 +761,7 @@ function coachSettlementRule(coach) {
 
 function coachSettlementSummary(coach) {
   const rule = coachSettlementRule(coach);
+  if (rule.currentTermUnavailable) return "현재 적용값 없음";
   if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
   const mode = rule.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
   return `${mode}의 ${coachSettlementPercentLabel((Number(rule.ratio) || 0) * 100)}%`;
@@ -827,7 +828,8 @@ function coachSettlementEffectiveTerms(coachRoleId = "") {
   return (adminLiveDataState.coachSettlementTerms || [])
     .filter((term) => (
       String(term.coach_role_id || "") === String(coachRoleId || "")
-      && !["archived", "cancelled", "deleted"].includes(String(term.status || "").toLowerCase())
+      && ["active", "scheduled", "ended"].includes(String(term.status || "").toLowerCase())
+      && Boolean(term.effective_from)
     ))
     .sort((left, right) => String(left.effective_from || "").localeCompare(String(right.effective_from || "")));
 }
@@ -835,26 +837,14 @@ function coachSettlementEffectiveTerms(coachRoleId = "") {
 function coachSettlementEffectiveState(draft) {
   const today = adminLocalDateKey(new Date());
   const terms = coachSettlementEffectiveTerms(draft.coachRoleId);
-  const current = terms
+  const currentTerms = terms
     .filter((term) => (
       String(term.effective_from || "") <= today
       && (!term.effective_to || String(term.effective_to) >= today)
-    ))
-    .slice(-1)[0] || null;
+    ));
+  const current = currentTerms.length === 1 ? currentTerms[0] : null;
   const future = terms.find((term) => String(term.effective_from || "") > today) || null;
-  if (current || future) return { current, future, today };
-  const fallback = {
-    settlement_type: draft.settlement.method,
-    coach_rate: Number(draft.settlement.ratio || 0) / 100,
-    hourly_rate: Number(draft.settlement.hourly) || 0,
-    settlement_basis: draft.settlement.basis,
-    settlement_calculation_mode: draft.settlement.calculationMode,
-    substitute_policy: draft.settlement.substitute,
-    effective_from: draft.settlement.effectiveFrom,
-  };
-  return String(draft.settlement.effectiveFrom || "") > today
-    ? { current: null, future: fallback, today }
-    : { current: fallback, future: null, today };
+  return { current, future, today };
 }
 
 function coachSettlementEffectiveMarkup(draft) {
@@ -936,6 +926,10 @@ function coachStaffServerMatches(saved, draft, freshTerms = null) {
     if (draft.coachRoleId && draft.coachRoleId !== saved.serverRoleId) return false;
     if (!coachStaffFreshSettlementTermMatches(freshTerms, saved.serverRoleId, draft.settlement)) return false;
     const today = adminLocalDateKey(new Date());
+    const currentMatches = freshTerms.filter((term) => term.coach_role_id === saved.serverRoleId
+      && ["active", "scheduled", "ended"].includes(term.status)
+      && term.effective_from <= today && (!term.effective_to || term.effective_to >= today));
+    if (currentMatches.length > 1) return false;
     const targetTerm = freshTerms.find((term) => term.coach_role_id === saved.serverRoleId
       && term.effective_from === draft.settlement.effectiveFrom);
     if (targetTerm.effective_from > today || (targetTerm.effective_to && targetTerm.effective_to < today)) {
@@ -947,6 +941,7 @@ function coachStaffServerMatches(saved, draft, freshTerms = null) {
     }
   }
   const settlement = coachSettlementRule(saved);
+  if (settlement.currentTermUnavailable) return false;
   if (settlement.method !== draft.settlement.method) return false;
   const settlementBasisToCardBase = { cash_ex_vat: "cash", actual_paid_inc_vat: "paid" };
   const expectedCardBase = settlementBasisToCardBase[draft.settlement.basis];
