@@ -129,16 +129,45 @@ function renderDashboardNoticeSummary() {
     </div>`;
 }
 
+function dashboardSummaryPaymentReady() {
+  return adminDemoMode || ((serverPaymentSyncState.directLoaded === true
+    ? Array.isArray(billings) && billings.length < 500 : serverPaymentSyncState.summaryVerified === true) && serverPaymentSyncState.loaded === true
+    && serverPaymentSyncState.loading !== true && serverPaymentSyncState.tone === "good");
+}
+
+function summarizeAdminTasks(sourceTasks) {
+  const groupedTasks = new Map();
+  sourceTasks.forEach((task) => {
+    const key = JSON.stringify([task.type, task.view]);
+    const group = groupedTasks.get(key) || { type: task.type, view: task.view, count: 0, tone: task.tone };
+    group.count += 1;
+    if (task.tone === "danger") group.tone = "danger";
+    groupedTasks.set(key, group);
+  });
+  return [...groupedTasks.values()];
+}
+
 function renderAdminOperations() {
   const taskList = $("#adminTaskList");
   if (!taskList) return;
 
-  const allTasks = getAdminTasks();
+  const summaryMode = adminLayoutSettings.dashboardMode === "summary";
+  const summaryFailed = !adminDemoMode && String(state.liveScheduleMessage || "").startsWith("실서버 시간표 확인 실패");
+  const summaryReady = adminDemoMode || (state.liveScheduleLoaded && !state.liveScheduleLoading && !summaryFailed);
+  const summaryPaymentReady = dashboardSummaryPaymentReady();
+  const sourceTasks = getAdminTasks();
+  const allTasks = summaryMode ? summarizeAdminTasks(sourceTasks) : sourceTasks;
   const branchMembers = dashboardOperationalMembers();
   const branchCoaches = operationBranchCoaches();
   state.adminTaskPage = normalizeDashboardPage(allTasks.length, state.adminTaskPage);
   const tasks = allTasks.slice(state.adminTaskPage * dashboardPageSize, (state.adminTaskPage + 1) * dashboardPageSize);
-  taskList.innerHTML = tasks.length
+  taskList.innerHTML = summaryMode && !summaryReady
+    ? (summaryFailed ? '<p role="status">자료를 확인하지 못했습니다. 다시 확인해 주세요.</p>' : '<p role="status">자료 확인 중입니다.</p>')
+    : summaryMode && tasks.length
+      ? tasks.map((task) => `<article class="ops-card ${escapeHtml(task.tone)}"><div><strong>${escapeHtml(task.type)} ${task.view === "billing" && !summaryPaymentReady ? "확인 필요" : `${task.count}건`}</strong></div><button class="ghost-button" style="min-height: 44px; color: inherit; background: transparent; border: 1px solid var(--line)" type="button" data-jump="${escapeHtml(task.view)}">확인</button></article>`).join("")
+    : summaryMode && !adminDemoMode
+      ? '<p role="status">확인된 처리 대기가 없습니다. 미확인 자료는 상세에서 확인해 주세요.</p>'
+    : tasks.length
     ? tasks
         .map(
           (task) => `
@@ -159,7 +188,11 @@ function renderAdminOperations() {
         compact: true,
       });
 
-  renderDashboardPager("#adminTaskPager", allTasks.length, state.adminTaskPage, "tasks");
+  if (summaryMode && summaryReady && !adminDemoMode && tasks.length) {
+    taskList.insertAdjacentHTML("beforeend", '<p role="status">불러온 자료 기준입니다. 자세한 내용은 각 항목에서 확인하세요.</p>');
+  }
+
+  renderDashboardPager("#adminTaskPager", summaryMode && !summaryReady ? 0 : allTasks.length, state.adminTaskPage, "tasks");
 
   state.memberStatusPage = normalizeDashboardPage(branchMembers.length, state.memberStatusPage);
   const visibleMembers = branchMembers.slice(state.memberStatusPage * dashboardPageSize, (state.memberStatusPage + 1) * dashboardPageSize);
@@ -853,7 +886,9 @@ function renderAdminLayoutSettings() {
     <section class="admin-layout-presets" aria-label="화면 구성 추천">
       <div>
         <h3>추천 화면</h3>
-        <p>업무에 맞는 기본 구성을 고른 뒤 세부 순서와 표시 여부를 바꿀 수 있습니다.</p>
+        <p>메뉴를 숨겨도 업무 중지나 권한 변경은 되지 않습니다.</p>
+        <label>대시보드 보기 <select data-admin-dashboard-mode><option value="summary" ${adminLayoutSettings.dashboardMode === "summary" ? "selected" : ""}>운영 요약</option><option value="legacy" ${adminLayoutSettings.dashboardMode === "legacy" ? "selected" : ""}>기존 배치</option></select></label>
+        <p>이 설정은 관리자 화면에 공통 적용됩니다.</p>
       </div>
       <div class="admin-layout-preset-list">
         ${Object.entries(adminLayoutPresets).map(([id, preset]) => `
@@ -883,7 +918,7 @@ function renderAdminLayoutSettings() {
       </section>
       ${Object.entries(adminDashboardWidgetDefinitions).map(([group, items]) => `
         <section>
-          <h3>${group === "operations" ? "오늘 운영 안쪽" : "공지·요약 안쪽"}</h3>
+          <h3>${group === "metrics" ? "운영 수치" : group === "operations" ? "오늘 운영 안쪽" : "공지·요약 안쪽"}</h3>
           <div class="admin-layout-list">
             ${adminLayoutSettings.widgetOrder[group].map((id, index) => {
               const item = items.find((entry) => entry.id === id);

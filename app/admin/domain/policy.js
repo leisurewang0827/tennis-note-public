@@ -435,6 +435,7 @@ async function clearAdminOperationalCache() {
 
 function defaultAdminLayoutSettings() {
   return {
+    dashboardMode: "summary",
     menuOrder: [...adminDefaultMenuOrder],
     moreMenus: [...adminDefaultMoreMenus],
     hiddenMenus: [],
@@ -461,6 +462,7 @@ function normalizeAdminLayoutSettings(value = {}) {
   const requiredGroups = adminDashboardGroupDefinitions.filter((item) => item.required).map((item) => item.id);
   const requiredReportWidgets = adminReportWidgetDefinitions.filter((item) => item.required).map((item) => item.id);
   return {
+    dashboardMode: value.dashboardMode === "legacy" ? "legacy" : "summary",
     menuOrder: normalizeLayoutOrder(value.menuOrder ?? defaults.menuOrder, adminMenuDefinitions),
     moreMenus: [...new Set((Array.isArray(value.moreMenus) ? value.moreMenus : defaults.moreMenus)
       .filter((id) => defaults.menuOrder.includes(id) && id !== "dashboard"))],
@@ -476,7 +478,7 @@ function normalizeAdminLayoutSettings(value = {}) {
       ]),
     ),
     hiddenWidgets: [...new Set((Array.isArray(value.hiddenWidgets) ? value.hiddenWidgets : [])
-      .filter((id) => !requiredWidgets.includes(id)))],
+      .filter((id) => !requiredWidgets.includes(id) && Object.values(adminDashboardWidgetDefinitions).flat().some((item) => item.id === id)))],
     reportWidgetOrder: normalizeLayoutOrder(value.reportWidgetOrder, adminReportWidgetDefinitions),
     hiddenReportWidgets: [...new Set((Array.isArray(value.hiddenReportWidgets) ? value.hiddenReportWidgets : [])
       .filter((id) => !requiredReportWidgets.includes(id) && adminReportWidgetDefinitions.some((item) => item.id === id)))],
