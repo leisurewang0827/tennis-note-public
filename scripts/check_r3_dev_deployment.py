@@ -1688,8 +1688,21 @@ def main() -> int:
     parser.add_argument("--branch-preflight", action="store_true")
     parser.add_argument('--ci-personal', action='store_true')
     parser.add_argument('--ci-dispute574', action='store_true')
+    parser.add_argument('--ci-dashboard575', action='store_true')
     args = parser.parse_args()
     try:
+        if args.ci_dashboard575:
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574), 'DASHBOARD575_MODE')
+            import check_admin_dashboard_dev575 as dashboard575
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            dashboard575.ci_pr(event, dict(os.environ), sys.modules[__name__])
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write('scoped=true\n')
+            return 0
+        if os.environ.get('GITHUB_REF') == 'refs/heads/codex/tennisnote-admin-dashboard-dev-20261102':
+            import check_admin_dashboard_dev575 as dashboard575
+            dashboard575.dispatch(args, sys.modules[__name__])
+            return 0
         if args.ci_dispute574:
             legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal), 'DEV574_MODE')
             import check_r3_dispute_dev574 as dispute574
