@@ -66,6 +66,8 @@ export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 step "테스트"
 node --test "tests/**/*.test.js"
 node --test tests/admin-dashboard-summary.test.cjs
+node --test tests/admin-dashboard-task-label.test.cjs tests/admin-dashboard-repair-context.test.cjs
+"$PYTHON_BIN" -B tests/admin-brand-assets.test.py
 TENNISNOTE_HOME_BROWSER=true node --test --test-name-pattern="Chromium/WebKit|실제 modular entry" tests/member-home-source.test.js tests/member-home-entry.test.js
 TENNISNOTE_ROUND_BROWSER=true node --test --test-name-pattern="modular Chromium/WebKit" tests/coach-future-round.test.js
 node scripts/check_tennisnote_self_profile_a_only_browser.cjs
