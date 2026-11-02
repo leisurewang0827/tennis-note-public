@@ -115,6 +115,11 @@ jobs:
           else
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
+      # R3_PROD_563_COLLECTOR_BEGIN
+      - name: Reviewed R3 563 candidate delta only
+        if: steps.display.outputs.production_563_only == 'true' && github.event_name == 'pull_request'
+        run: ./scripts/verify.sh --r3-production-563
+      # R3_PROD_563_COLLECTOR_END
       # PROD_LEGACY_COLLECTOR_BEGIN
       - name: Legacy monthly production successor delta only
         if: steps.display.outputs.production_legacy_only == 'true' && github.event_name == 'pull_request'

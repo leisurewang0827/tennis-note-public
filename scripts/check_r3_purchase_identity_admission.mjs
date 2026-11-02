@@ -4,6 +4,9 @@ import { readFileSync, appendFileSync, lstatSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
+// R3_563_HISTORICAL_IMPORT_BEGIN
+import * as r563Historical from './check_r3_dispute_production563.mjs';
+// R3_563_HISTORICAL_IMPORT_END
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const BASE = "b18de04ee6e883ecf4f530aee678732fb5e0d783";
 export const BASE_TREE = "bcc1512c7989ae052d09f4d309485b66d4308e91";
@@ -820,8 +823,29 @@ function r562Main(args) {
 }
 // R3_562_ADMISSION_END
 
+// R3_563_HISTORICAL_WRAPPER_BEGIN
+const r562OriginalControls = r562Controls;
+r562Controls = (...args) => {
+  const paths=['scripts/check_r3_purchase_identity_admission.mjs','.github/workflows/tennisnote-public-ci.yml','scripts/verify.sh'];
+  const indexes=[0,2,4], present=indexes.some(i=>String(args[i]).includes('R3_563_')||String(args[i]).includes('R3_PROD_563_'));
+  if (!present) return r562OriginalControls(...args);
+  need(r563Historical.seal(readFileSync(resolve(ROOT,r563Historical.SELF),'utf8'))===r563Historical.SELF_SEAL,'R563_HISTORICAL_SELF');
+  for(let i=0;i<paths.length;i++)need(hash(lf(args[indexes[i]]))===r563Historical.CONTROL_HASHES[paths[i]],'R563_HISTORICAL_CONTROL');
+  const restored=[...args];
+  for(let i=0;i<paths.length;i++)restored[indexes[i]]=r563Historical.inverseControl(paths[i],args[indexes[i]]);
+  return r562OriginalControls(...restored);
+};
+// R3_563_HISTORICAL_WRAPPER_END
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    // R3_563_ENTRY_BEGIN
+    const r563Event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
+    if (r563Event.pull_request?.head?.ref === 'codex/r3-dispute-production563-20261102' || (process.env.GITHUB_EVENT_NAME === 'push' && r563Event.before === 'b7e6e84d980067d58427c37448c47c88704a6be1')) {
+      const r563 = await import('./check_r3_dispute_production563.mjs');
+      r563.run(process.argv.slice(2), r563Event, process.env, {expectedMetadata});
+    } else
+    // R3_563_ENTRY_END
     if (r562Requested(process.argv.slice(2), process.env)) { r562Main(process.argv.slice(2)); } else
     if (summaryRequested(process.argv.slice(2), process.env)) { summaryMain(process.argv.slice(2)); } else {
     if (prodLegacyRequested(process.argv, process.env)) { prodLegacyMain(process.argv[2]); }
