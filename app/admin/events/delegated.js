@@ -268,6 +268,15 @@ function bindDelegatedEvents() {
     }
   });
   document.addEventListener("change", (event) => {
+    const dashboardMode = event.target.closest("[data-admin-dashboard-mode]");
+    if (dashboardMode) {
+      adminLayoutSettings.dashboardMode = dashboardMode.value === "legacy" ? "legacy" : "summary";
+      adminLayoutSaveState = "local";
+      persistAdminLayoutLocal();
+      renderAdminLayoutSettings();
+      renderAdminOperations();
+      return;
+    }
     const sizeSelect = event.target.closest("[data-admin-report-widget-size]");
     if (sizeSelect) {
       setAdminReportWidgetOption("size", sizeSelect.dataset.adminReportWidgetSize, sizeSelect.value);

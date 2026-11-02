@@ -491,6 +491,12 @@ const adminDashboardGroupDefinitions = [
 ];
 
 const adminDashboardWidgetDefinitions = {
+  metrics: [
+    { id: "metric-lessons", label: "오늘 수업" },
+    { id: "metric-changes", label: "변경 승인" },
+    { id: "metric-records", label: "기록·차감 대기" },
+    { id: "metric-payments", label: "결제 대기" },
+  ],
   operations: [
     { id: "tasks", label: "오늘 처리할 일", required: true },
     { id: "members", label: "회원 현황" },
@@ -507,7 +513,7 @@ const adminReportWidgetDefinitions = [
   { id: "members", label: "회원 흐름", defaultSize: "two" },
   { id: "quality", label: "피드백·출석", defaultSize: "two" },
   { id: "finance", label: "재무 자료 상태", required: true, defaultSize: "full" },
-  { id: "sources", label: "리포트 개발 순서", defaultSize: "full" },
+  { id: "sources", label: "자료 정보", defaultSize: "full" },
 ];
 
 const adminReportWidgetSizeOptions = [
