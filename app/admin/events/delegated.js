@@ -216,7 +216,7 @@ function bindDelegatedEvents() {
       );
       return;
     }
-    setView(button.dataset.jump);
+    setView(button.dataset.jump, { billingRepairContext: button.dataset.billingRepairContext === "1" });
   });
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-settings-tab]");
@@ -584,6 +584,7 @@ function bindDelegatedEvents() {
   document.addEventListener("click", (event) => {
     const billingFilterButton = event.target.closest("[data-billing-filter]");
     if (billingFilterButton) {
+      clearAdminBillingRepairContext();
       state.billingFilter = billingFilterButton.dataset.billingFilter || "action";
       state.billingPage = 0;
       renderBilling();

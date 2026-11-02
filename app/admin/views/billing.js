@@ -247,7 +247,7 @@ function renderBilling() {
   $$('[data-billing-count]').forEach((count) => {
     count.textContent = String(billingGroups[count.dataset.billingCount]?.length || 0);
   });
-  $$('[data-billing-filter]').forEach((button) => button.classList.toggle("is-active", button.dataset.billingFilter === state.billingFilter));
+  $$('[data-billing-filter]').forEach((button) => button.classList.toggle("is-active", !adminBillingRepairContext && button.dataset.billingFilter === state.billingFilter));
 
   const syncTarget = $("#serverPaymentSyncStatus");
   if (syncTarget) {
@@ -256,10 +256,12 @@ function renderBilling() {
       <div class="payment-sync-card ${syncTone}">
         <span>${escapeHtml(serverPaymentSyncState.message)}</span>
         ${badge(syncTone, serverPaymentSyncState.loading ? "불러오는 중" : serverPaymentSyncState.loaded ? "확인됨" : "대기")}
-      </div>`;
+      </div>${adminBillingRepairContext ? '<p role="status">회원권 연결 확인 · 전체기간 · 읽기 전용 목록입니다. 기존 월 또는 상태를 선택하면 원래 목록으로 돌아갑니다.</p>' : ""}`;
   }
 
-  const filteredBillings = billingGroups[state.billingFilter] || [];
+  const filteredBillings = adminBillingRepairContext
+    ? groupedBillingAttempts(operationBranchBillings()).filter((entry) => paymentRequiresTicketRepair(entry.primary))
+    : (billingGroups[state.billingFilter] || []);
   state.billingPage = normalizeDashboardPage(filteredBillings.length, state.billingPage, billingPageSize);
   const visibleBillings = filteredBillings.slice(
     state.billingPage * billingPageSize,
@@ -272,7 +274,7 @@ function renderBilling() {
         const index = billings.indexOf(item);
         const approval = paymentApprovalDisplay(item);
         const inlineContext = billingMemberTicketContext(item);
-        const inlineOpen = state.billingInlineIndex === index
+        const inlineOpen = !adminBillingRepairContext && state.billingInlineIndex === index
           && Boolean(inlineContext.member && inlineContext.ticket);
         const inlineTicketCount = inlineContext.member
           ? memberOperationalTickets(inlineContext.member).length
@@ -284,7 +286,7 @@ function renderBilling() {
           <td>${billingMembershipDetail(item)}${entry.attemptCount > 1 ? `<br><small>${escapeHtml(billingAttemptSummary(entry))}</small>` : ""}</td>
           <td><strong>${money.format(Number(item.amount) || 0)}원</strong><br><small>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</small>${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(Number(item.discountAmount) || 0)}원 할인</small>` : ""}</td>
           <td>${paymentConfirmationMarkup(item)}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
-          <td class="payment-sheet-approval">${paymentActionFor(item, index)}${billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen)}</td>
+          <td class="payment-sheet-approval">${adminBillingRepairContext ? "기존 목록에서 상세 확인" : `${paymentActionFor(item, index)}${billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen)}`}</td>
           <td class="billing-settlement-cell"><strong>${escapeHtml(billingCoachLabel(item))}</strong><br>${billingSettlementApprovalMarkup(item)}</td>
         </tr>
         ${inlineOpen ? `<tr class="member-inline-editor-row member-inline-sheet-row billing-inline-editor-row" data-billing-inline-index="${index}">
@@ -298,7 +300,7 @@ function renderBilling() {
         </tr>` : ""}`;
       },
     )
-    .join("") : '<tr><td colspan="7" class="empty-text">선택한 달과 상태의 결제 내역이 없습니다.</td></tr>';
+    .join("") : adminBillingRepairContext ? '<tr><td colspan="7" class="empty-text">현재 지점에 확인할 연결 대상이 없습니다. 자료가 바뀌었을 수 있습니다.</td></tr>' : '<tr><td colspan="7" class="empty-text">선택한 달과 상태의 결제 내역이 없습니다.</td></tr>';
   renderDashboardPager("#billingPager", filteredBillings.length, state.billingPage, "billing", billingPageSize);
 
   state.rechargePage = normalizeDashboardPage(rechargeTargets.length, state.rechargePage, billingPageSize);

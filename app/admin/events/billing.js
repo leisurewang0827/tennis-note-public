@@ -34,6 +34,7 @@ function bindBillingEvents() {
   $("#onsitePaymentMethod")?.addEventListener("change", updateOnsitePaymentAmount);
   $("#onsitePaymentForm")?.addEventListener("submit", submitOnsitePayment);
   $("#billingMonthFilter")?.addEventListener("change", (event) => {
+    clearAdminBillingRepairContext();
     state.billingMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
     resetAdminSettlementHistory();
     state.billingPage = 0;

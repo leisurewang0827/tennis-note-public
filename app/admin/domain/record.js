@@ -214,7 +214,7 @@ function getAdminTasks() {
   const tasks = [
     ...paymentDataErrors.map((entry) => ({
       type: "결제오류",
-      title: `${entry.primary.member} 회원권 연결 누락`,
+      title: `${entry.primary.member} 회원권 연결 확인 필요`,
       detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원 · 서버 결제 확인 필요${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "danger",
       action: "결제 확인",
@@ -371,14 +371,14 @@ function urgentOperationsRecords() {
       group: "pending",
       source: "결제 오류",
       member: item.member || "회원 확인 필요",
-      title: `${item.item || "회원권 결제"} 연결 누락`,
-      detail: `${money.format(Number(item.amount) || 0)}원 결제 후 회원권이 발급되지 않았습니다.`,
+      title: `${item.item || "회원권 결제"} 연결 확인 필요`,
+      detail: `${money.format(Number(item.amount) || 0)}원 결제의 회원권 연결을 확인해 주세요.`,
       subDetail: "결제 확인 후 회원권 연결이 필요합니다.",
       statusLabel: "긴급",
       actionLabel: "결제 확인",
       actionView: "billing",
       priority: "urgent",
-      urgentReason: "결제 완료와 회원권 데이터가 일치하지 않습니다.",
+      urgentReason: "결제와 회원권의 연결 상태를 확인해야 합니다.",
       sortAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
     }));
   const makeupRecords = makeupRequests

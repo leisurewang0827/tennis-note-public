@@ -462,8 +462,9 @@ function billingAttemptSummary(entry = {}) {
 function paymentApprovalDisplay(item = {}) {
   const method = String(item.method || "").toLowerCase();
   if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
+  if (item.bankTransferState === "confirmation_failed") return { tone: "danger", label: "회원권 처리 실패", detail: "입금은 확인됐지만 회원권 처리가 끝나지 않았습니다. 같은 결제에서 다시 처리해 주세요." };
   if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
-    return { tone: "danger", label: "회원권 처리 실패", detail: "결제는 확인됐지만 회원권 처리가 끝나지 않았습니다. 다시 처리해 주세요." };
+    return { tone: "danger", label: "회원권 연결 확인 필요", detail: "결제는 확인됐지만 회원권 연결 정보를 확인해야 합니다." };
   }
   if (item.status === "paid") {
     if (item.oneDayBookingId) return { tone: "good", label: "결제·예약 연결 완료", detail: "" };
