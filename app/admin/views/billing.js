@@ -765,7 +765,9 @@ function renderAdminSettlementHistory() {
 function adminSettlementResponseLabel(reconciliation) {
   if (reconciliation == null) return "응답 대기";
   const status = String(reconciliation.status || "").toLowerCase();
-  return status === "acknowledged" ? "확인 완료" : status === "disputed" ? "이의 접수" : "상태 확인 필요";
+  const disputeResolved = window.TennisNoteSettlementAdjustment.resolvedDispute(
+    adminMonthlySettlementWrite.payoutState,adminSettlementHistoryScope(),adminSettlementHistory.value?.snapshot,status);
+  return status === "acknowledged" ? "확인 완료" : status === "disputed" ? (disputeResolved ? "이의 해결 · 원본 이력 보존" : "이의 접수") : "상태 확인 필요";
 }
 
 function renderAdminR3SettlementWriter() {
@@ -853,6 +855,7 @@ function renderAdminR3SettlementWriter() {
       &&adminMonthlySettlementWrite.status==="CONFIRMED"&&adminMonthlySettlementWrite.payoutReadValid
       &&!adminMonthlySettlementWrite.payoutLoading&&!adminMonthlySettlementWrite.payoutSubmitting&&!adminMonthlySettlementWrite.payoutUncertain,
     originalAck:adminMonthlySettlementWrite.scopeState?.reconciliation?.status==="acknowledged",
+    originalDisputed:adminMonthlySettlementWrite.scopeState?.reconciliation?.status==="disputed",
     recordButton:$("#adminR3PayoutRecord"),dateInput:$("#adminR3PayoutDate"),methodInput:$("#adminR3PayoutMethod"),
     accept(value){adminMonthlySettlementWrite.payoutState=value;adminMonthlySettlementWrite.payoutReadValid=true;renderAdminSettlementHistory();}
   }));

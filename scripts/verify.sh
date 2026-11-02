@@ -11,6 +11,14 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# R3_PROD_563_COLLECTOR_BEGIN
+if [[ "${1:-}" == "--r3-production-563" ]]; then
+  [[ $# -eq 1 ]] || exit 2
+  node --test --test-name-pattern='^R563 two commit graph requires exact product-only parent$' tests/r3-production-563-admission.test.mjs
+  exit $?
+fi
+# R3_PROD_563_COLLECTOR_END
+
 # PROD_LEGACY_COLLECTOR_BEGIN
 # 새 운영 후속 연결만 검사하며 통과한 과거 제품·DB 검사는 반복하지 않습니다.
 if [[ "${1:-}" == "--r3-production-legacy" ]]; then
