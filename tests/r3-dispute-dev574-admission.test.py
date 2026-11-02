@@ -14,8 +14,34 @@ import check_r3_dev_deployment as old
 
 
 class Admission(unittest.TestCase):
+    def test_live_asset_uses_existing_safe_preflight_headers(self):
+        import hashlib
+        payload=b'synthetic asset\n'
+        url='https://example.invalid/synthetic.js'
+        class Response:
+            status=200
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+            def read(self,_): return payload
+        class Opener:
+            calls=0
+            def open(self,request,timeout):
+                self.calls+=1
+                self_request={k.lower():v for k,v in request.header_items()}
+                assert self_request.get('user-agent')=='TennisNote-Release-Preflight/1.0'
+                assert self_request.get('cache-control')=='no-cache'
+                assert self_request.get('accept')=='text/javascript'
+                assert 'authorization' not in self_request and 'cookie' not in self_request
+                assert timeout==20
+                return Response()
+        opener=Opener()
+        with patch.object(guard,'LIVE_BASE',{url:hashlib.sha256(payload).hexdigest()}):
+            guard.live_assets('a'*40,opener)
+        self.assertEqual(opener.calls,1)
+        self.assertEqual(guard.FEATURE_PARENT,'e2bdbaa11375f1bacb119be6480577ce5500826a')
+
     def test_diagnostic_stage_fails_closed_without_disclosing_errors(self):
-        self.assertEqual(guard.FEATURE_PARENT,'87f896ceb047ee596e2d6a608abbdc5fe655f778')
+        self.assertEqual(guard.FEATURE_PARENT,'e2bdbaa11375f1bacb119be6480577ce5500826a')
         source=(ROOT/'scripts/check_r3_dispute_dev574.py').read_text(encoding='utf-8')
         self.assertIn("old.run_git('show','-s','--format=%P',candidate)==FEATURE_PARENT",source)
         self.assertIn("head.get('parents',[])]==[FEATURE_PARENT]",source)

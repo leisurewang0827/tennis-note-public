@@ -9,11 +9,11 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = '1ee91d9adb8ce574dcc9ca9e91b5621dd712a2cc'
-FEATURE_PARENT = '87f896ceb047ee596e2d6a608abbdc5fe655f778'
+FEATURE_PARENT = 'e2bdbaa11375f1bacb119be6480577ce5500826a'
 BASE_BRANCH = 'codex/tennisnote-personal-create-partner-scope-20261101'
 BRANCH = 'codex/r3-dispute-adjustment-resolution-dev574-20261102'
 REPO = 'leisurewang0827/tennis-note-public'
-SELF_SEAL = 'df15a1632fb462cf401c4fc7f9baf18a73c855430b020dc593d7c597cca6b7c3'
+SELF_SEAL = 'fc294bbba41401afb92ded351e02cc615fe5d22d01dd3d5cb36b0e7d53b185af'
 APP_PINS = {
     'app/admin/index.html': 'f4c1c89e10bf1a7a739471f8e3a1180a7b38fd56fd846248bdd7def2376e3397',
     'app/admin/views/billing.js': 'dbb5122c9ec5ff5892bb70f70408f5a59ca44d2405a0c55362b544dcdf8ec134',
@@ -33,9 +33,9 @@ APP_PINS = {
     'app/tennis-note-member-app/ui/screens.js': '094bf5112fe422cb88ce68d4404c396972ecf290e7b9fed5de04a088f877be7d',
 }
 AUX_PINS = {
-    '.github/workflows/tennisnote-public-ci.yml': '94f3bc2f4707abafb1758814358f8b15bab15b093344f638f7a6e0fe0b3a7462',
+    '.github/workflows/tennisnote-public-ci.yml': '048bab3c8486c28f78f609282f65caf8ad2b104736689a0f67169b04824ca1ea',
     'scripts/check_r3_dev_deployment.py': 'd83db63733d6d0cf6072c441cd281fd7ecf23d141533bdab73e3503c7e3443c0',
-    'tests/r3-dispute-dev574-admission.test.py': '229c10099b74bf3f847c3a211abb0dba539036620d4e3ef5460161845786f39a',
+    'tests/r3-dispute-dev574-admission.test.py': '036e3f81ac494e2948a99bc205aeb21b59b61766b84abfd0187a6f18f1fe82cf',
 }
 SELF = 'scripts/check_r3_dispute_dev574.py'
 LIVE_BASE = {
@@ -194,7 +194,7 @@ def live_assets(candidate,opener):
     need(re.fullmatch(r'[0-9a-f]{40}',candidate or '') is not None,'DEV574_LIVE_SHA')
     for url,expected in LIVE_BASE.items():
         try:
-            request=urllib.request.Request(url+'?__tn_preflight='+candidate,headers={'Accept':'text/javascript'})
+            request=urllib.request.Request(url+'?__tn_preflight='+candidate,headers={'Accept':'text/javascript','Cache-Control':'no-cache','User-Agent':'TennisNote-Release-Preflight/1.0'})
             with opener.open(request,timeout=20) as response:
                 need(response.status==200,'DEV574_LIVE_ASSET')
                 raw=response.read(2000001)
