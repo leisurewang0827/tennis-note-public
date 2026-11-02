@@ -147,6 +147,12 @@ function summarizeAdminTasks(sourceTasks) {
   return [...groupedTasks.values()];
 }
 
+function dashboardTaskLabel(task) {
+  if (task.type === "결제오류" && task.view === "billing") return "회원권 연결 확인";
+  if (task.type === "긴급" && task.view === "schedule") return "시간표 배정";
+  return task.type;
+}
+
 function renderAdminOperations() {
   const taskList = $("#adminTaskList");
   if (!taskList) return;
@@ -164,7 +170,7 @@ function renderAdminOperations() {
   taskList.innerHTML = summaryMode && !summaryReady
     ? (summaryFailed ? '<p role="status">자료를 확인하지 못했습니다. 다시 확인해 주세요.</p>' : '<p role="status">자료 확인 중입니다.</p>')
     : summaryMode && tasks.length
-      ? tasks.map((task) => `<article class="ops-card ${escapeHtml(task.tone)}"><div><strong>${escapeHtml(task.type)} ${task.view === "billing" && !summaryPaymentReady ? "확인 필요" : `${task.count}건`}</strong></div><button class="ghost-button" style="min-height: 44px; color: inherit; background: transparent; border: 1px solid var(--line)" type="button" data-jump="${escapeHtml(task.view)}">확인</button></article>`).join("")
+      ? tasks.map((task) => `<article class="ops-card ${escapeHtml(task.tone)}"><div><strong>${escapeHtml(dashboardTaskLabel(task))} ${task.view === "billing" && !summaryPaymentReady ? "확인 필요" : `${task.count}건`}</strong></div><button class="ghost-button" style="min-height: 44px; color: inherit; background: transparent; border: 1px solid var(--line)" type="button" data-jump="${escapeHtml(task.view)}" ${task.type === "결제오류" && task.view === "billing" ? 'data-billing-repair-context="1"' : ""}>확인</button></article>`).join("")
     : summaryMode && !adminDemoMode
       ? '<p role="status">확인된 처리 대기가 없습니다. 미확인 자료는 상세에서 확인해 주세요.</p>'
     : tasks.length
@@ -173,11 +179,11 @@ function renderAdminOperations() {
           (task) => `
         <article class="ops-card ${task.tone}">
           <div>
-            <span>${task.type}</span>
-            <strong>${task.title}</strong>
-            <small>${task.detail}</small>
+            <span>${escapeHtml(dashboardTaskLabel(task))}</span>
+            <strong>${escapeHtml(task.title)}</strong>
+            <small>${escapeHtml(task.detail)}</small>
           </div>
-          <button class="small-button" type="button" data-jump="${task.view}" ${task.scheduleTicketId ? `data-schedule-ticket-id="${escapeHtml(String(task.scheduleTicketId))}"` : ""} ${task.scheduleLessonSource ? `data-schedule-lesson-source="${escapeHtml(task.scheduleLessonSource)}"` : ""}>${task.action}</button>
+          <button class="small-button" type="button" data-jump="${escapeHtml(task.view)}" ${task.type === "결제오류" && task.view === "billing" ? 'data-billing-repair-context="1"' : ""} ${task.scheduleTicketId ? `data-schedule-ticket-id="${escapeHtml(String(task.scheduleTicketId))}"` : ""} ${task.scheduleLessonSource ? `data-schedule-lesson-source="${escapeHtml(task.scheduleLessonSource)}"` : ""}>${escapeHtml(task.action)}</button>
         </article>`,
         )
         .join("")

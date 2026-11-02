@@ -50,7 +50,7 @@ test("nine task kinds keep all counts and destinations, with danger preserved", 
 
 test("summary keeps readiness guard and escapes type, tone and destination", () => {
   assert.match(settings, /summaryMode && !summaryReady/);
-  for (const value of ["task.tone", "task.type", "task.view"]) assert.ok(settings.includes(`escapeHtml(${value})`));
+  for (const value of ["task.tone", "dashboardTaskLabel(task)", "task.view"]) assert.ok(settings.includes(`escapeHtml(${value})`));
   assert.match(actions, /dashboardMode === "summary"/);
   assert.match(common, /state\.liveScheduleLoaded && !state\.liveScheduleLoading && !summaryFailed/);
   assert.ok(settings.includes("자료를 확인하지 못했습니다"));

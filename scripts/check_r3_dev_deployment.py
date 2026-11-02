@@ -1689,8 +1689,22 @@ def main() -> int:
     parser.add_argument('--ci-personal', action='store_true')
     parser.add_argument('--ci-dispute574', action='store_true')
     parser.add_argument('--ci-dashboard575', action='store_true')
+    parser.add_argument('--ci-adminreview576', action='store_true')
     args = parser.parse_args()
     try:
+        if args.ci_adminreview576:
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574 or args.ci_dashboard575), 'ADMINREVIEW576_MODE')
+            import check_admin_review_dev576 as adminreview576
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            adminreview576.ci_pr(event, dict(os.environ), sys.modules[__name__])
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write('scoped=true\n')
+            return 0
+        if os.environ.get('GITHUB_REF') == 'refs/heads/codex/tennisnote-admin-review-dev-20261103':
+            legacy_monthly_need(not args.ci_dashboard575, 'ADMINREVIEW576_MODE')
+            import check_admin_review_dev576 as adminreview576
+            adminreview576.dispatch(args, sys.modules[__name__])
+            return 0
         if args.ci_dashboard575:
             legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574), 'DASHBOARD575_MODE')
             import check_admin_dashboard_dev575 as dashboard575
