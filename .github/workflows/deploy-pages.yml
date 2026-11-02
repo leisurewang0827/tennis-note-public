@@ -27,13 +27,18 @@ jobs:
           node-version: "22"
       - name: Admit exact canonical production source before configuration
         if: >-
-          ${{ !(github.event_name == 'push' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) }}
+          ${{ !(github.event_name == 'push' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) && !(github.event_name == 'push' && github.event.before == '00569d95246a06aff17035e77eb8027868455760' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin review 565')) }}
         run: node scripts/check_r3_purchase_identity_admission.mjs --production-source --production
 
       - name: Admit exact dashboard production source before configuration
         if: >-
           ${{ github.event_name == 'push' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564') }}
         run: python3 -B scripts/check_admin_dashboard_prod564.py --deploy
+
+      - name: Admit exact admin review production source before configuration
+        if: >-
+          ${{ github.event_name == 'push' && github.event.before == '00569d95246a06aff17035e77eb8027868455760' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin review 565') }}
+        run: python3 -B scripts/check_admin_review_prod565.py --deploy
 
       - name: Prepare public site
         shell: bash

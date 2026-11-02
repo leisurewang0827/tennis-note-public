@@ -111,8 +111,14 @@ jobs:
           R3_TARGET: ${{ github.base_ref || github.ref_name }}
           R3_DASHBOARD_CLAIMED: >-
             ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-dashboard-prod-20261102') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) }}
+          ADMIN_REVIEW_CLAIMED: >-
+            ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-review-prod-20261103') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '00569d95246a06aff17035e77eb8027868455760' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin review 565')) }}
         run: |
-          if [ "$R3_DASHBOARD_CLAIMED" = true ]; then
+          if [ "$ADMIN_REVIEW_CLAIMED" = true ]; then
+            python -B scripts/check_admin_review_prod565.py --ci
+            echo 'scoped=true' >> "$GITHUB_OUTPUT"
+            echo 'adminreview565_only=true' >> "$GITHUB_OUTPUT"
+          elif [ "$R3_DASHBOARD_CLAIMED" = true ]; then
             python -B scripts/check_admin_dashboard_prod564.py --ci
             echo 'scoped=true' >> "$GITHUB_OUTPUT"
             echo 'dashboard564_only=true' >> "$GITHUB_OUTPUT"
@@ -121,6 +127,12 @@ jobs:
           else
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
+      - name: Verify PROD565 admin review candidate
+        if: steps.display.outputs.adminreview565_only == 'true' && github.event_name == 'pull_request'
+        run: |
+          python -B tests/admin-review-prod565-admission.test.py
+          python -B tests/admin-brand-assets.test.py
+          node --test tests/admin-dashboard-task-label.test.cjs tests/admin-dashboard-repair-context.test.cjs
       - name: Verify PROD564 dashboard candidate
         if: steps.display.outputs.dashboard564_only == 'true' && github.event_name == 'pull_request'
         run: |
