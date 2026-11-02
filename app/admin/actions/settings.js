@@ -488,7 +488,11 @@ function applyAdminLayoutSettings() {
     const group = dashboard.querySelector(`[data-dashboard-group="${groupId}"]`);
     if (!group) return;
     group.style.order = String(index);
-    group.hidden = adminLayoutSettings.hiddenGroups.includes(groupId);
+    if (groupId === "operations") {
+      group.style.gridTemplateColumns = adminLayoutSettings.dashboardMode === "summary" ? "minmax(0, 1fr)" : "";
+    }
+    group.hidden = adminLayoutSettings.hiddenGroups.includes(groupId)
+      || (adminLayoutSettings.dashboardMode === "summary" && ["lessons", "insights"].includes(groupId));
   });
   Object.entries(adminLayoutSettings.widgetOrder).forEach(([groupId, widgetOrder]) => {
     const group = dashboard.querySelector(`[data-dashboard-group="${groupId}"]`);
@@ -500,7 +504,8 @@ function applyAdminLayoutSettings() {
   });
   Object.values(adminDashboardWidgetDefinitions).flat().forEach((item) => {
     const widget = dashboard.querySelector(`[data-dashboard-widget="${item.id}"]`);
-    if (widget) widget.hidden = adminLayoutSettings.hiddenWidgets.includes(item.id);
+    if (widget) widget.hidden = adminLayoutSettings.hiddenWidgets.includes(item.id)
+      || (adminLayoutSettings.dashboardMode === "summary" && ["members", "coaches"].includes(item.id));
   });
 
   const reportView = $("#reportsView");
