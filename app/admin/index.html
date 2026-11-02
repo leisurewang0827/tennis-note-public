@@ -125,26 +125,26 @@
 
         <section id="dashboardView" class="view is-active" aria-label="운영 대시보드">
           <div class="metric-grid is-loading" data-dashboard-group="metrics" aria-busy="true">
-            <article class="metric-card">
+            <button class="metric-card" type="button" data-jump="schedule" data-dashboard-widget="metric-lessons" style="text-align: left">
               <span>오늘 수업</span>
               <strong id="metricLessons">—</strong>
               <small>최신 자료를 불러오는 중</small>
-            </article>
-            <article class="metric-card warning">
+            </button>
+            <button class="metric-card warning" type="button" data-jump="schedule" data-dashboard-widget="metric-changes" style="text-align: left">
               <span>변경 승인</span>
-              <strong id="metricMakeups">0</strong>
-              <small>24시간 이내 요청</small>
-            </article>
-            <article class="metric-card accent">
+              <strong id="metricMakeups">—</strong>
+              <small>최신 자료를 불러오는 중</small>
+            </button>
+            <button class="metric-card accent" type="button" data-jump="notes" data-dashboard-widget="metric-records" style="text-align: left">
               <span>기록/차감 대기</span>
               <strong id="metricNotes">—</strong>
               <small>최신 자료를 불러오는 중</small>
-            </article>
-            <article class="metric-card calm">
+            </button>
+            <button class="metric-card calm" type="button" data-jump="billing" data-dashboard-widget="metric-payments" style="text-align: left">
               <span>결제 대기</span>
               <strong id="metricBilling">—</strong>
               <small>최신 자료를 불러오는 중</small>
-            </article>
+            </button>
           </div>
 
           <section class="admin-today-grid" aria-label="오늘 운영 처리판" data-dashboard-group="operations">
@@ -153,6 +153,7 @@
                 <div>
                   <p class="eyebrow">오늘 운영</p>
                   <h2>오늘 처리할 일</h2>
+                  <button class="ghost-button" type="button" data-jump="settings" data-settings-tab="layout">화면 구성</button>
                 </div>
                 <button class="ghost-button" type="button" data-jump="billing">결제/정산 보기</button>
               </div>
@@ -956,7 +957,7 @@
             </section>
           </div>
           <details class="billing-secondary-details billing-lower-details">
-            <summary>월 정산·연장·처리 로그 상세보기</summary>
+            <summary>정산·연장 내역</summary>
             <div class="dashboard-grid lower-grid">
             <section class="panel table-panel">
               <div class="panel-heading">
@@ -1155,10 +1156,11 @@
 
           <section class="panel management-report-widget" data-report-widget="sources">
             <div class="panel-heading">
-              <div><p class="eyebrow">Drive 구조 반영</p><h2>리포트 개발 순서</h2></div>
-              <span class="source-pill">읽기 전용 계획</span>
+              <div><h2>자료 정보</h2></div>
+              <span class="source-pill">읽기 전용</span>
             </div>
-            <div id="managementSourcePlan" class="management-source-plan"></div>
+            <p class="setting-help">리포트의 자료와 연결 상태를 확인합니다.</p>
+            <details><summary>자세히 보기</summary><div id="managementSourcePlan" class="management-source-plan"></div></details>
           </section>
         </section>
 

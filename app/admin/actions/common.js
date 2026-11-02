@@ -923,6 +923,7 @@ async function performAdminLiveDataSync(options = {}) {
       : Promise.resolve(null);
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
+    let operationalPaymentsFailed = false;
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverMemberPaymentProjections, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
@@ -1000,7 +1001,7 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
-      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => { operationalPaymentsFailed = true; return []; })) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("memberPaymentProjections", () => client.rpc("tn_admin_member_payment_projections", {
         target_branch_id: activeOperationBranchId() || null,
       }).then((response) => Array.isArray(response) ? response : []).catch((error) => {
@@ -1598,6 +1599,7 @@ async function performAdminLiveDataSync(options = {}) {
     Object.assign(serverPaymentSyncState, {
       loaded: true,
       directLoaded: false,
+      summaryVerified: fullAdminAccess && !operationalPaymentsFailed && Array.isArray(serverPayments) && serverPayments.length < 500,
       loading: false,
       lastLoadedAt: Date.now(),
       message: `서버 결제 ${mappedPayments.length}건 확인`,

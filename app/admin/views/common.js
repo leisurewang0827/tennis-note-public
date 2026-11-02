@@ -35,30 +35,35 @@ function renderGlobalSearchResults() {
 }
 
 function renderMetrics() {
-  const metricsReady = dashboardOperationalDataReady();
+  const summaryFailed = !adminDemoMode && String(state.liveScheduleMessage || "").startsWith("실서버 시간표 확인 실패");
+  const metricsReady = adminLayoutSettings.dashboardMode === "summary"
+    ? (adminDemoMode || (state.liveScheduleLoaded && !state.liveScheduleLoading && !summaryFailed))
+    : dashboardOperationalDataReady();
   const metricGrid = $("#dashboardView .metric-grid");
   metricGrid?.classList.toggle("is-loading", !metricsReady);
   metricGrid?.setAttribute("aria-busy", String(!metricsReady));
-  const setMetric = (id, value, detail) => {
+  const setMetric = (id, value, detail, sourceReady = true) => {
     const target = $(id);
     if (!target) return;
-    target.textContent = metricsReady ? String(value) : "—";
+    const confirmed = metricsReady && sourceReady;
+    target.textContent = confirmed ? String(value) : "—";
     const detailTarget = target.parentElement?.querySelector("small");
-    if (detailTarget) detailTarget.textContent = metricsReady ? detail : "최신 자료를 불러오는 중";
+    if (detailTarget) detailTarget.textContent = confirmed ? detail : (metricsReady && !sourceReady ? "자료 확인 필요" : summaryFailed && adminLayoutSettings.dashboardMode === "summary" ? "자료 확인 실패" : "최신 자료를 불러오는 중");
   };
   const recordGroups = adminRecordGroups();
   const todayLessonCount = adminTodayLessonRows().length;
   const pendingScheduleCount = operationBranchLessons().filter((lesson) => isPendingScheduleLesson(lesson)).length;
   setMetric("#metricLessons", todayLessonCount, "코치별 시간표 기준");
   setMetric("#metricMakeups", pendingLessonChangeApprovals().length, "운영 규칙상 승인 요청");
-  setMetric("#metricNotes", recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length, "코치 완료 처리 후 차감");
+  const observedRecordCount = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
+  setMetric("#metricNotes", observedRecordCount, adminLayoutSettings.dashboardMode === "summary" ? "조회 자료 기준 · 기록 상세 확인" : "코치 완료 처리 후 차감", adminLayoutSettings.dashboardMode !== "summary" || adminDemoMode || observedRecordCount > 0);
   const currentBillingMonth = /^\d{4}-\d{2}$/.test(state.billingMonth)
     ? state.billingMonth
     : adminLocalDateKey(new Date()).slice(0, 7);
   const pendingPaymentGroups = groupedBillingAttempts(
     operationBranchBillings().filter((item) => billingOperationalMonthMatches(item, currentBillingMonth)),
   ).filter((entry) => ["action", "verifying"].includes(billingFilterGroup(entry.primary)));
-  setMetric("#metricBilling", pendingPaymentGroups.length, "결제/정산 처리 대기");
+  setMetric("#metricBilling", pendingPaymentGroups.length, adminLayoutSettings.dashboardMode === "summary" ? `${currentBillingMonth} 조회 자료 기준` : "결제/정산 처리 대기", adminLayoutSettings.dashboardMode !== "summary" || dashboardSummaryPaymentReady());
   if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = metricsReady ? `${todayLessonCount}회` : "확인 중";
   if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = metricsReady ? `${pendingScheduleCount}건` : "확인 중";
 }
@@ -463,6 +468,7 @@ function renderAdminView(view = state.view) {
     : view;
 
   if (activeView === "dashboard") {
+    applyAdminLayoutSettings();
     renderMetrics();
     renderCourtControls();
     renderDashboard();
