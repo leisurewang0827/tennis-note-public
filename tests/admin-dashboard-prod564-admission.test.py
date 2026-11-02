@@ -22,13 +22,22 @@ class Admission(unittest.TestCase):
                     "GITHUB_WORKFLOW_REF": guard.REPO + "/.github/workflows/tennisnote-public-ci.yml@refs/pull/7/merge"}
 
     def fake_git(self, *args):
-        return guard.SOURCE if args[-1] == self.head else guard.BASE + " " + self.head
+        if args[-1] == self.head: return guard.SUPPORT_BASE
+        if args[-1] == guard.SUPPORT_BASE: return guard.SOURCE
+        return guard.BASE + " " + self.head
 
     def test_exact_pr_and_wrong_branch(self):
         with patch.object(guard, "git", self.fake_git):
             self.assertEqual(guard.validate_context("ci", self.event, self.env), (self.head, self.merge))
             bad = {**self.event, "pull_request": {**self.event["pull_request"], "head": {**self.event["pull_request"]["head"], "ref": "wrong"}}}
             with self.assertRaises(RuntimeError): guard.validate_context("ci", bad, self.env)
+
+    def test_rejects_unreviewed_support_parent(self):
+        def unexpected_parent(*args):
+            if args[-1] == self.head: return "f" * 40
+            return self.fake_git(*args)
+        with patch.object(guard, "git", unexpected_parent), self.assertRaisesRegex(RuntimeError, "DASHBOARD564_PR"):
+            guard.validate_context("ci", self.event, self.env)
 
     def test_exact_deployment_rejects_wrong_base(self):
         env = {**self.env, "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main", "GITHUB_SHA": self.head,

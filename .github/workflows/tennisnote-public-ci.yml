@@ -109,7 +109,8 @@ jobs:
         id: display
         env:
           R3_TARGET: ${{ github.base_ref || github.ref_name }}
-          R3_DASHBOARD_CLAIMED: ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-dashboard-prod-20261102') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) }}
+          R3_DASHBOARD_CLAIMED: >-
+            ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-dashboard-prod-20261102') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) }}
         run: |
           if [ "$R3_DASHBOARD_CLAIMED" = true ]; then
             python -B scripts/check_admin_dashboard_prod564.py --ci

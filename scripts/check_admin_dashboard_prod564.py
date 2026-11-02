@@ -11,17 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = "leisurewang0827/tennis-note-public"
 BASE = "7b8310d137c19d7a8ac2b828de32f2e24e6c7d83"
 SOURCE = "2762864991e3e00c92586b334b89830287f054f3"
+SUPPORT_BASE = "15026f243914c019a20475a90641fe8db705a9b4"
 FEATURE = "013316fb76ab6cca4c77f9ce8917411122e5cc57"
 BRANCH = "codex/tennisnote-admin-dashboard-prod-20261102"
 SUBJECT = "release(tennisnote): admin dashboard 564"
 SELF = "scripts/check_admin_dashboard_prod564.py"
-SELF_SEAL = "cde11dd992f80a50254b60cb006a96b5463b2619328d0337eee6fca56f4c6758"
+SELF_SEAL = "b1480f7f1f080736515595eb76859914c5c961e4c5df82d128164752978a6b17"
 SUPPORT_PINS = {
-    ".github/workflows/tennisnote-public-ci.yml": "69e2bfc5c69eeaa6b29b9250ae685b349eda8608fea8273d0fc1f7c633b12856",
-    ".github/workflows/deploy-cloudflare-pages.yml": "506eaa41848e9f0084c019c15ace8b312e5801e49ac723a78f44d5a165909874",
-    ".github/workflows/deploy-pages.yml": "478b0d40b3e5c0855553be7ef5cce4c5b5694bcb9ae90942340a62574f6d4f39",
+    ".github/workflows/tennisnote-public-ci.yml": "84d0345e65c4fdfa322e761ae1d7f2bfcedf6ebaf727be4d2371a1873302a93e",
+    ".github/workflows/deploy-cloudflare-pages.yml": "7e7fed4aed7e9d1d8606a9ff8748816755bb717751d3c011cf8029d3079d9dea",
+    ".github/workflows/deploy-pages.yml": "615e2e668b13d3a3b9c2980de00902833c63bffa5776f2a57ac328f0b032d0c2",
     "scripts/verify.sh": "2e1bbd107d12c76c986f1187374ae3f813964ac95891e7948fccbb8793767fc1",
-    "tests/admin-dashboard-prod564-admission.test.py": "002fed72cd0fbe916b23ee626217168bfb6eeef9bfc245d8c98c73487e90a68f",
+    "tests/admin-dashboard-prod564-admission.test.py": "a24c383d6876ec2843a2b9c994e61f0426a37ff65b49648329e46e56535efd70",
 }
 PRODUCT = {
     "app/admin/actions/common.js", "app/admin/actions/settings.js", "app/admin/catalog.js",
@@ -103,7 +104,8 @@ def validate_context(mode, event, env):
              and (pr.get("base") or {}).get("sha") == BASE
              and ((pr.get("head") or {}).get("repo") or {}).get("full_name") == REPO
              and ((pr.get("base") or {}).get("repo") or {}).get("full_name") == REPO
-             and git("show", "-s", "--format=%P", candidate) == SOURCE
+             and git("show", "-s", "--format=%P", candidate) == SUPPORT_BASE
+             and git("show", "-s", "--format=%P", SUPPORT_BASE) == SOURCE
              and git("show", "-s", "--format=%P", checkout) == BASE + " " + candidate, "PR")
     elif env.get("GITHUB_EVENT_NAME") == "push":
         candidate = checkout
