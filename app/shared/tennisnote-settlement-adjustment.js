@@ -298,6 +298,13 @@
     return value;
   }
 
+  function resolvedDispute(value,scope,snapshot,originalStatus){
+    if(originalStatus!=="disputed")return false;
+    try{unpaidProjection(value,scope,snapshot);}catch(_){return false;}
+    const a=value.adjustment;
+    return Boolean(a.head&&a.response?.status==="acknowledged"&&a.response.headFingerprint===a.headFingerprint);
+  }
+
   async function readUnpaidState(client,scope){
     try{
       const raw=await client.rpc("tn_monthly_settlement_adjustment_state",{b:scope.branchId,c:scope.coachRoleId,m:scope.settlementMonth});
@@ -353,20 +360,26 @@
     control.summary.textContent="원본 "+won(a.originalAmount)+" · 조정 "+won(a.finalAmount-a.originalAmount)+" · 최종 "+won(a.finalAmount)+". 원본 계산은 보존됩니다.";
     control.history.replaceChildren();
     for(const event of a.events){const item=document.createElement("li");item.textContent=event.revision+"차 · "+won(event.deltaAmount)+" · "+event.reason;control.history.append(item);}
-    const admin=ctx.role==="admin",response=a.response,ready=ctx.originalAck===true;
+    const admin=ctx.role==="admin",response=a.response,ready=ctx.originalAck===true||ctx.originalDisputed===true;
+    const resolved=ctx.originalAck===true||(ctx.originalDisputed===true&&Boolean(a.head)&&response?.status==="acknowledged"&&response.headFingerprint===a.headFingerprint);
     control.amountLabel.hidden=!admin;control.answer.hidden=admin;control.reasonLabel.hidden=!admin&&control.answer.value!=="disputed";
     control.submit.textContent=control.busy?"확인 중":control.uncertain?"요청 결과 다시 확인":admin?"조정 기록 추가":"최신 조정 응답 저장";
     const locked=control.busy||!a.writesEnabled||a.hasAnyPayout||!ctx.authorized;
     control.submit.disabled=locked||(!admin&&(!a.head||response||!ready));
     for(const input of [control.delta,control.reason,control.answer])input.disabled=locked||control.uncertain;
     const derivedMessage=!a.writesEnabled?"조정 기능이 잠겨 있습니다.":a.hasAnyPayout?"지급·원복 기록이 있는 정산은 조정할 수 없습니다."
-      :!admin&&!ready?"원본 계산본 확인 후 최신 조정에 응답해 주세요.":response?response.status==="acknowledged"?"최신 조정 확인 완료":"이의 확인 필요 · 지급 기록 차단"
+      :!admin&&!ready?"원본 계산본 확인 후 최신 조정에 응답해 주세요.":response?response.status==="acknowledged"?(ctx.originalDisputed?"기존 이의 이력은 보존되며 현재 이의가 해결되었습니다.":"최신 조정 확인 완료"):"이의 확인 필요 · 지급 기록 차단"
         :a.head?"최신 조정에 대한 코치 재확인이 필요합니다.":"가감액과 필수 사유를 별도 이력으로 남깁니다.";
     // 상태에서 만든 안내만 갱신하고 요청 중·오류·저장 재조회 메시지는 보존한다.
     if(!control.message.textContent||control.message.textContent===control.derivedMessage)control.message.textContent=derivedMessage;
     control.derivedMessage=derivedMessage;
-    if(ctx.recordButton&&a.head)ctx.recordButton.disabled=control.busy||control.uncertain||!ready||!a.writesEnabled||a.hasAnyPayout
+    if(ctx.recordButton&&a.head)ctx.recordButton.disabled=control.busy||control.uncertain||!resolved||!a.writesEnabled||a.hasAnyPayout
       ||a.finalAmount<=0||response?.status!=="acknowledged"||ctx.payload.payout?.recordingEnabled!==true;
+    if(admin&&ctx.originalDisputed===true){
+      const disabled=control.busy||control.uncertain||!ctx.authorized||!resolved||!a.writesEnabled||a.hasAnyPayout
+        ||a.finalAmount<=0||response?.status!=="acknowledged"||ctx.payload.payout?.recordingEnabled!==true;
+      if(ctx.dateInput)ctx.dateInput.disabled=disabled;if(ctx.methodInput)ctx.methodInput.disabled=disabled;
+    }
   }
   async function saveUnpaid(control,kind){
     if(control.busy)return false;const ctx=control.factory(),a=ctx?.payload?.adjustment;
@@ -378,7 +391,8 @@
     let rpc,extra;
     if(kind==="record"){
       const date=ctx.dateInput?.value,method=ctx.methodInput?.value;
-      if(ctx.role!=="admin"||!ctx.originalAck||!a.head||a.response?.status!=="acknowledged"||a.finalAmount<=0||ctx.payload.payout?.recordingEnabled!==true
+      const resolved=ctx.originalAck===true||(ctx.originalDisputed===true&&Boolean(a.head)&&a.response?.status==="acknowledged"&&a.response.headFingerprint===a.headFingerprint);
+      if(ctx.role!=="admin"||!resolved||!a.head||a.response?.status!=="acknowledged"||a.finalAmount<=0||ctx.payload.payout?.recordingEnabled!==true
         ||!/^\d{4}-\d{2}-\d{2}$/.test(date||"")||!["bank_transfer","cash","other_manual"].includes(method))return false;
       rpc="tn_admin_record_adjusted_monthly_settlement_payout";extra={paid_on:date,method};
     }else if(ctx.role==="admin"){
@@ -388,7 +402,7 @@
       }
       rpc="tn_admin_append_monthly_settlement_adjustment";extra={delta,reason};
     }else{
-      if(!ctx.originalAck||!a.head||a.response)return false;const answer=control.answer.value,reason=answer==="disputed"?control.reason.value.trim():null;
+      if(!(ctx.originalAck===true||ctx.originalDisputed===true)||!a.head||a.response)return false;const answer=control.answer.value,reason=answer==="disputed"?control.reason.value.trim():null;
       if(!["acknowledged","disputed"].includes(answer)||(answer==="disputed"&&(!reason||reason.length<2||reason.length>240)))return false;
       rpc="tn_coach_respond_monthly_settlement_adjustment";extra={answer,reason};
     }
@@ -408,7 +422,7 @@
         s:ctx.snapshot.snapshotId,r:ctx.snapshot.revision,f:ctx.snapshot.sourceFingerprint,expected_head:a.headFingerprint,...extra,op:operation.key});}
       if(!current())return false;const value=await readUnpaidState(ctx.client,ctx.scope);
       if(!current()||!proof(value))throw Error("adjustment_readback_not_proven");
-      control.uncertain=false;control.delta.value="";control.reason.value="";ctx.accept(value);control.message.textContent="서버 저장과 재조회를 확인했습니다. 실제 송금은 하지 않았습니다.";return true;
+      control.uncertain=false;control.delta.value="";control.reason.value="";ctx.accept(value);control.message.textContent=rpc==="tn_coach_respond_monthly_settlement_adjustment"&&ctx.originalDisputed===true&&extra.answer==="acknowledged"?"기존 이의 이력은 보존되며 현재 이의가 해결되었습니다. 실제 송금은 하지 않았습니다.":"서버 저장과 재조회를 확인했습니다. 실제 송금은 하지 않았습니다.";return true;
     }catch(error){
       if(!current())return false;
       const rejected=/^(adjustment_(reason_required|reason_sensitive|total_invalid|delta_required|head_stale|response_conflict|latest_ack_required|payout_history_exists|writes_disabled)|approved_coach_scope_required|admin_role_required)$/.test(String(error?.payload?.message||""));
@@ -433,6 +447,7 @@
     sourceHold,
     effectiveError,
     unpaidProjection,
+    resolvedDispute,
     readUnpaidState,
     mountUnpaidDetail,
   });

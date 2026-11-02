@@ -1687,8 +1687,28 @@ def main() -> int:
     parser.add_argument("--live-preflight", action="store_true")
     parser.add_argument("--branch-preflight", action="store_true")
     parser.add_argument('--ci-personal', action='store_true')
+    parser.add_argument('--ci-dispute574', action='store_true')
     args = parser.parse_args()
     try:
+        if args.ci_dispute574:
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal), 'DEV574_MODE')
+            import check_r3_dispute_dev574 as dispute574
+            try:
+                event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+                dispute574.ci_pr(event, dict(os.environ), sys.modules[__name__])
+            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, KeyError):
+                fail('DEV574_CI_HOLD')
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write('scoped=true\n')
+            print('DEV574_CI_ADMISSION_PASS')
+            return 0
+        if os.environ.get('GITHUB_REF') == 'refs/heads/codex/r3-dispute-adjustment-resolution-dev574-20261102':
+            import check_r3_dispute_dev574 as dispute574
+            try:
+                dispute574.dispatch(args, sys.modules[__name__])
+            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, KeyError):
+                fail('DEV574_PREFLIGHT_HOLD')
+            return 0
         if args.ci_personal:
             legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight), 'PERSONAL573_MODE')
             event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
