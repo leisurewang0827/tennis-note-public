@@ -145,9 +145,11 @@ function renderCoachSettlementHistory() {
   section.dataset.state = uiState;
   section.setAttribute("aria-busy", String(busy));
   const badge = $("#coachSettlementReconciliationStateBadge");
-  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);
+  const disputeResolved = payloadIsExact && window.TennisNoteSettlementAdjustment.resolvedDispute(
+    coachSettlementHistory.coachSettlementPayoutState,coachSettlementReconciliationScope(),snapshot,reconciliation?.status);
+  if (badge) badge.textContent = disputeResolved ? "이의 해결 · 원본 보존" : coachSettlementReconciliationStateLabel(uiState);
   const message = $("#coachSettlementReconciliationMessage");
-  if (message) message.textContent = coachSettlementHistory.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);
+  if (message) message.textContent = disputeResolved ? "기존 이의 이력은 보존되며 최신 조정안 확인으로 현재 이의가 해결되었습니다." : (coachSettlementHistory.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState));
 
   const summary = $("#coachSettlementReconciliationSummary");
   if (summary) {
@@ -201,6 +203,7 @@ function renderCoachSettlementHistory() {
     actorKey:String(state.liveProfileId||""),authorized:Boolean(coachSettlementReconciliationContinuation()?.())
       &&!coachSettlementHistory.coachSettlementReconciliationLoading&&!coachSettlementHistory.coachSettlementReconciliationSubmitting,
     originalAck:coachSettlementHistory.coachSettlementReconciliation?.reconciliation?.status==="acknowledged",
+    originalDisputed:coachSettlementHistory.coachSettlementReconciliation?.reconciliation?.status==="disputed",
     accept(value){coachSettlementHistory.coachSettlementPayoutState=value;renderCoachSettlementHistory();}
   }));
 }
