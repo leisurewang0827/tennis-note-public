@@ -49,7 +49,7 @@ class Admission(unittest.TestCase):
             if args[:2] == ("status", "--porcelain"): return ""
             if args[:3] == ("diff", "--cached", "--name-only"): return ""
             if args[:3] == ("show", "-s", "--format=%P"):
-                return {candidate: guard.SOURCE, guard.SOURCE: guard.FEATURE, guard.FEATURE: guard.BASE}[args[3]]
+                return {candidate: guard.SUPPORT_BASE, guard.SUPPORT_BASE: guard.SOURCE, guard.SOURCE: guard.FEATURE, guard.FEATURE: guard.BASE}[args[3]]
             if args[0] == "rev-parse": return "tree"
             if args == ("diff", "--name-only", guard.BASE, guard.SOURCE): return "\n".join(sorted(guard.PRODUCT))
             if args == ("diff", "--name-only", guard.SOURCE, candidate): return "\n".join(sorted(set(guard.SUPPORT_PINS) | {guard.SELF, "unexpected"}))

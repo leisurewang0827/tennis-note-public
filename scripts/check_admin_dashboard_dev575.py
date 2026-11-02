@@ -10,17 +10,18 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 BASE = "4717ab7d7ba33e755279823d4ec439945020b02a"
 SOURCE = "49cb1bb9a07a4d0e0426b06a6f46013c1794ff1e"
+SUPPORT_BASE = "67acdd470f5a2e08ea3d3e6f3ac4bc47516d3360"
 FEATURE = "a97927005c19ac76a11ef9e9eeaad6535fb20810"
 BRANCH = "codex/tennisnote-admin-dashboard-dev-20261102"
 BASE_BRANCH = "codex/r3-dispute-adjustment-resolution-dev574-20261102"
 REPO = "leisurewang0827/tennis-note-public"
 SELF = "scripts/check_admin_dashboard_dev575.py"
-SELF_SEAL = "9d8452de59bc1a8fc030fd7f5b9cd2ec4ed9695a25d75e5897d0263fd26f9051"
+SELF_SEAL = "7964ddde1ba9ea9476d8d499935c660a01f86b35964dd31b40d206d1a3946a63"
 SUPPORT_PINS = {
     ".github/workflows/tennisnote-public-ci.yml": "23563adc6e10e6246ad4e62aa8466b29f389dab798199a4f072249e5a5d1dbee",
     "scripts/check_r3_dev_deployment.py": "638c91cf2b05fc53aacb62a5f81d29ea449e3322249e303ee513bbf4d6dd78b1",
     "scripts/verify.sh": "6cdbd65b76751fdc23c2218ba39d045d72cffe274558a3cef155e0357539315d",
-    "tests/admin-dashboard-dev575-admission.test.py": "60219dc9ce126653b69909733a9af3ac5fdd4c4de859f94b07e1cacdde8ceea5",
+    "tests/admin-dashboard-dev575-admission.test.py": "94cca9da8a19212c0ba82fe753b241a03d13b3181434f00f0d5f1dd0536f94ec",
 }
 PRODUCT = {
     "app/admin/actions/common.js", "app/admin/actions/settings.js", "app/admin/catalog.js",
@@ -57,7 +58,8 @@ def seal(data):
 def source(candidate, checkout, old):
     git = old.run_git
     need(re.fullmatch(r"[0-9a-f]{40}", candidate or "") is not None, "CANDIDATE")
-    need(git("show", "-s", "--format=%P", candidate) == SOURCE
+    need(git("show", "-s", "--format=%P", candidate) == SUPPORT_BASE
+         and git("show", "-s", "--format=%P", SUPPORT_BASE) == SOURCE
          and git("show", "-s", "--format=%P", SOURCE) == FEATURE
          and git("show", "-s", "--format=%P", FEATURE) == BASE, "GRAPH")
     need(git("rev-parse", "HEAD") == checkout and not git("status", "--porcelain", "--untracked-files=all")
@@ -122,7 +124,9 @@ def ci_receipt(candidate, old):
          and run.get("status") == "completed" and run.get("conclusion") == "success"
          and run.get("workflow_id") == 329932540 and (run.get("repository") or {}).get("full_name") == REPO
          and (run.get("head_repository") or {}).get("full_name") == REPO and len(links) == 1
-         and type(links[0].get("number")) is int, "CI_RUN")
+         and type(links[0].get("number")) is int
+         and (links[0].get("head") or {}).get("sha") == candidate
+         and (links[0].get("base") or {}).get("sha") == BASE, "CI_RUN")
     pr = old.status_dev_github_get("pulls/" + str(links[0]["number"]))
     need(pr.get("state") == "open" and pr.get("mergeable") is True and pr.get("mergeable_state") == "clean"
          and (pr.get("head") or {}).get("sha") == candidate and (pr.get("head") or {}).get("ref") == BRANCH
@@ -131,7 +135,7 @@ def ci_receipt(candidate, old):
          and ((pr.get("base") or {}).get("repo") or {}).get("full_name") == REPO, "CI_PR")
     head = old.status_dev_github_get("git/commits/" + candidate)
     merge = old.status_dev_github_get("git/commits/" + str(pr.get("merge_commit_sha", "")))
-    need(head.get("sha") == candidate and [p.get("sha") for p in head.get("parents", [])] == [SOURCE]
+    need(head.get("sha") == candidate and [p.get("sha") for p in head.get("parents", [])] == [SUPPORT_BASE]
          and merge.get("sha") == pr.get("merge_commit_sha")
          and [p.get("sha") for p in merge.get("parents", [])] == [BASE, candidate]
          and (head.get("tree") or {}).get("sha") == (merge.get("tree") or {}).get("sha"), "CI_TREE")
