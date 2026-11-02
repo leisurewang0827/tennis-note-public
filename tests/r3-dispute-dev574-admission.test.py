@@ -14,6 +14,26 @@ import check_r3_dev_deployment as old
 
 
 class Admission(unittest.TestCase):
+    def test_diagnostic_stage_fails_closed_without_disclosing_errors(self):
+        self.assertEqual(guard.FEATURE_PARENT,'87f896ceb047ee596e2d6a608abbdc5fe655f778')
+        source=(ROOT/'scripts/check_r3_dispute_dev574.py').read_text(encoding='utf-8')
+        self.assertIn("old.run_git('show','-s','--format=%P',candidate)==FEATURE_PARENT",source)
+        self.assertIn("head.get('parents',[])]==[FEATURE_PARENT]",source)
+        self.assertEqual(guard.stage('CONTEXT',lambda:'ok'),'ok')
+        for name in guard.STAGES:
+            def failure(): raise RuntimeError('sensitive arbitrary detail')
+            with self.subTest(stage=name), self.assertRaisesRegex(RuntimeError,'^DEV574_STAGE_'+name+'_HOLD$'):
+                guard.stage(name,failure)
+        with self.assertRaisesRegex(RuntimeError,'^DEV574_STAGE_INVALID_HOLD$'):
+            guard.stage('invalid',lambda:None)
+        def safe_failure(msg):
+            try: guard.stage('LIVE_STATE',lambda:(_ for _ in ()).throw(RuntimeError(msg)))
+            except RuntimeError as exc: return guard.safe_stage_failure(exc)
+        self.assertEqual(safe_failure('DEV574_LIVE'),'DEV574_STAGE_LIVE_STATE_HOLD:DEV574_LIVE')
+        self.assertEqual(safe_failure('live development release read failed endpoint=member_release reason=HTTP_STATUS status=403'),'DEV574_STAGE_LIVE_STATE_HOLD:HTTP_403')
+        self.assertEqual(safe_failure('secret token URL'),'DEV574_STAGE_LIVE_STATE_HOLD')
+        self.assertEqual(guard.safe_stage_failure(RuntimeError('DEV574_STAGE_LIVE_STATE_HOLD:secret')),'DEV574_PREFLIGHT_HOLD')
+
     def test_exact_dispatch_context_and_unknown_inputs_fail_closed(self):
         sha='a'*40
         env={'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REPOSITORY':guard.REPO,
@@ -67,7 +87,7 @@ class Admission(unittest.TestCase):
             bad_parent=False
             def run_git(self,*args):
                 if args==('rev-parse','HEAD'): return sha
-                if args==('show','-s','--format=%P',sha): return 'b'*40 if self.bad_parent else guard.BASE
+                if args==('show','-s','--format=%P',sha): return 'b'*40 if self.bad_parent else guard.FEATURE_PARENT
                 if args[0]=='rev-parse' and args[1].endswith('^{tree}'): return 'c'*40
                 if args[0]=='status' or args==('diff','--cached','--name-only'): return ''
                 if args[:3]==('diff','--no-renames','--name-status'):

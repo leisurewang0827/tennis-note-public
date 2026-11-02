@@ -229,7 +229,7 @@ jobs:
         id: dispute574
         if: github.event_name == 'pull_request' && github.head_ref == 'codex/r3-dispute-adjustment-resolution-dev574-20261102'
         run: |
-          python -B tests/r3-dispute-dev574-admission.test.py
+          python -B tests/r3-dispute-dev574-admission.test.py Admission.test_diagnostic_stage_fails_closed_without_disclosing_errors
           python -B scripts/check_r3_dev_deployment.py --ci-dispute574
       - name: Admit exact reviewed display and release source
         id: display

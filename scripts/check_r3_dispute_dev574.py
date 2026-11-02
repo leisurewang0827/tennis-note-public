@@ -4,14 +4,16 @@ import json
 import os
 from pathlib import Path
 import re
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = '1ee91d9adb8ce574dcc9ca9e91b5621dd712a2cc'
+FEATURE_PARENT = '87f896ceb047ee596e2d6a608abbdc5fe655f778'
 BASE_BRANCH = 'codex/tennisnote-personal-create-partner-scope-20261101'
 BRANCH = 'codex/r3-dispute-adjustment-resolution-dev574-20261102'
 REPO = 'leisurewang0827/tennis-note-public'
-SELF_SEAL = '9a942471810476ecc861cc9bdcd5e9860028e673338e5741d05d74463a1ea350'
+SELF_SEAL = 'df15a1632fb462cf401c4fc7f9baf18a73c855430b020dc593d7c597cca6b7c3'
 APP_PINS = {
     'app/admin/index.html': 'f4c1c89e10bf1a7a739471f8e3a1180a7b38fd56fd846248bdd7def2376e3397',
     'app/admin/views/billing.js': 'dbb5122c9ec5ff5892bb70f70408f5a59ca44d2405a0c55362b544dcdf8ec134',
@@ -31,9 +33,9 @@ APP_PINS = {
     'app/tennis-note-member-app/ui/screens.js': '094bf5112fe422cb88ce68d4404c396972ecf290e7b9fed5de04a088f877be7d',
 }
 AUX_PINS = {
-    '.github/workflows/tennisnote-public-ci.yml': '4b08947c77746b2a9ca3be316f5ca0f1e7e3d1974b68ec038c2e6843e2396a3e',
-    'scripts/check_r3_dev_deployment.py': 'd4cb065c139257cfdf753d689e784f9fa19d6f5d7ac190cfc910c70de86e6d05',
-    'tests/r3-dispute-dev574-admission.test.py': '4fbd588ff4da2b48d1a85ffd66d32de0c88cf2d53c2edd33305f0772b3870908',
+    '.github/workflows/tennisnote-public-ci.yml': '94f3bc2f4707abafb1758814358f8b15bab15b093344f638f7a6e0fe0b3a7462',
+    'scripts/check_r3_dev_deployment.py': 'd83db63733d6d0cf6072c441cd281fd7ecf23d141533bdab73e3503c7e3443c0',
+    'tests/r3-dispute-dev574-admission.test.py': '229c10099b74bf3f847c3a211abb0dba539036620d4e3ef5460161845786f39a',
 }
 SELF = 'scripts/check_r3_dispute_dev574.py'
 LIVE_BASE = {
@@ -46,6 +48,37 @@ LIVE_BASE = {
 def need(value, code):
     if not value:
         raise RuntimeError(code)
+
+
+STAGES = frozenset({'CONTEXT','SOURCE','CI','ARTIFACTS','BUILT_ASSET','LIVE_STATE','LIVE_ASSET','MONOTONIC','ROLLBACK'})
+STAGE_CODES = frozenset('DEV574_STAGE_'+name+'_HOLD' for name in STAGES)
+DETAIL_CODES = frozenset({'DEV574_CONTEXT','DEV574_GRAPH','DEV574_PATHS','DEV574_PIN','DEV574_SELF','DEV574_RELEASE','DEV574_CACHE','DEV574_CI_COUNT','DEV574_PR_COUNT','DEV574_PR','DEV574_MERGE_TREE','DEV574_CI','DEV574_CI_STEP','DEV574_BUILT_ASSET','DEV574_LIVE','DEV574_LIVE_ASSET','DEV574_ACCOUNT','DEV574_TARGET','DEV574_ROLLBACK','DEV574_ROLLBACK_SOURCE','LEGACY_MONTHLY_ARTIFACT_RELEASE','LEGACY_MONTHLY_ARTIFACT_RUNTIME','LEGACY_MONTHLY_ARTIFACT_CACHE_BYTES','LEGACY_MONTHLY_ARTIFACT_SOURCE','LEGACY_MONTHLY_TARGET_REQUEST','LEGACY_MONTHLY_TARGET_READ','LEGACY_MONTHLY_TARGET_RESPONSE','LEGACY_MONTHLY_TARGET_RESPONSE_SIZE'})
+
+
+def safe_stage_failure(error):
+    text=str(error)
+    for prefix in STAGE_CODES:
+        if text==prefix: return text
+        if text.startswith(prefix+':'):
+            detail=text[len(prefix)+1:]
+            if detail in DETAIL_CODES or re.fullmatch(r'HTTP_[1-5][0-9]{2}',detail): return text
+    return 'DEV574_PREFLIGHT_HOLD'
+
+
+def stage(name, fn):
+    if name not in STAGES:
+        raise RuntimeError('DEV574_STAGE_INVALID_HOLD')
+    try:
+        return fn()
+    except Exception as error:
+        prefix='DEV574_STAGE_'+name+'_HOLD'
+        detail=str(error)
+        http=re.fullmatch(r'live development release read failed endpoint=(?:member_release|admin_release|member_worker|coach_worker) reason=HTTP_STATUS status=([1-5][0-9]{2})',detail)
+        if isinstance(error,urllib.error.HTTPError) and 100<=error.code<=599: detail='HTTP_'+str(error.code)
+        elif http: detail='HTTP_'+http.group(1)
+        elif detail.startswith('DEV574_HTTP_STATUS_') and re.fullmatch(r'DEV574_HTTP_STATUS_[1-5][0-9]{2}',detail): detail='HTTP_'+detail[-3:]
+        elif detail not in DETAIL_CODES: detail=''
+        raise RuntimeError(prefix+(':'+detail if detail else '')) from None
 
 
 def digest(data):
@@ -71,7 +104,7 @@ def context(env,head,old):
 
 def source(candidate,checkout,old):
     need(old.run_git('rev-parse','HEAD')==checkout
-         and old.run_git('show','-s','--format=%P',candidate)==BASE
+         and old.run_git('show','-s','--format=%P',candidate)==FEATURE_PARENT
          and old.run_git('rev-parse',checkout+'^{tree}')==old.run_git('rev-parse',candidate+'^{tree}')
          and not old.run_git('status','--porcelain','--untracked-files=all')
          and not old.run_git('diff','--cached','--name-only'),'DEV574_GRAPH')
@@ -122,7 +155,7 @@ def ci_result(candidate,old):
     head=old.status_dev_github_get('git/commits/'+candidate)
     merge=old.status_dev_github_get('git/commits/'+str(pr.get('merge_commit_sha','')))
     tree=(head.get('tree') or {}).get('sha')
-    need(head.get('sha')==candidate and [x.get('sha') for x in head.get('parents',[])]==[BASE]
+    need(head.get('sha')==candidate and [x.get('sha') for x in head.get('parents',[])]==[FEATURE_PARENT]
          and re.fullmatch(r'[0-9a-f]{40}',str(tree or '')) is not None
          and merge.get('sha')==pr.get('merge_commit_sha')
          and [x.get('sha') for x in merge.get('parents',[])]==[BASE,candidate]
@@ -168,6 +201,11 @@ def live_assets(candidate,opener):
             need(len(raw)<=2000000,'DEV574_LIVE_ASSET')
             normalized=raw.decode('utf-8').replace('\r\n','\n').rstrip('\n')+'\n'
             need(hashlib.sha256(normalized.encode('utf-8')).hexdigest()==expected,'DEV574_LIVE_ASSET')
+        except urllib.error.HTTPError as error:
+            status=error.code
+            error.close()
+            if isinstance(status,int) and 100<=status<=599: raise RuntimeError('DEV574_HTTP_STATUS_'+str(status)) from None
+            raise RuntimeError('DEV574_LIVE_ASSET') from None
         except (OSError,UnicodeError,ValueError):
             raise RuntimeError('DEV574_LIVE_ASSET') from None
 
@@ -176,22 +214,28 @@ def dispatch(args,old):
     env=dict(os.environ)
     need(int(args.source_only)+int(args.live_preflight)==1 and not args.branch_preflight,'DEV574_MODE')
     os.environ['GIT_NO_LAZY_FETCH']='1'
-    candidate=context(env,old.run_git('rev-parse','HEAD'),old)
-    release=source(candidate,candidate,old); run=ci_result(candidate,old)
+    candidate=stage('CONTEXT',lambda:context(env,old.run_git('rev-parse','HEAD'),old))
+    release=stage('SOURCE',lambda:source(candidate,candidate,old)); run=stage('CI',lambda:ci_result(candidate,old))
     if args.live_preflight:
-        old.legacy_monthly_artifacts({'release':release},Path('dist/member-dev'),Path('dist/admin-dev'))
-        for built,src in [('dist/member-dev/shared/tennisnote-settlement-adjustment.js','app/shared/tennisnote-settlement-adjustment.js'),
-                          ('dist/admin-dev/shared/tennisnote-settlement-adjustment.js','app/shared/tennisnote-settlement-adjustment.js'),
-                          ('dist/admin-dev/views/billing.js','app/admin/views/billing.js'),
-                          ('dist/member-dev/tennis-note-coach-app/views/settlement.js','app/tennis-note-coach-app/views/settlement.js')]:
-            need(digest((ROOT/built).read_bytes())==APP_PINS[src],'DEV574_BUILT_ASSET')
-        states=old.read_live_dev_states(candidate)
-        for state in states:
-            previous=state.get('release') or {}
-            need(previous.get('version')=='1.0.573' and previous.get('releaseId')=='2026.11.01.01'
-                 and state.get('member_cache')==606 and state.get('coach_cache')==579,'DEV574_LIVE')
-        live_assets(candidate,old._LIVE_READ_OPENER)
-        old.verify_monotonic_release(release,607,580,states)
-        print('DEV574_PREFLIGHT_PASS run_id='+str(run)+' rollback_sha256='+rollback(env,old))
+        stage('ARTIFACTS',lambda:old.legacy_monthly_artifacts({'release':release},Path('dist/member-dev'),Path('dist/admin-dev')))
+        def built_check():
+            for built,src in [('dist/member-dev/shared/tennisnote-settlement-adjustment.js','app/shared/tennisnote-settlement-adjustment.js'),
+                              ('dist/admin-dev/shared/tennisnote-settlement-adjustment.js','app/shared/tennisnote-settlement-adjustment.js'),
+                              ('dist/admin-dev/views/billing.js','app/admin/views/billing.js'),
+                              ('dist/member-dev/tennis-note-coach-app/views/settlement.js','app/tennis-note-coach-app/views/settlement.js')]:
+                need(digest((ROOT/built).read_bytes())==APP_PINS[src],'DEV574_BUILT_ASSET')
+        stage('BUILT_ASSET',built_check)
+        def live_state():
+            states=old.read_live_dev_states(candidate)
+            for state in states:
+                previous=state.get('release') or {}
+                need(previous.get('version')=='1.0.573' and previous.get('releaseId')=='2026.11.01.01'
+                     and state.get('member_cache')==606 and state.get('coach_cache')==579,'DEV574_LIVE')
+            return states
+        states=stage('LIVE_STATE',live_state)
+        stage('LIVE_ASSET',lambda:live_assets(candidate,old._LIVE_READ_OPENER))
+        stage('MONOTONIC',lambda:old.verify_monotonic_release(release,607,580,states))
+        rollback_hash=stage('ROLLBACK',lambda:rollback(env,old))
+        print('DEV574_PREFLIGHT_PASS run_id='+str(run)+' rollback_sha256='+rollback_hash)
     else:
         print('DEV574_SOURCE_CI_PASS run_id='+str(run))

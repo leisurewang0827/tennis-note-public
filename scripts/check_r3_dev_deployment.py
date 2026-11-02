@@ -1706,8 +1706,8 @@ def main() -> int:
             import check_r3_dispute_dev574 as dispute574
             try:
                 dispute574.dispatch(args, sys.modules[__name__])
-            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, KeyError):
-                fail('DEV574_PREFLIGHT_HOLD')
+            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, KeyError) as error:
+                fail(dispute574.safe_stage_failure(error))
             return 0
         if args.ci_personal:
             legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight), 'PERSONAL573_MODE')
