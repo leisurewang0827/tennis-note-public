@@ -248,6 +248,18 @@ def build_admin(output: Path) -> None:
     copy_directory(APP_ROOT / "admin", output)
     copy_directory(APP_ROOT / "shared", output / "shared")
     shutil.copy2(APP_ROOT / "release.json", output / "release.json")
+    brand = APP_ROOT / "tennis-note-member-app" / "assets" / "brand"
+    local_brand = output / "assets" / "brand"
+    local_brand.mkdir(parents=True, exist_ok=True)
+    for size in (180, 192):
+        shutil.copy2(brand / f"app-icon-{size}.png", local_brand / f"app-icon-{size}.png")
+    for filename, expected in (("index.html", 3), ("styles.css", 1)):
+        path = output / filename
+        contents = path.read_text(encoding="utf-8")
+        old = "../tennis-note-member-app/assets/brand/app-icon-"
+        if contents.count(old) != expected:
+            raise ValueError("Admin brand source contract changed")
+        path.write_text(contents.replace(old, "./assets/brand/app-icon-"), encoding="utf-8")
     copy_directory(
         APP_ROOT / "tennis-note-member-app" / "assets",
         output / "tennis-note-member-app" / "assets",

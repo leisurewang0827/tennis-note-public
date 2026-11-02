@@ -3,6 +3,7 @@ const adminDemoMode = adminQuery.get("demoAdmin") === "1";
 const adminLocalPreviewMode = adminDemoMode && ["127.0.0.1", "localhost"].includes(window.location.hostname);
 const adminBrandSplashStartedAt = performance.now();
 let adminBrandSplashHideScheduled = false;
+let adminBillingRepairContext = null;
 
 const state = {
   view: "dashboard",

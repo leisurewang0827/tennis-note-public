@@ -177,6 +177,13 @@ function updateAdminSaveState(message = "") {
   target.dataset.tone = label === "서버 저장 완료" ? "server" : "saved";
 }
 
+function clearAdminBillingRepairContext() {
+  if (!adminBillingRepairContext) return;
+  state.billingPage = adminBillingRepairContext.previousPage;
+  adminBillingRepairContext = null;
+  adminViewRenderCache.delete("billing");
+}
+
 function setView(view, options = {}) {
   reconcileAdminBillingLockUi();
   if (!operationsAccessReady()) {
@@ -199,6 +206,12 @@ function setView(view, options = {}) {
     showToast("현재 계정에서 사용할 수 없는 메뉴입니다.");
   }
   if (!options.skipLock && !requestAdminUnlock(view)) return;
+  const contextChanged = Boolean(adminBillingRepairContext) || (view === "billing" && options.billingRepairContext === true);
+  clearAdminBillingRepairContext();
+  if (view === "billing" && options.billingRepairContext === true) {
+    adminBillingRepairContext = { previousPage: state.billingPage };
+    state.billingPage = 0;
+  }
   const previousView = state.view;
   const enteringSchedule = view === "schedule" && previousView !== "schedule";
   closeCleanMemberInlineEditor(view);
@@ -221,7 +234,7 @@ function setView(view, options = {}) {
     settings: "운영 설정",
   };
   $("#viewTitle").textContent = titles[view];
-  const reuseRenderedView = canReuseAdminView(view);
+  const reuseRenderedView = !contextChanged && canReuseAdminView(view);
   if (enteringSchedule && !reuseRenderedView) {
     const grid = $("#scheduleGrid");
     if (grid) {
