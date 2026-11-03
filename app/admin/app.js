@@ -1297,6 +1297,16 @@ let scheduleV2IntegrityPreviewState = {
 
 window.TennisNoteAdminScheduleV2Bridge = {
   snapshot: scheduleV2AdminBridgeSnapshot,
+  integrityContext: () => {
+    const client = window.TennisNoteDataClient;
+    const session = client?.getSession?.();
+    const actorId = String(client?.sessionSubject?.(session) || "");
+    return {
+      authorized: Boolean(session?.access_token && actorId && operationsRole() === "admin" && operationsAccessReady()),
+      actorId,
+      branchId: String(activeOperationBranchId() || ""),
+    };
+  },
   saveOneDayBooking: async ({
     bookingId = null,
     coachRoleId,
@@ -1352,7 +1362,7 @@ window.TennisNoteAdminScheduleV2Bridge = {
     }
     return refreshed;
   },
-  rpc: (name, parameters = {}) => window.TennisNoteDataClient?.rpc?.(name, parameters),
+  rpc: (name, parameters = {}, options = {}) => window.TennisNoteDataClient?.rpc?.(name, parameters, options),
 };
 
 restoreSnapshot();
