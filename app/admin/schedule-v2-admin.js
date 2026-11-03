@@ -103,6 +103,8 @@
     postSaveRefreshPending: false,
     policyEditorDirty: false,
     integrityRepairGroups: new Map(),
+    integrityContext: null,
+    integrityBusy: false,
   };
 
   function bridge() {
@@ -422,14 +424,37 @@
     return [...new Set(names)].join(" · ") || "이름 확인 필요";
   }
 
+  function currentIntegrityContext() {
+    try {
+      const value = bridge()?.integrityContext?.();
+      return value?.authorized && value.actorId && value.branchId ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function matchesIntegrityContext(expected) {
+    const current = currentIntegrityContext();
+    return Boolean(current && expected && current.actorId === expected.actorId && current.branchId === expected.branchId);
+  }
+
   async function runScheduleV2MemberIntegrityPreview() {
     const button = $("#scheduleV2IntegrityButton");
     const applyButton = $("#scheduleV2IntegrityApplyButton");
     const summary = $("#scheduleV2IntegritySummary");
     const list = $("#scheduleV2IntegrityList");
-    if (!button || !summary || !list || !bridge()?.rpc) return;
+    if (!button || button.disabled || state.integrityBusy || !summary || !list || !bridge()?.rpc) return;
+    const context = currentIntegrityContext();
+    if (!context) {
+      state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
+      if (applyButton) applyButton.disabled = true;
+      summary.textContent = "관리자와 운영 지점을 확인해 주세요.";
+      return;
+    }
     button.disabled = true;
     state.integrityRepairGroups = new Map();
+    state.integrityContext = null;
     if (applyButton) {
       applyButton.disabled = true;
       applyButton.textContent = "확정 가능한 일정 생성";
@@ -439,15 +464,18 @@
     try {
       const response = await bridge().rpc("tn_admin_schedule_v2_member_integrity_preview", {});
       const result = Array.isArray(response) ? response[0] || {} : response || {};
-      const items = Array.isArray(result.items) ? result.items : [];
+      if (!matchesIntegrityContext(context)) throw new Error("integrity_context_changed");
+      const items = (Array.isArray(result.items) ? result.items : [])
+        .filter((item) => String(item.branchId || "") === context.branchId);
       const groupedItems = groupedScheduleIntegrityItems(items);
-      const affectedMembers = Number(result.affectedMemberCount) || 0;
-      const affectedTickets = Number(result.affectedTicketCount) || 0;
+      const affectedMembers = new Set(items.map((item) => String(item.userId || "")).filter(Boolean)).size;
+      const affectedTickets = new Set(items.map((item) => String(item.ticketId || "")).filter(Boolean)).size;
       const reconcileByTicket = new Map();
       const missingByBranch = new Map();
       items.forEach((item) => {
         const codes = Array.isArray(item.issueCodes) ? item.issueCodes : [];
-        if (!codes.includes("active_regular_ticket_without_future_lessons") || !item.branchId || !item.ticketId) return;
+        if (!codes.includes("active_regular_ticket_without_future_lessons") || Number(item.futureLessonCount) !== 0
+          || String(item.branchId || "") !== context.branchId || !item.ticketId) return;
         const ticketIds = missingByBranch.get(item.branchId) || new Set();
         ticketIds.add(item.ticketId);
         missingByBranch.set(item.branchId, ticketIds);
@@ -463,22 +491,26 @@
           const rows = Array.isArray(preview?.results) ? preview.results : [];
           rows.forEach((row) => reconcileByTicket.set(row.ticketId, row));
         } catch (error) {
-          console.warn("Schedule V2 integrity reconciliation preview failed", error);
+          throw new Error("integrity_dry_run_failed");
         }
       }));
-      const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
+      if (!matchesIntegrityContext(context)) throw new Error("integrity_context_changed");
       reconcileByTicket.forEach((row, ticketId) => {
         const created = Number(row.createdCount) || 0;
-        const remaining = Number(row.remainingUnassignedUnits) || 0;
-        const conflicts = Number(row.conflictCount) || 0;
+        const remaining = Number(row.remainingUnassignedUnits);
+        const conflicts = Number(row.conflictCount);
         const item = items.find((candidate) => String(candidate.ticketId) === String(ticketId));
-        if (!item?.branchId || created < 1 || remaining > 0 || conflicts > 0) return;
+        const codes = Array.isArray(item?.issueCodes) ? item.issueCodes : [];
+        if (String(item?.branchId || "") !== context.branchId || Number(item?.futureLessonCount) !== 0
+          || !codes.includes("active_regular_ticket_without_future_lessons")
+          || row.eligible !== true || created < 1 || remaining !== 0 || conflicts !== 0) return;
         const ticketIds = state.integrityRepairGroups.get(item.branchId) || new Set();
         ticketIds.add(ticketId);
         state.integrityRepairGroups.set(item.branchId, ticketIds);
       });
       const repairableTicketCount = [...state.integrityRepairGroups.values()]
         .reduce((total, ticketIds) => total + ticketIds.size, 0);
+      state.integrityContext = context;
       if (applyButton) {
         applyButton.disabled = repairableTicketCount === 0;
         applyButton.textContent = repairableTicketCount
@@ -486,7 +518,7 @@
           : "확정 가능한 일정 없음";
       }
       summary.textContent = affectedTickets
-        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
+        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${repairableTicketCount}권`
         : "문제 없음";
       list.innerHTML = groupedItems.length
         ? groupedItems.map((item) => {
@@ -500,6 +532,7 @@
         : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
     } catch (error) {
       state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
       if (applyButton) applyButton.disabled = true;
       const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
       summary.textContent = "점검 실패";
@@ -509,34 +542,98 @@
     }
   }
 
+  function integrityApplyResultComplete(result, context, ticketIds) {
+    const expected = new Set([...ticketIds].map(String));
+    const rows = Array.isArray(result?.results) ? result.results : [];
+    const validCount = (value) => Number.isSafeInteger(value) && value >= 0;
+    if (result?.ok !== true || result.dryRun !== false || String(result.branchId || "") !== context.branchId
+      || rows.length !== expected.size || result.candidateCount !== expected.size
+      || result.eligibleCount !== expected.size || result.blockedCount !== 0 || result.remainingUnassignedUnits !== 0
+      || !validCount(result.createdCount) || !validCount(result.createdUnits)) return false;
+    const seen = new Set();
+    let created = 0;
+    let units = 0;
+    for (const row of rows) {
+      const id = String(row?.ticketId || "");
+      if (!expected.has(id) || seen.has(id) || row.ok !== true || row.eligible !== true
+        || !validCount(row.createdCount) || row.createdCount < 1 || !validCount(row.createdUnits)
+        || row.remainingUnassignedUnits !== 0 || row.conflictCount !== 0) return false;
+      seen.add(id);
+      created += row.createdCount;
+      units += row.createdUnits;
+    }
+    return seen.size === expected.size && created === result.createdCount && units === result.createdUnits;
+  }
+
   async function applyScheduleV2IntegrityRepairs() {
     const button = $("#scheduleV2IntegrityApplyButton");
     const groups = [...state.integrityRepairGroups.entries()];
     const ticketCount = groups.reduce((total, [, ticketIds]) => total + ticketIds.size, 0);
-    if (!button || !ticketCount || !bridge()?.rpc || !requireWritableServer("status")) return;
+    const context = state.integrityContext;
+    if (!button || button.disabled || state.integrityBusy || !ticketCount || !bridge()?.rpc) return;
+    if (groups.length !== 1 || groups[0][0] !== context?.branchId || !matchesIntegrityContext(context)) {
+      state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
+      button.disabled = true;
+      setStatus("관리자 권한 또는 운영 지점이 변경됐습니다. 다시 점검해 주세요.", "warning");
+      return;
+    }
+    if (!requireWritableServer("status")) return;
     if (!window.confirm(`충돌 없이 복구 가능한 회원권 ${ticketCount}개의 미래 고정수업을 생성할까요?`)) return;
+    if (!matchesIntegrityContext(context) || !requireWritableServer("status")) {
+      state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
+      button.disabled = true;
+      setStatus("관리자 권한 또는 운영 지점이 변경됐습니다. 다시 점검해 주세요.", "warning");
+      return;
+    }
     button.disabled = true;
+    state.integrityBusy = true;
+    const previewButton = $("#scheduleV2IntegrityButton");
+    if (previewButton) previewButton.disabled = true;
+    let refreshPreview = false;
     setStatus("미래 고정수업을 복구하는 중입니다.");
     try {
+      const latest = await bridge().rpc("tn_admin_schedule_v2_member_integrity_preview", {}, {
+        requireCurrentSession: true, retryAuth: false,
+      });
+      const latestResult = Array.isArray(latest) ? latest[0] : latest;
+      if (!matchesIntegrityContext(context) || !Array.isArray(latestResult?.items)) throw new Error("integrity_context_changed");
+      const currentMissing = new Set(latestResult.items.filter((item) =>
+        String(item.branchId || "") === context.branchId
+        && Number(item.futureLessonCount) === 0 && Array.isArray(item.issueCodes)
+        && item.issueCodes.includes("active_regular_ticket_without_future_lessons")
+      ).map((item) => String(item.ticketId || "")).filter(Boolean));
+      if (![...groups[0][1]].every((id) => currentMissing.has(String(id)))) throw new Error("integrity_preview_changed");
       for (const [branchId, ticketIds] of groups) {
-        await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
+        if (!matchesIntegrityContext(context) || !requireWritableServer("status")) throw new Error("integrity_context_changed");
+        const result = await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
           target_branch_id: branchId,
           target_ticket_ids: [...ticketIds],
           target_operation_key: operationKey("integrity-apply"),
           target_dry_run: false,
-        });
+        }, { requireCurrentSession: true, retryAuth: false });
+        if (!matchesIntegrityContext(context)) throw new Error("integrity_context_changed");
+        if (!integrityApplyResultComplete(result, context, ticketIds)) throw new Error("future_regular_reconcile_incomplete");
       }
       state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
       const refreshed = await refreshWorkspaceAfterWrite(bridge());
-      if (refreshed) {
+      if (refreshed && matchesIntegrityContext(context)) {
         setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
-        await runScheduleV2MemberIntegrityPreview();
+        refreshPreview = true;
       }
-      void bridge()?.refresh?.();
+      if (matchesIntegrityContext(context)) void bridge()?.refresh?.();
     } catch (error) {
-      setStatus(errorMessage(error), "error");
-      button.disabled = false;
+      state.integrityRepairGroups = new Map();
+      state.integrityContext = null;
+      button.disabled = true;
+      setStatus(`${errorMessage(error)} 다시 점검해 주세요.`, "error");
+    } finally {
+      state.integrityBusy = false;
+      if (previewButton) previewButton.disabled = false;
     }
+    if (refreshPreview && matchesIntegrityContext(context)) await runScheduleV2MemberIntegrityPreview();
   }
 
   async function repairExpectedRegularSlot(slot) {
