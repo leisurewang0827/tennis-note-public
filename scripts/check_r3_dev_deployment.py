@@ -1691,10 +1691,24 @@ def main() -> int:
     parser.add_argument('--ci-dashboard575', action='store_true')
     parser.add_argument('--ci-adminreview576', action='store_true')
     parser.add_argument('--ci-schedule577', action='store_true')
+    parser.add_argument('--ci-schedule578', action='store_true')
     args = parser.parse_args()
     try:
+        if args.ci_schedule578:
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574 or args.ci_dashboard575 or args.ci_adminreview576 or args.ci_schedule577), 'SCHEDULEINTEGRITY578_MODE')
+            import check_schedule_integrity_dev578 as schedule578
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            schedule578.ci_pr(event, dict(os.environ), sys.modules[__name__])
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write('scoped=true\n')
+            return 0
+        if os.environ.get('GITHUB_REF') == 'refs/heads/codex/tennisnote-schedule-integrity-dev-20261103':
+            legacy_monthly_need(not (args.ci_adminreview576 or args.ci_dashboard575 or args.ci_schedule577), 'SCHEDULEINTEGRITY578_MODE')
+            import check_schedule_integrity_dev578 as schedule578
+            schedule578.dispatch(args, sys.modules[__name__])
+            return 0
         if args.ci_schedule577:
-            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574 or args.ci_dashboard575 or args.ci_adminreview576), 'SCHEDULECOUNT577_MODE')
+            legacy_monthly_need(not (args.source_only or args.live_preflight or args.branch_preflight or args.ci_personal or args.ci_dispute574 or args.ci_dashboard575 or args.ci_adminreview576 or args.ci_schedule578), 'SCHEDULECOUNT577_MODE')
             import check_schedule_count_dev577 as schedule577
             event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
             schedule577.ci_pr(event, dict(os.environ), sys.modules[__name__])

@@ -31,6 +31,6 @@ test("자동 복구가 중단되는 안전 오류를 관리자에게 설명한�
 });
 
 test("휴무 복구 스크립트는 이전 캐시와 분리된 URL로 로드한다", () => {
-  assert.match(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-20/);
-  assert.doesNotMatch(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-19/);
+  assert.match(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-21/);
+  assert.doesNotMatch(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-20/);
 });
