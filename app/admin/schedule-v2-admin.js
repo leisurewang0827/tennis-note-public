@@ -466,7 +466,6 @@
           console.warn("Schedule V2 integrity reconciliation preview failed", error);
         }
       }));
-      const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
       reconcileByTicket.forEach((row, ticketId) => {
         const created = Number(row.createdCount) || 0;
         const remaining = Number(row.remainingUnassignedUnits) || 0;
@@ -486,7 +485,7 @@
           : "확정 가능한 일정 없음";
       }
       summary.textContent = affectedTickets
-        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
+        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${repairableTicketCount}권`
         : "문제 없음";
       list.innerHTML = groupedItems.length
         ? groupedItems.map((item) => {

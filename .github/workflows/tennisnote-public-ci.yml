@@ -231,6 +231,12 @@ jobs:
         run: |
           python -B tests/r3-dispute-dev574-admission.test.py Admission.test_live_asset_uses_existing_safe_preflight_headers
           python -B scripts/check_r3_dev_deployment.py --ci-dispute574
+      - name: Verify DEV577 schedule count candidate
+        id: schedule577
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-schedule-count-20261103'
+        run: |
+          python -B tests/schedule-count-dev577-admission.test.py
+          python -B scripts/check_r3_dev_deployment.py --ci-schedule577
       - name: Verify DEV576 admin review candidate
         id: adminreview576
         if: github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-review-dev-20261103'
@@ -254,7 +260,7 @@ jobs:
           R3_ROW_SCOPE_CLAIMED: ${{ github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r3-substitute-row-scope-dev569-20261030' }}
           R3_LEGACY_CLAIMED: ${{ startsWith(github.head_ref, 'codex/tennisnote-r3-legacy-monthly-') || startsWith(github.ref, 'refs/heads/codex/tennisnote-r3-legacy-monthly-') || (github.event_name == 'push' && github.event.before == '8cef5b40228c929693c31aaa8af2a089cb0262f4') }}
         run: |
-          if [ '${{ steps.personal573.outputs.scoped }}' = true ] || [ '${{ steps.dispute574.outputs.scoped }}' = true ] || [ '${{ steps.dashboard575.outputs.scoped }}' = true ] || [ '${{ steps.adminreview576.outputs.scoped }}' = true ]; then
+          if [ '${{ steps.personal573.outputs.scoped }}' = true ] || [ '${{ steps.dispute574.outputs.scoped }}' = true ] || [ '${{ steps.dashboard575.outputs.scoped }}' = true ] || [ '${{ steps.adminreview576.outputs.scoped }}' = true ] || [ '${{ steps.schedule577.outputs.scoped }}' = true ]; then
             echo 'scoped=true' >> "$GITHUB_OUTPUT"
           elif [ "$R3_ROW_SCOPE_CLAIMED" = true ]; then
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --row-scope
