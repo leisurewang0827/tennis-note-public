@@ -1999,6 +1999,7 @@
     loadConfig,
     readiness,
     getSession,
+    sessionSubject,
     sessionPersistence,
     setSessionPersistence,
     refreshSession,
