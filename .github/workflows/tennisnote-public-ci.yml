@@ -113,8 +113,14 @@ jobs:
             ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-dashboard-prod-20261102') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '7b8310d137c19d7a8ac2b828de32f2e24e6c7d83' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin dashboard 564')) }}
           ADMIN_REVIEW_CLAIMED: >-
             ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-admin-review-prod-20261103') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '00569d95246a06aff17035e77eb8027868455760' && startsWith(github.event.head_commit.message, 'release(tennisnote): admin review 565')) }}
+          SCHEDULE_INTEGRITY_CLAIMED: >-
+            ${{ (github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-schedule-integrity-prod-20261103') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '905e8b65d5fa540f7d410e6b0255587f566d68dd' && startsWith(github.event.head_commit.message, 'release(tennisnote): schedule integrity 566')) }}
         run: |
-          if [ "$ADMIN_REVIEW_CLAIMED" = true ]; then
+          if [ "$SCHEDULE_INTEGRITY_CLAIMED" = true ]; then
+            python -B scripts/check_schedule_integrity_prod566.py --ci
+            echo 'scoped=true' >> "$GITHUB_OUTPUT"
+            echo 'schedule_integrity566_only=true' >> "$GITHUB_OUTPUT"
+          elif [ "$ADMIN_REVIEW_CLAIMED" = true ]; then
             python -B scripts/check_admin_review_prod565.py --ci
             echo 'scoped=true' >> "$GITHUB_OUTPUT"
             echo 'adminreview565_only=true' >> "$GITHUB_OUTPUT"
@@ -127,6 +133,11 @@ jobs:
           else
             node scripts/check_r3_purchase_identity_admission.mjs --ci-route --checkout-mode
           fi
+      - name: Verify PROD566 schedule integrity candidate
+        if: steps.display.outputs.schedule_integrity566_only == 'true' && github.event_name == 'pull_request'
+        run: |
+          python -B tests/schedule-integrity-prod566-admission.test.py
+          node --test tests/admin-schedule-integrity-count.test.js tests/admin-schedule-integrity-wiring.test.cjs tests/admin-holiday-reopen.test.js
       - name: Verify PROD565 admin review candidate
         if: steps.display.outputs.adminreview565_only == 'true' && github.event_name == 'pull_request'
         run: |
