@@ -24,11 +24,12 @@
     ["regular", "coupon"].includes(row.productKind) && [20, 30, 40, 60].includes(row.lessonMinutes);
   const paint = () => {
     const action = fields.action.value;
+    const ticketReady = Boolean(state && ticket()?.id === state.ticketId);
     for (const group of groups) {
       group.hidden = group.dataset.r4Write !== action;
-      group.disabled = group.hidden;
+      group.disabled = group.hidden || !ticketReady || saving;
     }
-    submit.disabled = saving || !state || !ticket() ||
+    submit.disabled = saving || !ticketReady ||
       (action === "memo" && !state.membership) ||
       (action === "payment" && !payment()) ||
       (action === "lesson" && (!singleLessonEligible(ticket()) || !fields.coach.value));
@@ -85,9 +86,13 @@
     clearTicket();
     status.textContent = "";
     if (!selected || !current(stamp, branchId) || roster.branchId !== branchId) return;
+    status.textContent = "회원권을 불러오는 중입니다.";
     try {
       const result = await readTicket(branchId, selected.id);
-      if (current(stamp, branchId) && ticket()?.id === selected.id) showTicket(result);
+      if (current(stamp, branchId) && ticket()?.id === selected.id) {
+        showTicket(result);
+        status.textContent = "";
+      }
     } catch {
       if (current(stamp, branchId)) status.textContent = "회원권을 조회할 수 없습니다.";
     }

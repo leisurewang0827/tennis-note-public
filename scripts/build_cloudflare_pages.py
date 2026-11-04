@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -244,10 +245,26 @@ def build_member(output: Path) -> None:
     copy_public_pages(output)
 
 
+def sync_admin_release_labels(output: Path) -> None:
+    manifest = json.loads((output / "release.json").read_text(encoding="utf-8"))
+    script = output / "shared" / "tennisnote-release.js"
+    contents = script.read_text(encoding="utf-8")
+    for key in ("version", "releaseId", "appSurfaceVersion", "deployedAt"):
+        value = manifest.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"Missing administrator release field: {key}")
+        pattern = rf'^    {key}: "[^"\n]*",$'
+        contents, count = re.subn(pattern, lambda _: f"    {key}: {json.dumps(value)},", contents, flags=re.M)
+        if count != 1:
+            raise ValueError(f"Administrator release template changed: {key}")
+    script.write_text(contents, encoding="utf-8")
+
+
 def build_admin(output: Path) -> None:
     copy_directory(APP_ROOT / "admin", output)
     copy_directory(APP_ROOT / "shared", output / "shared")
     shutil.copy2(APP_ROOT / "release.json", output / "release.json")
+    sync_admin_release_labels(output)
     brand = APP_ROOT / "tennis-note-member-app" / "assets" / "brand"
     local_brand = output / "assets" / "brand"
     local_brand.mkdir(parents=True, exist_ok=True)

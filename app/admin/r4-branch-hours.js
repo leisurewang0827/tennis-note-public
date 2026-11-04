@@ -6,6 +6,7 @@
   const start = el("r4BranchOpenStart");
   const end = el("r4BranchOpenEnd");
   const status = el("r4BranchHoursStatus");
+  const loginMessage = el("operationsLoginMessage");
   if (![panel, select, form, start, end, status].every(Boolean)) return;
   let client;
   let actor = "";
@@ -20,6 +21,7 @@
     actor = "";
     branchHours = null;
     panel.hidden = true;
+    if (loginMessage) loginMessage.hidden = false;
     form.hidden = true;
     select.replaceChildren();
     start.value = "";
@@ -105,6 +107,7 @@
         if (!choices.length) return;
         select.replaceChildren(placeholder, ...choices);
         panel.hidden = false;
+        if (loginMessage) loginMessage.hidden = true;
       } catch {
         // Pre-R4 deployments have no RPC. Leave the existing login path untouched.
       }

@@ -11,22 +11,31 @@ import urllib.request
 REPO = "leisurewang0827/tennis-note-public"
 BRANCH = "codex/tennisnote-r4-admin-dev-20261104"
 BASE = "15f046722252a75892886ca7afd67a4fea37ea9f"
+REVIEWED_PARENT = "d7741422bca27cd6080b8ca64bd12214c12d4482"
 PROJECT = "tennisnote-admin-dev"
-PRIOR_URL = "https://403f3964.tennisnote-admin-dev.pages.dev"
+PRIOR_URL = "https://1e437cb9.tennisnote-admin-dev.pages.dev"
+PRIOR_DEPLOYMENT = "1e437cb9-8252-46de-8be9-6485b79122dc"
+VERSION = "1.0.580"
+RELEASE_ID = "2026.11.04.02"
 FINGERPRINT = "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba"
 WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 CI_WORKFLOW = ".github/workflows/tennisnote-public-ci.yml"
 BASE_BRANCH = "codex/tennisnote-schedule-integrity-dev-20261103"
 FILES = {
     WORKFLOW, CI_WORKFLOW, "scripts/check_r4_admin_dev_deployment.py", "app/release.json",
+    "scripts/build_cloudflare_pages.py",
     "app/admin/index.html", "app/admin/views/settings.js",
     "app/admin/r4-branch-hours.js", "app/admin/r4-branch-admin-writes.js",
 }
+FOLLOWUP_FILES = {
+    "app/admin/index.html", "app/admin/r4-branch-hours.js", "app/admin/r4-branch-admin-writes.js",
+    "app/release.json", "scripts/build_cloudflare_pages.py", "scripts/check_r4_admin_dev_deployment.py",
+}
 ASSETS = {
-    "app/admin/index.html": "058f8e50467cdef1309912eb5d2b5339d561fbba186747b2cd56d999180d0def",
+    "app/admin/index.html": "a5c20bc2841a1ffd75b395a94ec9050dbd0d9818b31e0c1cd5d6a91f44396fa2",
     "app/admin/views/settings.js": "ced03f101de01eeb7661b3d21bc7c09f48bb7aa8c951a09ad9616481536687fa",
-    "app/admin/r4-branch-hours.js": "db754b5d6970f40ed76fa040c35883d6711f18ab6eb9eceb87a133755d653765",
-    "app/admin/r4-branch-admin-writes.js": "76a11bcf580fbe185f770fad81e1a42f7c696ba6c591dcd7ae9dcf962d346e97",
+    "app/admin/r4-branch-hours.js": "5bd021d6792e6949d54fe466fe36a937226043c7cd1ac36b7e815dded6bd6a66",
+    "app/admin/r4-branch-admin-writes.js": "f4d705df89b17f4777ab400e1c639caa740c542b80346a8d5857c0e1e8e4e1f8",
 }
 
 def need(condition, reason):
@@ -56,6 +65,7 @@ def check_ci_source(env, event):
     head, base = pr.get("head") or {}, pr.get("base") or {}
     target = head.get("sha")
     need(env.get("GITHUB_EVENT_NAME") == "pull_request" and env.get("GITHUB_REPOSITORY") == REPO
+         and pr.get("number") == 240
          and env.get("GITHUB_RUN_ATTEMPT") == "1" and env.get("GITHUB_HEAD_REF") == BRANCH
          and env.get("GITHUB_BASE_REF") == BASE_BRANCH and head.get("ref") == BRANCH
          and base.get("ref") == BASE_BRANCH and base.get("sha") == BASE
@@ -65,11 +75,16 @@ def check_ci_source(env, event):
 
 def check_candidate(env, target):
     need(git("rev-parse", "HEAD").decode().strip() == target, "HEAD")
-    need(git("rev-parse", "HEAD^").decode().strip() == BASE, "PARENT")
+    need(git("rev-parse", "HEAD^").decode().strip() == REVIEWED_PARENT
+         and git("rev-parse", "HEAD^^").decode().strip() == BASE, "PARENT")
     need(len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) == 2, "PARENT_COUNT")
     need(not git("status", "--porcelain", "--untracked-files=all").strip(), "DIRTY")
     paths = set(git("diff", "--no-renames", "--name-only", BASE, target).decode().splitlines())
     need(paths == FILES, "EXACT_PATHS")
+    need(set(git("diff", "--no-renames", "--name-only", REVIEWED_PARENT, target).decode().splitlines())
+         == FOLLOWUP_FILES, "EXACT_FOLLOWUP_PATHS")
+    need(sha(git("show", f"{target}:scripts/build_cloudflare_pages.py"))
+         == "af64d2fdd0b581b59881934c814b4f0854f5741c1684f8cb93b89e61661c7222", "BUILDER_DIGEST")
     for path, expected in ASSETS.items():
         need(sha(git("show", f"{target}:{path}")) == expected, "ASSET_DIGEST")
     need(env.get("TENNISNOTE_ENVIRONMENT") == "development"
@@ -81,8 +96,8 @@ def check_candidate(env, target):
     new = json.loads(git("show", target+":app/release.json"))
     allowed = {"version", "releaseId", "appSurfaceVersion", "deployedAt"}
     need(set(new) == set(old) and all(new[k] == old[k] for k in old.keys()-allowed), "RELEASE_METADATA_SCOPE")
-    need(new["version"] == "1.0.579" and new["appSurfaceVersion"] == "1.0.579"
-         and new["releaseId"] == "2026.11.04.01", "RELEASE_ORDER")
+    need(new["version"] == VERSION and new["appSurfaceVersion"] == VERSION
+         and new["releaseId"] == RELEASE_ID, "RELEASE_ORDER")
     return target
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -108,9 +123,9 @@ def verify_ci(get, run_id, target):
          and run.get("status") == "completed" and run.get("conclusion") == "success"
          and (run.get("head_repository") or {}).get("full_name") == REPO, "CI_RECEIPT")
     prs = run.get("pull_requests") or []
-    need(len(prs) == 1 and type(prs[0].get("number")) is int, "CI_PR")
+    need(len(prs) == 1 and prs[0].get("number") == 240, "CI_PR")
     pr = get(f"pulls/{prs[0]['number']}")
-    need((pr.get("head") or {}).get("sha") == target and (pr.get("base") or {}).get("sha") == BASE
+    need(pr.get("state") == "open" and (pr.get("head") or {}).get("sha") == target and (pr.get("base") or {}).get("sha") == BASE
          and ((pr.get("base") or {}).get("repo") or {}).get("full_name") == REPO, "PR_PIN")
     verify_focused_job(get(f"actions/runs/{run_id}/jobs?per_page=100"))
 
@@ -129,11 +144,12 @@ def verify_recovery(project, rows, active, immutable):
     deploy = rows[0]
     meta = (deploy.get("deployment_trigger") or {}).get("metadata") or {}
     need(deploy.get("environment") == "production" and meta.get("branch") == "dev"
-         and meta.get("commit_hash") == BASE and (deploy.get("latest_stage") or {}).get("status") == "success"
+         and meta.get("commit_hash") == REVIEWED_PARENT and (deploy.get("latest_stage") or {}).get("status") == "success"
          and deploy.get("url") == PRIOR_URL
-         and re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", deploy.get("id", "")), "CF_RECOVERY")
+         and deploy.get("id") == PRIOR_DEPLOYMENT, "CF_RECOVERY")
     for manifest in [active, immutable]:
-        need(manifest.get("version") == "1.0.578" and manifest.get("releaseId") == "2026.11.03.03", "LIVE_RELEASE")
+        need(manifest.get("version") == "1.0.579" and manifest.get("releaseId") == "2026.11.04.01", "LIVE_RELEASE")
+    need(active == immutable, "LIVE_RELEASE_CONTENT")
     return deploy["id"]
 
 def verify_artifact(root, target):
@@ -158,7 +174,15 @@ def verify_artifact(root, target):
         if asset != "app/admin/index.html":
             need(sha((root/asset.removeprefix("app/admin/")).read_bytes()) == expected, "BUILT_ASSET")
     release = json.loads((root/"release.json").read_text(encoding="utf-8"))
-    need(release.get("version") == "1.0.579" and release.get("releaseId") == "2026.11.04.01", "BUILT_RELEASE")
+    need(release == json.loads(git("show", f"{target}:app/release.json"))
+         and release.get("version") == VERSION and release.get("releaseId") == RELEASE_ID, "BUILT_RELEASE")
+    built_labels = (root/"shared/tennisnote-release.js").read_text(encoding="utf-8")
+    template = git("show", f"{BASE}:app/shared/tennisnote-release.js").decode()
+    for key in ("version", "releaseId", "appSurfaceVersion", "deployedAt"):
+        template, n = re.subn(rf'^    {key}: "[^"\n]*",$',
+                              lambda _: f"    {key}: {json.dumps(release[key])},", template, flags=re.M)
+        need(n == 1, "RELEASE_LABEL_TEMPLATE")
+    need(built_labels == template, "BUILT_RELEASE_LABELS")
 
 def main():
     target = check_source(os.environ)

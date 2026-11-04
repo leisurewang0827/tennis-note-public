@@ -51,6 +51,7 @@
         <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
         <section id="r4BranchHoursPanel" aria-labelledby="r4BranchHoursTitle" hidden>
           <h2 id="r4BranchHoursTitle">내 지점 운영시간</h2>
+          <p>승인된 지점만 관리할 수 있습니다.</p>
           <label>승인된 지점 <select id="r4ManagedBranch"></select></label>
           <form id="r4BranchHoursForm" class="operations-password-login-form" hidden>
             <label>시작 시간 <input id="r4BranchOpenStart" type="time" step="1" required /></label>
@@ -65,7 +66,7 @@
               <option value="payment">미확인 수동 결제</option>
               <option value="lesson">단일 수업</option>
             </select></label>
-            <fieldset data-r4-write="memo">
+            <fieldset data-r4-write="memo" disabled>
               <label>회원권 메모 <textarea name="memo" maxlength="500"></textarea></label>
             </fieldset>
             <fieldset data-r4-write="payment" hidden disabled>
@@ -2263,7 +2264,7 @@
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script src="../shared/tennisnote-curriculum-search.js?v=1.0.578"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-release.js?v=r4-admin-ui2"></script>
     <script src="../shared/tennisnote-release-updater.js?v=1.0.578"></script>
     <script src="../shared/tennisnote-ui-language.js?v=1.0.578"></script>
     <script src="../shared/tennisnote-ticket-state.js?v=1.0.578"></script>
@@ -2306,8 +2307,8 @@
     <script src="./views/notes.js?v=1.0.578"></script>
     <script src="./views/reports.js?v=1.0.578"></script>
     <script src="./views/schedule.js?v=1.0.578"></script>
-    <script src="./r4-branch-hours.js?v=r4-f1e28f0aa6d6"></script>
-    <script src="./r4-branch-admin-writes.js?v=r4-f1e28f0aa6d6"></script>
+    <script src="./r4-branch-hours.js?v=r4-admin-ui2"></script>
+    <script src="./r4-branch-admin-writes.js?v=r4-admin-ui2"></script>
     <script src="./views/settings.js?v=r4-f1e28f0aa6d6"></script>
     <script src="./data/billing.js?v=1.0.578"></script>
     <script src="./data/common.js?v=1.0.578"></script>
