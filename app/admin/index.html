@@ -70,6 +70,16 @@
             <button class="primary-button" type="submit">운영시간 저장</button>
           </form>
           <p id="r4BranchHoursStatus" aria-live="polite"></p>
+          <form id="r4BranchOperations" class="operations-password-login-form" aria-label="내 지점 운영 설정" hidden>
+            <label>지점 설정 <select name="action">
+              <option value="policy">수업 정책</option>
+              <option value="product">회원권 상품 등록</option>
+              <option value="import">엑셀 초기 등록</option>
+            </select></label>
+            <fieldset></fieldset>
+            <button class="primary-button" type="submit" disabled>정책 저장</button>
+            <p role="status" aria-live="polite"></p>
+          </form>
           <form id="r4FirstLessonSetup" class="operations-password-login-form" aria-label="첫 수업 준비" hidden>
             <p>이 지점의 첫 코치·20분 5회권 상품·회원을 등록합니다. 결제나 계정 연결은 하지 않습니다.</p>
             <label>첫 코치 이름 <input name="coachName" minlength="2" maxlength="60" required /></label>
@@ -2321,9 +2331,10 @@
     <script src="./views/reports.js?v=1.0.566"></script>
     <script src="./views/schedule.js?v=1.0.566"></script>
     <script src="./r4-branch-hours.js?v=r4-pilot-d57c20f26113"></script>
-    <script src="./r4-branch-admin-writes.js?v=r4-pilot-d57c20f26113"></script>
+    <script src="./r4-branch-admin-writes.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./r4-onboarding.js?v=r4-pilot-d57c20f26113"></script>
-    <script src="./views/settings.js?v=r4-pilot-d57c20f26113"></script>
+    <script src="./r4-branch-operations.js?v=r4-ops-d75f6a0c54a0"></script>
+    <script src="./views/settings.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./data/billing.js?v=1.0.566"></script>
     <script src="./data/common.js?v=1.0.566"></script>
     <script src="./data/member.js?v=1.0.566"></script>

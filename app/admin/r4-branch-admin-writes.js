@@ -100,6 +100,7 @@
     }
   }
   branch.addEventListener("change", loadBranch);
+  branch.addEventListener("r4-ticket-imported", loadBranch);
   setup?.addEventListener("submit", async event => {
     event.preventDefault();
     const branchId = branch.value, stamp = epoch, originalActor = actor;

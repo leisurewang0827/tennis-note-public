@@ -26,9 +26,11 @@ jobs:
           test "$APPROVED_SHA" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           base=dfee6f9324d12e914c65acf4ea4582bf807a839b
-          test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $base"
+          prior=2be559dba0e1dc1e6e791a892cfef834a8de4501
+          test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $prior"
+          test "$(git rev-parse "$prior^")" = "$base"
           test "$(git rev-parse refs/remotes/origin/main)" = "$base"
-          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-onboarding.js app/admin/views/settings.js) <(git diff --name-only "$base" HEAD)
+          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/views/settings.js) <(git diff --name-only "$base" HEAD)
       - name: Build administrator only
         env:
           TENNISNOTE_SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
@@ -57,6 +59,8 @@ jobs:
           assert not (root / "tennis-note-coach-app/index.html").exists()
           assert "r4Onboarding" in (root / "index.html").read_text(encoding="utf-8")
           assert (root / "r4-onboarding.js").is_file()
+          assert "r4BranchOperations" in (root / "index.html").read_text(encoding="utf-8")
+          assert (root / "r4-branch-operations.js").is_file()
           cfg = (root / "shared/config.local.js").read_text(encoding="utf-8")
           match = re.search(r"window\.TENNISNOTE_CONFIG\s*=\s*(\{.*?\});", cfg, re.S)
           assert match is not None
