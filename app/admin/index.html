@@ -49,6 +49,38 @@
           <button class="provider-login-button naver" type="button" data-admin-login-provider="네이버">네이버로 로그인</button>
         </div>
         <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
+        <section id="r4BranchHoursPanel" aria-labelledby="r4BranchHoursTitle" hidden>
+          <h2 id="r4BranchHoursTitle">내 지점 운영시간</h2>
+          <label>승인된 지점 <select id="r4ManagedBranch"></select></label>
+          <form id="r4BranchHoursForm" class="operations-password-login-form" hidden>
+            <label>시작 시간 <input id="r4BranchOpenStart" type="time" step="1" required /></label>
+            <label>종료 시간 <input id="r4BranchOpenEnd" type="time" step="1" required /></label>
+            <button class="primary-button" type="submit">운영시간 저장</button>
+          </form>
+          <p id="r4BranchHoursStatus" aria-live="polite"></p>
+          <form id="r4BranchSaveForm" class="operations-password-login-form" aria-label="지점 업무 저장" hidden>
+            <label>회원권 <select name="ticket" required></select></label>
+            <label>저장할 항목 <select name="action">
+              <option value="memo">회원권 메모</option>
+              <option value="payment">미확인 수동 결제</option>
+              <option value="lesson">단일 수업</option>
+            </select></label>
+            <fieldset data-r4-write="memo">
+              <label>회원권 메모 <textarea name="memo" maxlength="500"></textarea></label>
+            </fieldset>
+            <fieldset data-r4-write="payment" hidden disabled>
+              <label>미확인 수동 결제 <select name="payment" required></select></label>
+              <label>금액(원) <input name="amount" type="number" min="1" max="2147483647" step="1" required /></label>
+            </fieldset>
+            <fieldset data-r4-write="lesson" hidden disabled>
+              <label>담당 코치 <select name="coach" required></select></label>
+              <label>수업 날짜 <input name="date" type="date" required /></label>
+              <label>시작 시간 <input name="time" type="time" required /></label>
+            </fieldset>
+            <button class="primary-button" type="submit" disabled>저장</button>
+          </form>
+          <p id="r4BranchSaveStatus" aria-live="polite"></p>
+        </section>
         <small class="operations-access-note">코치는 회원·시간표·수업기록만 이용할 수 있습니다.</small>
         <small class="release-version" data-tennisnote-release="detail"></small>
       </div>
@@ -2274,7 +2306,9 @@
     <script src="./views/notes.js?v=1.0.578"></script>
     <script src="./views/reports.js?v=1.0.578"></script>
     <script src="./views/schedule.js?v=1.0.578"></script>
-    <script src="./views/settings.js?v=1.0.578"></script>
+    <script src="./r4-branch-hours.js?v=r4-f1e28f0aa6d6"></script>
+    <script src="./r4-branch-admin-writes.js?v=r4-f1e28f0aa6d6"></script>
+    <script src="./views/settings.js?v=r4-f1e28f0aa6d6"></script>
     <script src="./data/billing.js?v=1.0.578"></script>
     <script src="./data/common.js?v=1.0.578"></script>
     <script src="./data/member.js?v=1.0.578"></script>
