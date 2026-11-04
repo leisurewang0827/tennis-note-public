@@ -11,35 +11,46 @@ import urllib.request
 REPO = "leisurewang0827/tennis-note-public"
 BRANCH = "codex/tennisnote-r4-admin-dev-20261104"
 BASE = "15f046722252a75892886ca7afd67a4fea37ea9f"
-REVIEWED_PARENT = "46a90e333c05b607147519144d37c9f8b61ce598"
+REVIEWED_PARENT = "692f532b69cbc332d3aa17aa26eaccaf5e4ecbd4"
 PROJECT = "tennisnote-admin-dev"
-PRIOR_URL = "https://304b2fa8.tennisnote-admin-dev.pages.dev"
-PRIOR_DEPLOYMENT = "304b2fa8-902c-4ddf-b274-f2f1123ea283"
-VERSION = "1.0.581"
-RELEASE_ID = "2026.11.04.03"
+PRIOR_URL = "https://5c75dcf7.tennisnote-admin-dev.pages.dev"
+PRIOR_DEPLOYMENT = "5c75dcf7-fcc3-4203-94d7-aaa699d31a52"
+VERSION = "1.0.582"
+RELEASE_ID = "2026.11.04.04"
 FINGERPRINT = "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba"
 WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 CI_WORKFLOW = ".github/workflows/tennisnote-public-ci.yml"
 BASE_BRANCH = "codex/tennisnote-schedule-integrity-dev-20261103"
 FILES = {
-    WORKFLOW, CI_WORKFLOW, "scripts/check_r4_admin_dev_deployment.py", "app/release.json",
+    ".github/workflows/deploy-cloudflare-pages-dev.yml",
+    ".github/workflows/tennisnote-public-ci.yml",
+    "app/admin/actions/common.js",
+    "app/admin/index.html",
+    "app/admin/r4-branch-admin-writes.js",
+    "app/admin/r4-branch-hours.js",
+    "app/admin/r4-branch-operations.js",
+    "app/admin/r4-onboarding.js",
+    "app/admin/views/settings.js",
+    "app/release.json",
     "scripts/build_cloudflare_pages.py",
-    "app/admin/index.html", "app/admin/views/settings.js",
-    "app/admin/r4-branch-hours.js", "app/admin/r4-branch-admin-writes.js",
-    "app/admin/r4-onboarding.js", "app/admin/actions/common.js",
+    "scripts/check_r4_admin_dev_deployment.py",
 }
 FOLLOWUP_FILES = {
-    "app/admin/index.html", "app/admin/r4-branch-hours.js", "app/admin/r4-branch-admin-writes.js",
-    "app/admin/r4-onboarding.js", "app/admin/actions/common.js", "app/admin/views/settings.js",
-    "app/release.json", "scripts/check_r4_admin_dev_deployment.py",
+    "app/admin/index.html",
+    "app/admin/r4-branch-admin-writes.js",
+    "app/admin/r4-branch-operations.js",
+    "app/admin/views/settings.js",
+    "app/release.json",
+    "scripts/check_r4_admin_dev_deployment.py",
 }
 ASSETS = {
-    "app/admin/index.html": "13e610013a9efdaab117f5c0907044d6d67cf92afb00c68a9c415adf3288969b",
-    "app/admin/views/settings.js": "2cddc6b89711bf6510611ffd5b61aa1b06c28aa192f420d8e18395603446d2c0",
+    "app/admin/index.html": "445bd368ac144081a4e2957c7b1c3ef1b305be248c0c2371aafc7bbdf0ee5ee4",
+    "app/admin/views/settings.js": "93a1130f2a3010a7b81f51d4212459435d7576bc8e885c6ea4987eb7a2e7fea3",
     "app/admin/r4-branch-hours.js": "811f3c7b990c2b48ecf6ebc982eeca744f9999a2987be2bc12d0b675b211fd0b",
-    "app/admin/r4-branch-admin-writes.js": "4912e3e22db470420550d3b72bb04621ad977cc9008dcde2a3301e89f87ad8ee",
+    "app/admin/r4-branch-admin-writes.js": "8b124453005072e06d5f524dbf1e7b3a92ab3e2da137a3b52460e8774fa66d1f",
     "app/admin/r4-onboarding.js": "89e3375f914569cac32998b42f6339494be6ce1a41ab501adde0224bfd4bfb5d",
     "app/admin/actions/common.js": "b6ae4f530368777788b4abe313719a3037a859de8c7b23a0b486b4bc729d36a5",
+    "app/admin/r4-branch-operations.js": "1ae64393eae9a960248b50478861508a5cf88f17e38d26e06e7e5fd890bb969b"
 }
 
 def need(condition, reason):
@@ -80,7 +91,7 @@ def check_ci_source(env, event):
 def check_candidate(env, target):
     need(git("rev-parse", "HEAD").decode().strip() == target, "HEAD")
     need(git("rev-parse", "HEAD^").decode().strip() == REVIEWED_PARENT
-         and git("rev-parse", "HEAD^^^").decode().strip() == BASE, "PARENT")
+         and git("rev-parse", "HEAD^^^^").decode().strip() == BASE, "PARENT")
     need(len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) == 2, "PARENT_COUNT")
     need(not git("status", "--porcelain", "--untracked-files=all").strip(), "DIRTY")
     paths = set(git("diff", "--no-renames", "--name-only", BASE, target).decode().splitlines())
@@ -150,9 +161,10 @@ def verify_recovery(project, rows, active, immutable):
     need(deploy.get("environment") == "production" and meta.get("branch") == "dev"
          and meta.get("commit_hash") == REVIEWED_PARENT and (deploy.get("latest_stage") or {}).get("status") == "success"
          and deploy.get("url") == PRIOR_URL
+         and PRIOR_DEPLOYMENT != "UNBOUND_BLOCK_DEPLOYMENT"
          and deploy.get("id") == PRIOR_DEPLOYMENT, "CF_RECOVERY")
     for manifest in [active, immutable]:
-        need(manifest.get("version") == "1.0.580" and manifest.get("releaseId") == "2026.11.04.02", "LIVE_RELEASE")
+        need(manifest.get("version") == "1.0.581" and manifest.get("releaseId") == "2026.11.04.03", "LIVE_RELEASE")
     need(active == immutable, "LIVE_RELEASE_CONTENT")
     return deploy["id"]
 
