@@ -33,6 +33,18 @@ function renderOperationsLoginGate() {
     initializeOperationsSessionPersistence();
   }
   applyOperationsRolePermissions();
+  window.TennisNoteR4BranchHours?.refresh?.({
+    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    client: window.TennisNoteDataClient,
+  });
+  window.TennisNoteR4BranchAdminWrites?.refresh?.({
+    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    client: window.TennisNoteDataClient,
+  });
+  window.TennisNoteR4Onboarding?.refresh?.({
+    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    client: window.TennisNoteDataClient,
+  });
 }
 
 function renderAdminLockModal() {
