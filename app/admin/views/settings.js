@@ -41,6 +41,10 @@ function renderOperationsLoginGate() {
     allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
     client: window.TennisNoteDataClient,
   });
+  window.TennisNoteR4Onboarding?.refresh?.({
+    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    client: window.TennisNoteDataClient,
+  });
 }
 
 function renderAdminLockModal() {

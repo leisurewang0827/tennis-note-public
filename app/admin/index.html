@@ -49,6 +49,17 @@
           <button class="provider-login-button naver" type="button" data-admin-login-provider="네이버">네이버로 로그인</button>
         </div>
         <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
+        <section id="r4Onboarding" aria-labelledby="r4OnboardingTitle" hidden>
+          <h2 id="r4OnboardingTitle">지점 신청</h2>
+          <form id="r4ApplicationForm" class="operations-password-login-form" hidden>
+            <label>사업장 이름 <input name="organization" minlength="2" maxlength="100" required /></label>
+            <label>지점 이름 <input name="branch" minlength="2" maxlength="100" required /></label>
+            <button class="primary-button" type="submit" disabled>지점 신청</button>
+          </form>
+          <div id="r4ApplicationList"></div>
+          <button id="r4ApplicationRefresh" class="ghost-button" type="button">상태 새로 확인</button>
+          <p id="r4ApplicationStatus" aria-live="polite"></p>
+        </section>
         <section id="r4BranchHoursPanel" aria-labelledby="r4BranchHoursTitle" hidden>
           <h2 id="r4BranchHoursTitle">내 지점 운영시간</h2>
           <p>승인된 지점만 관리할 수 있습니다.</p>
@@ -59,6 +70,13 @@
             <button class="primary-button" type="submit">운영시간 저장</button>
           </form>
           <p id="r4BranchHoursStatus" aria-live="polite"></p>
+          <form id="r4FirstLessonSetup" class="operations-password-login-form" aria-label="첫 수업 준비" hidden>
+            <p>이 지점의 첫 코치·20분 5회권 상품·회원을 등록합니다. 결제나 계정 연결은 하지 않습니다.</p>
+            <label>첫 코치 이름 <input name="coachName" minlength="2" maxlength="60" required /></label>
+            <label>첫 상품 이름 <input name="productName" minlength="2" maxlength="80" required /></label>
+            <label>첫 회원 이름 <input name="memberName" minlength="2" maxlength="60" required /></label>
+            <button class="primary-button" type="submit" disabled>첫 수업 준비</button>
+          </form>
           <form id="r4BranchSaveForm" class="operations-password-login-form" aria-label="지점 업무 저장" hidden>
             <label>회원권 <select name="ticket" required></select></label>
             <label>저장할 항목 <select name="action">
@@ -2307,9 +2325,10 @@
     <script src="./views/notes.js?v=1.0.578"></script>
     <script src="./views/reports.js?v=1.0.578"></script>
     <script src="./views/schedule.js?v=1.0.578"></script>
-    <script src="./r4-branch-hours.js?v=r4-admin-ui2"></script>
-    <script src="./r4-branch-admin-writes.js?v=r4-admin-ui2"></script>
-    <script src="./views/settings.js?v=r4-f1e28f0aa6d6"></script>
+    <script src="./r4-branch-hours.js?v=r4-admin-onboarding1"></script>
+    <script src="./r4-branch-admin-writes.js?v=r4-admin-onboarding1"></script>
+    <script src="./r4-onboarding.js?v=r4-admin-onboarding1"></script>
+    <script src="./views/settings.js?v=r4-admin-onboarding1"></script>
     <script src="./data/billing.js?v=1.0.578"></script>
     <script src="./data/common.js?v=1.0.578"></script>
     <script src="./data/member.js?v=1.0.578"></script>
@@ -2321,7 +2340,7 @@
     <script src="./forms/schedule.js?v=1.0.578"></script>
     <script src="./actions/billing.js?v=1.0.578"></script>
     <script src="./actions/coach.js?v=1.0.578"></script>
-    <script src="./actions/common.js?v=1.0.578"></script>
+    <script src="./actions/common.js?v=r4-admin-onboarding1"></script>
     <script src="./actions/member.js?v=1.0.578"></script>
     <script src="./actions/notice.js?v=1.0.578"></script>
     <script src="./actions/report.js?v=1.0.578"></script>

@@ -2,12 +2,15 @@
   const branch = document.getElementById("r4ManagedBranch");
   const form = document.getElementById("r4BranchSaveForm");
   const status = document.getElementById("r4BranchSaveStatus");
+  const setup = document.getElementById("r4FirstLessonSetup");
+  const setupSubmit = setup?.querySelector('button[type="submit"]');
   if (!branch || !form || !status) return;
   const fields = form.elements;
   const submit = form.querySelector("button[type=submit]");
   const groups = [...form.querySelectorAll("[data-r4-write]")];
   const auth = Object.freeze({ requireCurrentSession: true, retryAuth: false });
   let client, actor, roster, state, pendingLesson, epoch = 0, saving = false;
+  let setupBusy = false;
   const current = (stamp, branchId) => stamp === epoch && actor &&
     actor === client?.sessionSubject?.() && branch.value === branchId;
   const option = (value, name) => {
@@ -63,6 +66,11 @@
     const stamp = ++epoch, branchId = branch.value;
     roster = null;
     form.hidden = true;
+    if (setup) {
+      setup.hidden = true;
+      setupSubmit.disabled = true;
+      setup.reset();
+    }
     clearTicket();
     status.textContent = "";
     if (!branchId || !current(stamp, branchId)) return;
@@ -76,7 +84,10 @@
       setOptions(fields.ticket, "회원권 선택", result.tickets.map(t => ({ id: t.id, name: t.name + " · " + t.productName })));
       setOptions(fields.coach, "코치 선택", result.coaches);
       form.hidden = !result.tickets.length;
-      if (form.hidden) status.textContent = "이 지점에 표시할 회원권이 없습니다.";
+      if (setup && form.hidden && !result.coaches.length && root.TennisNoteR4Onboarding?.ownsApprovedBranch(branchId)) {
+        setup.hidden = false;
+        setupSubmit.disabled = setupBusy;
+      } else if (form.hidden) status.textContent = "이 지점에 표시할 회원권이 없습니다.";
     } catch {
       if (current(stamp, branchId)) status.textContent = "이 지점의 업무 자료를 조회할 수 없습니다.";
     }
@@ -98,6 +109,38 @@
     }
   }
   branch.addEventListener("change", loadBranch);
+  setup?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const branchId = branch.value, stamp = epoch, originalActor = actor;
+    if (setupBusy || setup.hidden || setupSubmit.disabled || !current(stamp, branchId)
+        || roster?.branchId !== branchId || roster.coaches.length || roster.tickets.length
+        || !setup.reportValidity()) return;
+    const names = ["coachName", "productName", "memberName"].map(name => setup.elements[name].value.trim());
+    if (names.some(name => name.length < 2)) return;
+    setupBusy = true;
+    setupSubmit.disabled = true;
+    status.textContent = "첫 수업 준비 결과를 확인하는 중입니다.";
+    try {
+      const saved = await rpc("tn_r4_initialize_first_lesson", {
+        target_branch_id: branchId, target_coach_name: names[0], target_product_name: names[1], target_member_name: names[2],
+      });
+      if (!current(stamp, branchId)) return;
+      if (saved?.branchId !== branchId || saved.paymentEnabled !== false ||
+          !saved.ticketId || !saved.coachId || !saved.memberId || !saved.productId) throw Error("r4_setup_receipt");
+      await loadBranch();
+      if (actor !== originalActor || actor !== client?.sessionSubject?.() || branch.value !== branchId) return;
+      if (!roster?.coaches.some(row => row.id === saved.coachId && row.name === names[0]) ||
+          !roster?.tickets.some(row => row.id === saved.ticketId && row.userId === saved.memberId &&
+            row.name === names[2] && row.productName === names[1])) throw Error("r4_setup_readback");
+      status.textContent = "등록을 확인했습니다. 단일 수업을 저장할 수 있습니다.";
+    } catch {
+      if (actor === originalActor && actor === client?.sessionSubject?.() && branch.value === branchId) {
+        status.textContent = "등록 결과를 확인할 수 없습니다. 지점을 다시 선택해 기록부터 확인해 주세요.";
+      }
+    } finally {
+      setupBusy = false;
+    }
+  });
   fields.ticket.addEventListener("change", loadTicket);
   fields.action.addEventListener("change", paint);
   fields.coach.addEventListener("change", paint);
@@ -191,6 +234,11 @@
       roster = null;
       pendingLesson = null;
       form.hidden = true;
+      if (setup) {
+        setup.hidden = true;
+        setupSubmit.disabled = true;
+        setup.reset();
+      }
       status.textContent = "";
       clearTicket();
       setOptions(fields.ticket, "회원권 선택", []);

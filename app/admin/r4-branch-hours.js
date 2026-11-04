@@ -82,12 +82,12 @@
     }
   });
   root.TennisNoteR4BranchHours = Object.freeze({
-    async refresh({ allowed, client: nextClient }) {
+    async refresh({ allowed, client: nextClient, openBranchId = "" }) {
       if (!allowed || !nextClient?.rpc || !nextClient?.sessionSubject?.()) {
         if (actor) reset();
         return;
       }
-      if (client === nextClient && actor === currentActor()) return;
+      if (saving || (client === nextClient && actor === currentActor() && !openBranchId)) return;
       reset();
       client = nextClient;
       actor = currentActor();
@@ -108,6 +108,11 @@
         select.replaceChildren(placeholder, ...choices);
         panel.hidden = false;
         if (loginMessage) loginMessage.hidden = true;
+        if (openBranchId && choices.some(option => option.value === openBranchId)) {
+          select.value = openBranchId;
+          select.dispatchEvent(new Event("change"));
+          return true;
+        }
       } catch {
         // Pre-R4 deployments have no RPC. Leave the existing login path untouched.
       }
