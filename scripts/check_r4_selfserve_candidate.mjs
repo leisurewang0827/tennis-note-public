@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 const source = "c20639b1521e8bc8b4e520ade96bd2c5a4e2faf3";
+const admissionParent = "67a5600e8d9b3798d1da37db5d0404d4bd5682a2";
 const repository = "leisurewang0827/tennis-note-public";
 const branch = "refs/heads/codex/tennisnote-r4-admin-prod-candidate";
 const changed = [".github/workflows/deploy-cloudflare-pages.yml", "docs/tennisnote-r4-prod-selfserve-release-approval.json", "scripts/build_r4_prod_selfserve_release.mjs", "scripts/check_r4_selfserve_candidate.mjs"].sort();
@@ -46,7 +47,8 @@ function localReceiptChecks() {
 }
 try {
   const sha = git("rev-parse", ref);
-  assert.equal(git("rev-list", "--parents", "-n", "1", sha), sha + " " + source, "ONE_ADMISSION_COMMIT_ONLY");
+  assert.equal(git("rev-list", "--parents", "-n", "1", sha), sha + " " + admissionParent, "EXACT_ADMISSION_FIX_PARENT_ONLY");
+  assert.equal(git("rev-list", "--parents", "-n", "1", admissionParent), admissionParent + " " + source);
   assert.deepEqual(git("diff", "--name-only", source, sha).split("\n").sort(), changed);
   const plan = JSON.parse(read(sha, "docs/tennisnote-r4-prod-selfserve-release-approval.json"));
   assert.equal(plan.runtimeSource, source);
@@ -60,6 +62,7 @@ try {
   assert.equal(plan.configSha256, "0a89879945c847ecf2244823a1a32ff21dfb6936ecc80706b183c7231671bd64");
   assert.equal(plan.artifactSha256, "f67aca0feb04748be8ebe72e588a2bbfb25d7013f1f8d2561d36eaffed0bcc49");
   assert.equal(plan.operatingBase, "69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da");
+  assert.deepEqual(plan.crlfAssets, ["index.html", "styles.css", "tennis-note-member-app/assets/app-icon.svg", "_headers", "_redirects", "_worker.js"]);
   assert.equal(plan.authorized.paidSales, false);
   assert.equal(plan.authorized.pilot, false);
   assert.equal(plan.authorized.existingPaymentsChanged, false);
