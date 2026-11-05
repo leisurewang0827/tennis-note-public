@@ -25,6 +25,8 @@ export async function rollback(env,request=fetch){
  const results=[];
  for(const plan of plans){
   if(!plan.old){const response=await get(`${plan.api}/deployments/${plan.t.id}/rollback`,true,'POST');assert.equal(response.success,true,'rollback rejected');}
+  const restored=await get(plan.api,true),current=restored.result?.canonical_deployment;
+  assert.equal(restored.success,true);assert.equal(current?.id,plan.t.id);assert.equal(current?.deployment_trigger?.metadata?.commit_hash,plan.t.sha);
   const now=await get(`https://${plan.t.name}.pages.dev/release.json`);assert.deepEqual(now,plan.prior,'rollback readback mismatch');results.push({surface:plan.t.name,state:plan.old?'ALREADY_BASELINE':'ROLLBACK_READBACK_PASS'});
  }
  return {status:'DEVELOPMENT_ROLLBACK_READBACK_PASS',results};
