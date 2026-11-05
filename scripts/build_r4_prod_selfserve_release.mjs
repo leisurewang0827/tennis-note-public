@@ -77,7 +77,7 @@ export async function buildRelease({ repository = process.cwd(), ref = "HEAD", o
   } catch { throw new Error("ADMINISTRATOR_COMPILATION_FAILED_NO_SENSITIVE_LOG"); }
   writeFileSync(join(built, "shared/config.local.js"), config);
   writeFileSync(join(built, "r4-admin-release.json"), JSON.stringify({ sourceSha: plan.runtimeSource, surface: "administrator", configSha256: digest(config), candidateSha256: manifest.candidateSha256 }) + "\n");
-  // 승인된 Windows 산출물의 정확한 여섯 텍스트 파일 줄바꿈을 Linux에서도 재현한다.
+  // 승인된 Windows 산출물의 정확한 일곱 텍스트 파일 줄바꿈을 Linux에서도 재현한다.
   // 설정과 그 외 런타임 bytes는 정규화하지 않는다.
   for (const path of plan.crlfAssets) {
     const file = join(built, path);
