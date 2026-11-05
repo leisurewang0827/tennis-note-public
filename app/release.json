@@ -1,6 +1,6 @@
 {
   "version": "1.0.582",
-  "releaseId": "2026.11.05.01",
+  "releaseId": "2026.11.05.02",
   "appSurfaceVersion": "1.0.582",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "bundled-shell",

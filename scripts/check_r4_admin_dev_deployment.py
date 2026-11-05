@@ -11,12 +11,12 @@ import urllib.request
 REPO = "leisurewang0827/tennis-note-public"
 BRANCH = "codex/tennisnote-r4-admin-dev-20261104"
 BASE = "15f046722252a75892886ca7afd67a4fea37ea9f"
-REVIEWED_PARENT = "1ed38d76cb981761fc23586e89ac78bb3215efeb"
+REVIEWED_PARENT = "98be30a430d217af27d97c7d31c86bd1fa5076a4"
 PROJECT = "tennisnote-admin-dev"
-PRIOR_URL = "https://9f34c515.tennisnote-admin-dev.pages.dev"
-PRIOR_DEPLOYMENT = "9f34c515-4dd2-4b73-8673-29396827547e"
+PRIOR_URL = "https://f7e1af75.tennisnote-admin-dev.pages.dev"
+PRIOR_DEPLOYMENT = "f7e1af75-2f4b-4c7f-ac65-4ed319838fe3"
 VERSION = "1.0.582"
-RELEASE_ID = "2026.11.05.01"
+RELEASE_ID = "2026.11.05.02"
 FINGERPRINT = "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba"
 WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 CI_WORKFLOW = ".github/workflows/tennisnote-public-ci.yml"
@@ -36,9 +36,8 @@ FILES = {
     "scripts/check_r4_admin_dev_deployment.py",
 }
 FOLLOWUP_FILES = {
-    "app/admin/index.html",
-    "app/admin/r4-onboarding.js",
     "app/release.json",
+    "scripts/build_cloudflare_pages.py",
     "scripts/check_r4_admin_dev_deployment.py",
 }
 ASSETS = {
@@ -89,7 +88,7 @@ def check_ci_source(env, event):
 def check_candidate(env, target):
     need(git("rev-parse", "HEAD").decode().strip() == target, "HEAD")
     need(git("rev-parse", "HEAD^").decode().strip() == REVIEWED_PARENT
-         and git("rev-parse", "HEAD^^^^^").decode().strip() == BASE, "PARENT")
+         and git("rev-parse", "HEAD^^^^^^").decode().strip() == BASE, "PARENT")
     need(len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) == 2, "PARENT_COUNT")
     need(not git("status", "--porcelain", "--untracked-files=all").strip(), "DIRTY")
     paths = set(git("diff", "--no-renames", "--name-only", BASE, target).decode().splitlines())
@@ -97,7 +96,7 @@ def check_candidate(env, target):
     need(set(git("diff", "--no-renames", "--name-only", REVIEWED_PARENT, target).decode().splitlines())
          == FOLLOWUP_FILES, "EXACT_FOLLOWUP_PATHS")
     need(sha(git("show", f"{target}:scripts/build_cloudflare_pages.py"))
-         == "af64d2fdd0b581b59881934c814b4f0854f5741c1684f8cb93b89e61661c7222", "BUILDER_DIGEST")
+         == "5f2a9e85daa0cccc83aa9f9405f81ee9894abed93c730d3db00db6dae1079f80", "BUILDER_DIGEST")
     for path, expected in ASSETS.items():
         need(sha(git("show", f"{target}:{path}")) == expected, "ASSET_DIGEST")
     need(env.get("TENNISNOTE_ENVIRONMENT") == "development"
@@ -162,7 +161,7 @@ def verify_recovery(project, rows, active, immutable):
          and PRIOR_DEPLOYMENT != "UNBOUND_BLOCK_DEPLOYMENT"
          and deploy.get("id") == PRIOR_DEPLOYMENT, "CF_RECOVERY")
     for manifest in [active, immutable]:
-        need(manifest.get("version") == "1.0.582" and manifest.get("releaseId") == "2026.11.04.04", "LIVE_RELEASE")
+        need(manifest.get("version") == "1.0.582" and manifest.get("releaseId") == "2026.11.05.01", "LIVE_RELEASE")
     need(active == immutable, "LIVE_RELEASE_CONTENT")
     return deploy["id"]
 
@@ -181,9 +180,29 @@ def verify_artifact(root, target):
     if 'name="robots"' not in index:
         index = index.replace("</head>", '  <meta name="robots" content="noindex,nofollow" />\n</head>', 1)
     built = (root/"index.html").read_text(encoding="utf-8")
+    manifest_link = '  <link rel="manifest" href="/admin-dev.webmanifest" />\n'
+    need(built.count(manifest_link) == 1, "BUILT_MANIFEST_LINK")
+    built = built.replace(manifest_link, "", 1)
     banner = r'\n    <aside role="status" aria-label="개발계 안내" style="[^"<>]*">개발계 · 실제 결제·푸시 차단</aside>'
     stripped, count = re.subn(banner, "", built)
     need(count == 1 and stripped == index, "BUILT_HTML")
+    manifest = json.loads((root/"admin-dev.webmanifest").read_text(encoding="utf-8"))
+    icons = [
+        {"src": f"/assets/brand/app-icon-{size}.png", "sizes": f"{size}x{size}",
+         "type": "image/png", "purpose": "any"} for size in (192, 512)
+    ]
+    need(manifest == {
+        "id": "/", "start_url": "/", "scope": "/", "name": "테니스노트 관리자 개발계",
+        "short_name": "테니스노트 DEV 관리자", "lang": "ko", "display": "standalone",
+        "theme_color": "#065d45", "background_color": "#f4f7f5", "icons": icons,
+    }, "BUILT_MANIFEST")
+    for icon in icons:
+        path = icon["src"].lstrip("/")
+        need((root/path).read_bytes() == git("show", f"{target}:app/tennis-note-member-app/{path}"), "BUILT_MANIFEST_ICON")
+    headers = (root/"_headers").read_text(encoding="utf-8")
+    need(headers.endswith("\n/admin-dev.webmanifest\n  Content-Type: application/manifest+json; charset=utf-8\n"
+                          "  Cache-Control: no-cache, no-store, must-revalidate\n")
+         and not (root/"service-worker.js").exists(), "BUILT_MANIFEST_HEADERS")
     for asset, expected in ASSETS.items():
         if asset != "app/admin/index.html":
             need(sha((root/asset.removeprefix("app/admin/")).read_bytes()) == expected, "BUILT_ASSET")

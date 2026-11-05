@@ -260,6 +260,34 @@ def sync_admin_release_labels(output: Path) -> None:
     script.write_text(contents, encoding="utf-8")
 
 
+def write_dev_admin_install_metadata(output: Path) -> None:
+    # 서울 개발 관리자에만 설치 정보를 추가한다. 서비스 워커는 등록하지 않는다.
+    if (deployment_environment() != "development"
+            or env("TENNISNOTE_SUPABASE_URL") != "https://udjmiezroipctytmztwz.supabase.co"
+            or payments_enabled()):
+        return
+    index = output / "index.html"
+    contents = index.read_text(encoding="utf-8")
+    if contents.count("</head>") != 1 or 'rel="manifest"' in contents:
+        raise ValueError("Admin manifest link contract changed")
+    manifest = {
+        "id": "/", "start_url": "/", "scope": "/",
+        "name": "테니스노트 관리자 개발계", "short_name": "테니스노트 DEV 관리자",
+        "lang": "ko", "display": "standalone", "theme_color": "#065d45",
+        "background_color": "#f4f7f5",
+        "icons": [
+            {"src": f"/assets/brand/app-icon-{size}.png", "sizes": f"{size}x{size}",
+             "type": "image/png", "purpose": "any"} for size in (192, 512)
+        ],
+    }
+    shutil.copy2(APP_ROOT / "tennis-note-member-app/assets/brand/app-icon-512.png",
+                 output / "assets/brand/app-icon-512.png")
+    (output / "admin-dev.webmanifest").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    index.write_text(contents.replace("</head>", '  <link rel="manifest" href="/admin-dev.webmanifest" />\n</head>'),
+                     encoding="utf-8")
+
+
 def build_admin(output: Path) -> None:
     copy_directory(APP_ROOT / "admin", output)
     copy_directory(APP_ROOT / "shared", output / "shared")
@@ -299,6 +327,12 @@ def main() -> int:
     write_browser_config(output)
     mark_development_build(output)
     write_platform_files(output, args.target)
+    if args.target == "admin":
+        write_dev_admin_install_metadata(output)
+        if (output / "admin-dev.webmanifest").is_file():
+            with (output / "_headers").open("a", encoding="utf-8") as headers:
+                headers.write("\n/admin-dev.webmanifest\n  Content-Type: application/manifest+json; charset=utf-8\n"
+                              "  Cache-Control: no-cache, no-store, must-revalidate\n")
     print(f"Built {args.target} Cloudflare Pages artifact: {output.relative_to(ROOT)}")
     return 0
 
