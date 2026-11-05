@@ -36,6 +36,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/check_r4_selfserve_candidate.mjs
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify changed phone normalization artifact
+        env:
+          TENNISNOTE_ENVIRONMENT: development
+          TENNISNOTE_PAYMENTS_ENABLED: "false"
+          TENNISNOTE_SUPABASE_URL: https://udjmiezroipctytmztwz.supabase.co
+          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_local_artifact_only
+          TENNISNOTE_PAYMENT_MODE: disabled
+          TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+          TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+          TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+        run: node scripts/build_r4_phone_dev.mjs --build
   admin-only:
     if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'deploy'
     runs-on: ubuntu-latest
@@ -55,8 +70,11 @@ jobs:
           test "$APPROVED_SHA" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           base=dfee6f9324d12e914c65acf4ea4582bf807a839b
-          prior=1aa2a5a3f026079a2ae9f229543f297f7f99a753
+          prior=a32801a876e14bda4aae63e890d3cf23ed854745
           test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $prior"
+          recovery_parent=1aa2a5a3f026079a2ae9f229543f297f7f99a753
+          test "$(git rev-parse "$prior^")" = "$recovery_parent"
+          prior=$recovery_parent
           phone_parent=3bdc51d3d0767cfa0c1c7a4bd627bd3f705ec555
           test "$(git rev-parse "$prior^")" = "$phone_parent"
           prior=$phone_parent

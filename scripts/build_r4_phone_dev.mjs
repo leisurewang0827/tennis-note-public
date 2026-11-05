@@ -9,7 +9,7 @@ const repository=env.R4_PHONE_LOCAL_REPOSITORY||root;
 assert.ok(!env.GITHUB_ACTIONS||!env.R4_PHONE_LOCAL_REPOSITORY,"LOCAL_OVERRIDE_FORBIDDEN_ON_CI");
 const devBase="0d2a1e5a489cead9957368ffe66c85c0b7c0a261";
 const project="tennisnote-admin-dev";
-const priorPrefix="2eac2bf7";
+const priorPrefix="3e05420e";
 const fingerprint="63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const git=(...args)=>execFileSync("git",["-C",repository,...args],{maxBuffer:30e6});
@@ -32,11 +32,11 @@ if(process.argv.includes("--preflight")){
   const current=data.result.canonical_deployment;
   assert.equal(data.result.name,project);assert.equal(data.result.production_branch,"dev");
   assert.equal(current.environment,"production");assert.equal(current.latest_stage.status,"success");
-  assert.equal(current.deployment_trigger.metadata.commit_hash,devBase);
+  assert.equal(current.deployment_trigger.metadata.commit_hash,"a32801a876e14bda4aae63e890d3cf23ed854745");
   assert.equal(current.id.startsWith(priorPrefix+"-"),true);
   assert.equal(current.url,"https://"+priorPrefix+"."+project+".pages.dev");
   const active=await json("https://"+project+".pages.dev/release.json");const immutable=await json(current.url+"/release.json");
-  assert.deepEqual(active,immutable);assert.equal(active.version,"1.0.582");assert.equal(active.releaseId,"2026.11.05.02");
+  assert.deepEqual(active,immutable);assert.equal(active.version,"1.0.582");assert.equal(active.releaseId,"2026.11.05.03");
   mkdirSync("dist",{recursive:true});
   writeFileSync("dist/r4-phone-dev-recovery.json",JSON.stringify({project,source:env.GITHUB_SHA,rollback:current.id,rollbackUrl:current.url},null,2));
   console.log(JSON.stringify({status:"DEV_TARGET_AND_RECOVERY_PASS",project,rollbackDeployment:current.id}));
@@ -61,7 +61,7 @@ if(process.argv.includes("--preflight")){
     writeFileSync(join(dir,"app/admin",file),readFileSync(join(root,"app/admin",file)));
   }
   const releasePath=join(dir,"app/release.json");const release=JSON.parse(readFileSync(releasePath));
-  assert.equal(release.releaseId,"2026.11.05.02");release.releaseId="2026.11.05.03";
+  assert.equal(release.releaseId,"2026.11.05.02");release.releaseId="2026.11.05.04";
   writeFileSync(releasePath,JSON.stringify(release,null,2)+"\n");
   const out=resolve(root,"dist/admin-phone-dev");
   const isolatedOutput=join(dir,"dist/admin-dev");
@@ -77,9 +77,9 @@ if(process.argv.includes("--preflight")){
   }
   assert.equal(existsSync(join(out,"tennis-note-member-app/index.html")),false);assert.equal(existsSync(join(out,"tennis-note-coach-app/index.html")),false);
   assert.equal(readFileSync(join(out,"index.html"),"utf8").includes('href="/admin-dev.webmanifest"'),true);
-  assert.equal(JSON.parse(readFileSync(join(out,"release.json"))).releaseId,"2026.11.05.03");
+  assert.equal(JSON.parse(readFileSync(join(out,"release.json"))).releaseId,"2026.11.05.04");
   const walk=(p,prefix="")=>readdirSync(p,{withFileTypes:true}).flatMap(x=>x.isDirectory()?walk(join(p,x.name),prefix+x.name+"/"):[[prefix+x.name,hash(readFileSync(join(p,x.name)))]]);
   const assets=Object.fromEntries(walk(out));
-  writeFileSync(join(root,"dist/r4-phone-dev-artifact.json"),JSON.stringify({source:env.GITHUB_SHA||null,devBase,project,release:"2026.11.05.03",assets},null,2));
-  console.log(JSON.stringify({status:"ADMIN_DEV_ARTIFACT_PASS",project,release:"2026.11.05.03",assetCount:Object.keys(assets).length}));
+  writeFileSync(join(root,"dist/r4-phone-dev-artifact.json"),JSON.stringify({source:env.GITHUB_SHA||null,devBase,project,release:"2026.11.05.04",assets},null,2));
+  console.log(JSON.stringify({status:"ADMIN_DEV_ARTIFACT_PASS",project,release:"2026.11.05.04",assetCount:Object.keys(assets).length}));
 }else throw Error("EXPLICIT_BUILD_OR_PREFLIGHT_REQUIRED");

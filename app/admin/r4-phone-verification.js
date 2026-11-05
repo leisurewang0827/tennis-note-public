@@ -16,10 +16,14 @@
     if (/^01[0-9]{8,9}$/.test(text)) return "+82" + text.slice(1);
     return /^\+821[0-9]{8,9}$/.test(text) ? text : "";
   };
+  const authPhone = value => {
+    const text = String(value || "");
+    return /^\+?[1-9][0-9]{7,14}$/.test(text) ? "+" + text.replace(/^\+/, "") : "";
+  };
   const confirmed = user => {
     const within = value => Number.isFinite(Date.parse(value)) && Date.parse(value) <= Date.now();
     return Boolean((user.email?.trim() && within(user.email_confirmed_at))
-      || (/^\+[1-9][0-9]{7,14}$/.test(user.phone || "") && within(user.phone_confirmed_at)));
+      || (authPhone(user.phone) && within(user.phone_confirmed_at)));
   };
   function controls(ctx) {
     if (!current(ctx)) return;
@@ -102,7 +106,7 @@
       if (!current(ctx)) return;
       code.value = "";
       const user = await userFor(ctx);
-      if (user.phone !== destination || !user.phone_confirmed_at || !confirmed(user)) throw Error("r4_phone_not_confirmed");
+      if (authPhone(user.phone) !== destination || !user.phone_confirmed_at || !confirmed(user)) throw Error("r4_phone_not_confirmed");
       await complete(ctx);
     } catch {
       if (current(ctx)) note.textContent = "인증 상태를 확인하지 못했습니다. 번호와 유효시간을 확인해 주세요.";
