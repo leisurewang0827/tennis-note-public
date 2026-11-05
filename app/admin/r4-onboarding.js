@@ -43,8 +43,17 @@
       ctx.mode = "applicant";
     }
     if (!current(ctx)) return;
-    ctx.canSubmit = ctx.mode === "applicant" && !rows.some(row => row.status === "pending");
-    title.textContent = ctx.mode === "reviewer" ? "지점 신청 심사" : "지점 신청";
+    ctx.selfServe = null;
+    if (ctx.mode === "applicant") {
+      try {
+        const state = await call(ctx,"tn_r4_my_selfserve_branch");
+        if (state?.paymentEnabled === false && (state.available === true || id(state.branchId))) ctx.selfServe=state;
+      } catch { /* 기존 신청 흐름은 그대로 유지한다. */ }
+    }
+    if (!current(ctx)) return;
+    ctx.canSubmit = ctx.mode === "applicant" && !ctx.selfServe?.branchId && !rows.some(row => row.status === "pending");
+    title.textContent = ctx.mode === "reviewer" ? "지점 신청 심사" : ctx.selfServe ? "내 지점" : "지점 신청";
+    button.textContent = ctx.selfServe?.available ? "내 지점 만들기" : "지점 신청";
     form.hidden = !ctx.canSubmit;
     panel.hidden = false;
     if (message) message.hidden = true;
@@ -66,7 +75,15 @@
       }
       list.append(item);
     }
-    if (!items.length) list.textContent = ctx.mode === "reviewer" ? "대기 중인 신청이 없습니다." : "신청 내역이 없습니다.";
+    if (id(ctx.selfServe?.branchId) && typeof ctx.selfServe.name === "string") {
+      const branchId=ctx.selfServe.branchId;
+      ctx.approvedBranches.add(branchId);
+      const item=document.createElement("p");
+      item.textContent=ctx.selfServe.name+" · 운영 관리 · 앱 결제 OFF ";
+      item.append(action("내 지점 열기",()=>open(ctx,{branch_id:branchId,selfServe:true})));
+      list.prepend(item);
+    }
+    if (!list.children.length) list.textContent = ctx.mode === "reviewer" ? "대기 중인 신청이 없습니다." : "신청 내역이 없습니다.";
   }
   async function run(ctx, work, fallback) {
     if (!current(ctx) || ctx.busy) return;
@@ -107,7 +124,7 @@
         allowed: true, client: ctx.client, openBranchId: row.branch_id,
       });
       if (opened !== true) throw Error("r4_workspace_unavailable");
-      return "승인된 지점을 열었습니다.";
+      return row.selfServe ? "내 지점을 열었습니다." : "승인된 지점을 열었습니다.";
     }, "지점을 열 수 없습니다. 상태를 새로 확인해 주세요.");
   }
   form.addEventListener("submit", event => {
@@ -117,6 +134,16 @@
     const organization = form.elements.organization.value.trim(), branch = form.elements.branch.value.trim();
     if ([organization, branch].some(value => value.length < 2 || value.length > 100)) return;
     return run(ctx, async () => {
+      if (ctx.selfServe?.available) {
+        const key=ctx.createKey?.org===organization && ctx.createKey?.branch===branch ? ctx.createKey.key : root.crypto.randomUUID();
+        ctx.createKey={org:organization,branch,key};
+        const created=await call(ctx,"tn_r4_create_selfserve_branch",{p_organization:organization,p_branch:branch,p_operation:key});
+        if (created?.status!=="created" || !id(created.branchId) || created.paymentEnabled!==false) throw Error("r4_create_receipt");
+        if (current(ctx)) form.reset();
+        await load(ctx);
+        if (ctx.selfServe?.branchId!==created.branchId) throw Error("r4_create_readback");
+        return "지점을 만들었습니다. 내 지점 열기를 눌러 운영을 시작하세요.";
+      }
       const result = await call(ctx, "tn_r4_submit_branch_application", { organization_name: organization, branch_name: branch });
       if (result?.status !== "pending" || !id(result.applicationId)) throw Error("r4_application_receipt");
       if (current(ctx)) form.reset();
