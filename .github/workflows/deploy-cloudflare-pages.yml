@@ -8,11 +8,22 @@ on:
         type: choice
         required: true
         default: verify
-        options: [verify, deploy-development, deploy]
+        options: [verify, deploy-development, deploy, marketplace-verify, marketplace-preview, marketplace-promote, marketplace-rollback]
       candidate_sha:
         description: Exact reviewed SHA required for development deployment
         type: string
         required: false
+      prior_run_id:
+        description: Exact successful verification or preview run ID
+        type: string
+        required: false
+      qa_verified:
+        description: Independent preview QA completed for this exact artifact
+        type: boolean
+        required: false
+        default: false
+  push:
+    branches: [codex/tennisnote-r4-marketplace-paired-20261106]
 permissions:
   contents: read
   actions: read
@@ -187,3 +198,174 @@ jobs:
         run: node scripts/build_r4_phone_dev.mjs --build
       - name: Deploy only the Seoul development administrator
         run: npx --yes wrangler@3.90.0 pages deploy dist/admin-phone-dev --project-name=tennisnote-admin-dev --branch=dev
+
+  marketplace-verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-marketplace-paired-20261106' && (github.event_name == 'push' || inputs.mode == 'marketplace-verify')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TENNISNOTE_ENVIRONMENT: development
+      TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_SUPABASE_URL: https://udjmiezroipctytmztwz.supabase.co
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_local_artifact_only
+      TENNISNOTE_PAYMENT_MODE: disabled
+      TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Check development preflight negative cases
+        run: |
+          node scripts/r4-marketplace-paired/test-preflight.mjs
+          node scripts/r4-marketplace-paired/test-rollback.mjs
+          node scripts/r4-marketplace-paired/test-check-run.mjs
+      - name: Build and check exact synthetic paired candidate
+        run: |
+          node scripts/r4-marketplace-paired/build.mjs --synthetic
+          node scripts/r4-marketplace-paired/test-check-runtime.mjs dist/r4-marketplace-paired/admin/shared/config.local.js
+          node scripts/r4-marketplace-paired/seal.mjs create dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
+          node scripts/r4-marketplace-paired/seal.mjs verify dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
+
+  marketplace-preview:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-marketplace-paired-20261106' && inputs.mode == 'marketplace-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+    concurrency:
+      group: cloudflare-pages-development
+      cancel-in-progress: false
+    env:
+      TENNISNOTE_ENVIRONMENT: development
+      TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
+      TENNISNOTE_PAYMENT_MODE: disabled
+      TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      PRIOR_RUN_ID: ${{ inputs.prior_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Require exact reviewed commit and successful candidate CI
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          node scripts/r4-marketplace-paired/check-run.mjs "$PRIOR_RUN_ID" verify
+      - name: Recheck both existing development deployments
+        run: node scripts/r4-marketplace-paired/preflight.mjs
+      - name: Build once and seal the development-only paired artifact
+        run: |
+          node scripts/r4-marketplace-paired/build.mjs --live
+          node scripts/r4-marketplace-paired/seal.mjs create dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
+      - name: Retain exact paired artifact for reviewed promotion
+        uses: actions/upload-artifact@v4
+        with:
+          name: r4-marketplace-paired-${{ github.run_id }}
+          path: |
+            dist/r4-marketplace-paired/
+            dist/r4-marketplace-seal.json
+          if-no-files-found: error
+          retention-days: 2
+      - name: Deploy isolated development preview surfaces
+        run: |
+          npx --yes wrangler@3.90.0 pages deploy dist/r4-marketplace-paired/admin --project-name=tennisnote-admin-dev --branch=r4-marketplace-qa --commit-hash="$GITHUB_SHA" --commit-dirty=false
+          npx --yes wrangler@3.90.0 pages deploy dist/r4-marketplace-paired/member --project-name=tennisnote-app-dev --branch=r4-marketplace-qa --commit-hash="$GITHUB_SHA" --commit-dirty=false
+
+  marketplace-promote:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-marketplace-paired-20261106' && inputs.mode == 'marketplace-promote' && inputs.qa_verified == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: development
+    concurrency:
+      group: cloudflare-pages-development
+      cancel-in-progress: false
+    env:
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      PRIOR_RUN_ID: ${{ inputs.prior_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Require successful exact preview and reviewed commit
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          node scripts/r4-marketplace-paired/check-run.mjs "$PRIOR_RUN_ID" preview
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-marketplace-paired-${{ inputs.prior_run_id }}
+          run-id: ${{ inputs.prior_run_id }}
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Verify identical artifact and unchanged development baselines
+        run: |
+          node scripts/r4-marketplace-paired/seal.mjs verify dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
+          node scripts/r4-marketplace-paired/check-runtime.mjs dist/r4-marketplace-paired --live
+          node scripts/r4-marketplace-paired/preflight.mjs
+      - name: Promote only the two development surfaces
+        run: |
+          npx --yes wrangler@3.90.0 pages deploy dist/r4-marketplace-paired/admin --project-name=tennisnote-admin-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+          npx --yes wrangler@3.90.0 pages deploy dist/r4-marketplace-paired/member --project-name=tennisnote-app-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+
+  marketplace-rollback:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-marketplace-paired-20261106' && inputs.mode == 'marketplace-rollback'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: development
+    concurrency:
+      group: cloudflare-pages-development
+      cancel-in-progress: false
+    env:
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      PRIOR_RUN_ID: ${{ inputs.prior_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Require failed exact promotion and restore only its two development baselines
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          node scripts/r4-marketplace-paired/check-run.mjs "$PRIOR_RUN_ID" failed-promote
+          node scripts/r4-marketplace-paired/rollback.mjs

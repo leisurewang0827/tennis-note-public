@@ -1,0 +1,674 @@
+{
+  "state": "LOCAL_RECONSTRUCTED_SYNTHETIC_CONFIG_NOT_DEPLOYABLE",
+  "source": "8d3dfca18ee0cd9511aea50b147df647ef1fea0b",
+  "devBase": "0d2a1e5a489cead9957368ffe66c85c0b7c0a261",
+  "artifactSha256": "165fd918140cfeda7a97e2cb5e5b43a3cfaaddbffb8defc753b7a539a21765d4",
+  "fileCount": 165,
+  "files": [
+    {
+      "path": "_headers",
+      "sha256": "09a6295ec776a3eec7d7e0eaf0da20dc8a53bb58f92f56b0e3a4850bc98a13ca"
+    },
+    {
+      "path": "_redirects",
+      "sha256": "057cdddc14463901f8fa509f6bfaac1999e708fd7c882564ec0907c1a10f5032"
+    },
+    {
+      "path": "_worker.js",
+      "sha256": "504e6c552185a54dd95ea1b9db9891a59c670c7580e50155973b9d11ed77fba6"
+    },
+    {
+      "path": "actions/billing.js",
+      "sha256": "45655328b301b63d63d5a8d44c60b3015c7cff89aa644944dd0b3f10d14877ae"
+    },
+    {
+      "path": "actions/coach.js",
+      "sha256": "97742728727914f9aa774c334d03507d63856cdea0ba6448f769adb23ba0c201"
+    },
+    {
+      "path": "actions/common.js",
+      "sha256": "144c3776c534b7fd5ba3ac5b61713f5e66ae2a6462c7a9f9e94ee75bed1cabeb"
+    },
+    {
+      "path": "actions/member.js",
+      "sha256": "3c8e2b28192ba3c1ce362456960618d3714e06d061e37ada49f02448da33e5fc"
+    },
+    {
+      "path": "actions/notice.js",
+      "sha256": "2ee953be508a2686b983fc611e69875333afd495411cbca868e0de3229ac86bc"
+    },
+    {
+      "path": "actions/report.js",
+      "sha256": "91bff9799c2129112408ec8f3f5072e191cb5fbb7f71cfd2822dc6e926323810"
+    },
+    {
+      "path": "actions/schedule.js",
+      "sha256": "28171b96e0d6d3ebff1ed1c0f1b4bc71b7b53dee1210af8630dbd484cbae9c97"
+    },
+    {
+      "path": "actions/settings.js",
+      "sha256": "52d50b167e8d8b78579537aecd5968d72b23778c25af3bfe9f7b0f679eae2032"
+    },
+    {
+      "path": "admin-dev.webmanifest",
+      "sha256": "42de989801a30677b6f9191c795ffdd6533ff76e08cc41db9a3360c818d2bb68"
+    },
+    {
+      "path": "app.js",
+      "sha256": "9662f3ccab5bd2900a32e1128b3e961e79ee283e264477fa8097be73ae18a527"
+    },
+    {
+      "path": "assets/brand/app-icon-180.png",
+      "sha256": "b5ca1e0b8a8b5aaf0fe93b5b3bf11bb7d1934b7c7a7a1024f09f44437c3fe2d8"
+    },
+    {
+      "path": "assets/brand/app-icon-192.png",
+      "sha256": "67e7973b634e8215342ae61931592f81084910c4d9e5a7bca36dfa829cd23dcd"
+    },
+    {
+      "path": "assets/brand/app-icon-512.png",
+      "sha256": "9519d18775bf43904e7882f088a96dfa65f741e3c9728478e021a734f14f10d2"
+    },
+    {
+      "path": "assets/brand/launch-splash.png",
+      "sha256": "2c964239efc628280e90025373151a92c5d01567de04701ffaa30f8e86440125"
+    },
+    {
+      "path": "catalog.js",
+      "sha256": "398d2387e2977b7a9be11e431a0fc36b0a7e1cfc8bdb2029fb04b1bc12761e4d"
+    },
+    {
+      "path": "commerce.html",
+      "sha256": "f7521a117e27ba82de5b667c0b8f1029f893eb940950043e93b1dae20337f87b"
+    },
+    {
+      "path": "data/billing.js",
+      "sha256": "fde08533a25c02eb875adf2dbe21d9676ae923149c2172a6c581fe526debf0ac"
+    },
+    {
+      "path": "data/common.js",
+      "sha256": "9b1c09cbfa5fbd19601f91253f02c7fedaa6ef9dc150725eb379d9e8419f7435"
+    },
+    {
+      "path": "data/member.js",
+      "sha256": "44edc7d76a4f2b5e875a18292894fa3853c3152e802116ec327de60b7b84026a"
+    },
+    {
+      "path": "data/schedule.js",
+      "sha256": "4cbd3de7deeb44644ee693b3f37ce3f65be91efa0e6daa7d9c0f2792591418ab"
+    },
+    {
+      "path": "data/settings.js",
+      "sha256": "dac2b2a34509ca1a23521d964126373d4b91c1d5319dc21cc8fb93e184275f4c"
+    },
+    {
+      "path": "delete-account.html",
+      "sha256": "d68056d354c4cec7010af5df1f6ca47639b8d53d08c26cf62bca0d67b06bcd46"
+    },
+    {
+      "path": "domain/billing.js",
+      "sha256": "c6e9157e9865ff07d05668382f4f2ed5557826272ad6d767b54ac56188817868"
+    },
+    {
+      "path": "domain/coaches.js",
+      "sha256": "bba3e4430b43a293197f83c1a5b6f607acb2098712f95bef19147d98fd3b52ac"
+    },
+    {
+      "path": "domain/common.js",
+      "sha256": "42f59735bab983e21cc62ac612af5453e68297cb091d3d53903a5cc2d5c2c32f"
+    },
+    {
+      "path": "domain/lessons.js",
+      "sha256": "1ce401747fc6edf3286c28729af9253591da4fdcc17cf529c0e8cb373a05e9a0"
+    },
+    {
+      "path": "domain/members.js",
+      "sha256": "72779b96699f3f8281a7100c5986422d47b41877dee45760f6409b23a0535117"
+    },
+    {
+      "path": "domain/payment.js",
+      "sha256": "12523213450dfd945ef78e6e96aa1fcd008b3d0a3446ed8fe3999f3a8657a632"
+    },
+    {
+      "path": "domain/policy.js",
+      "sha256": "4dcabcb062a42a3b6108a73d2725d1146564f29ab046b1a00115a51975ea3523"
+    },
+    {
+      "path": "domain/record.js",
+      "sha256": "32b79fffdb91685d74b0bdb48d19362cc9bf136328effd781e5c2079933d1baa"
+    },
+    {
+      "path": "domain/schedule.js",
+      "sha256": "e55f4715f4f573c451ab0eaef59ff82b0159413d7ebd3b216959dc344ddf2c73"
+    },
+    {
+      "path": "domain/tickets.js",
+      "sha256": "2ac8eea36453f3fc7e1118a882eb92326e5307478764e846906e71a31f88c9ab"
+    },
+    {
+      "path": "domain/values.js",
+      "sha256": "3f8f4bd829739c7406090581bf51ecc1a44570d43269901a0b3ac16bc3438a8f"
+    },
+    {
+      "path": "events/billing.js",
+      "sha256": "bf6fb48aec506a31633bafb60c4e4d174954274d181b3b0d76c161c62fe50114"
+    },
+    {
+      "path": "events/common.js",
+      "sha256": "b00b5ea00062a8f7f9944e5674b1cc67aad9ca283aea84daa0bf0b504e8efaad"
+    },
+    {
+      "path": "events/data.js",
+      "sha256": "02bf57c4c4427b9da6649ab2c0e8a2b21d47a62a453d357904edb6ee4f6311ac"
+    },
+    {
+      "path": "events/delegated.js",
+      "sha256": "ce954aa62e002bb74f153e9b99bdd858fbd78f725cb09a236c3b180efcd3d2bb"
+    },
+    {
+      "path": "events/members.js",
+      "sha256": "ba565c94c7bdfded54ca190aa1f0823e39db52486c7a1674ebd59f7f14639996"
+    },
+    {
+      "path": "events/notes.js",
+      "sha256": "0f366af6ef7e776f86d9ef254203ca585a405b0dddedb59d8d0c6ea42f230d9d"
+    },
+    {
+      "path": "events/reports.js",
+      "sha256": "d82f72ea61a9d00e9189c154d97d32403967d0e9d99a74876106f488239d27a4"
+    },
+    {
+      "path": "events/schedule.js",
+      "sha256": "1760953f9c86de745e34bb03b218c6e921eb666f6ca5ce2870550a55fc1de4eb"
+    },
+    {
+      "path": "events/settings.js",
+      "sha256": "ba949292644ba0e16bd543a1a1dfaed52876b22f4c05791252193bc00a1d295e"
+    },
+    {
+      "path": "forms/coach.js",
+      "sha256": "58467d8e0276eefd9eebdd0cbfae100ed029e219b758c109411b4780e3c28120"
+    },
+    {
+      "path": "forms/common.js",
+      "sha256": "2cb6af086a122e56a325aa6f89f0dda63e1b30968775e33ea0b161a54b2bfbac"
+    },
+    {
+      "path": "forms/member.js",
+      "sha256": "fae5750387272dbc66fe1695821cf7444543b8ca3d2ead61e27adf1478fca63c"
+    },
+    {
+      "path": "forms/policy.js",
+      "sha256": "a40eb9069c188aea3199eb800b0e84d3e80040523dd869894e4b945493254b7b"
+    },
+    {
+      "path": "forms/schedule.js",
+      "sha256": "9d91f9993e70f1cdf6a1bfc331f32dbf9386f00a88f71f93503ef522f74bbc21"
+    },
+    {
+      "path": "forms/tickets.js",
+      "sha256": "9793818d50cabdb58ed4e494eb27154164df0deea1b6333e4d6200976c774ca5"
+    },
+    {
+      "path": "index.html",
+      "sha256": "70be037f28a2dfa77429ca22b63abab93f5505273ee50faf2c126058793b8700"
+    },
+    {
+      "path": "privacy.html",
+      "sha256": "f57ee2918e34bcfba57e0dee5df5ed755b3a97a5fd0e01668f13a60190edf00d"
+    },
+    {
+      "path": "r4-branch-admin-writes.js",
+      "sha256": "8b124453005072e06d5f524dbf1e7b3a92ab3e2da137a3b52460e8774fa66d1f"
+    },
+    {
+      "path": "r4-branch-hours.js",
+      "sha256": "811f3c7b990c2b48ecf6ebc982eeca744f9999a2987be2bc12d0b675b211fd0b"
+    },
+    {
+      "path": "r4-branch-operations.js",
+      "sha256": "1ae64393eae9a960248b50478861508a5cf88f17e38d26e06e7e5fd890bb969b"
+    },
+    {
+      "path": "r4-onboarding.js",
+      "sha256": "d3a97cce1befd4ad2f99d17232c2f5298145098ddb764744b5a61936ee28e186"
+    },
+    {
+      "path": "r4-phone-verification.js",
+      "sha256": "896ec2fb0d3edd9c7a0e03e4fa99fc5f1e8481d79738b6973f0441f93fb43fac"
+    },
+    {
+      "path": "r4-selfserve-client.js",
+      "sha256": "4da7498e721a2cb05cd76b88826633353c59c3ed296f9a7ded526d8726266d66"
+    },
+    {
+      "path": "release.json",
+      "sha256": "48872977e0e1f89dc6188e9f55f74707a3bd7d27aa062deefb146463240357e3"
+    },
+    {
+      "path": "schedule-v2-admin.css",
+      "sha256": "c079062674eb3313b13ad4e8a10fcd89573713a5ecf97fb65ac0cacda793452c"
+    },
+    {
+      "path": "schedule-v2-admin.js",
+      "sha256": "e074cebb29c328272319f4282428b57d79e39ccce6d7e74f5ae73b883a5367fb"
+    },
+    {
+      "path": "settings.js",
+      "sha256": "9ff0b0747442524dfda48e3daaa3b5a64950350169f4a3ab1bd34a01aa4b2896"
+    },
+    {
+      "path": "shared/config.local.js",
+      "sha256": "74417d84a5638c67fd38652fd67575bb4b4d33a638f042b645a6e0c1dfc41df1"
+    },
+    {
+      "path": "shared/tennisnote-app-common.js",
+      "sha256": "8fb546c9886105dd9c883d4f6224fdb9cca2b02a13de9ff5b5617f3bc0f52393"
+    },
+    {
+      "path": "shared/tennisnote-bottom-sheet.css",
+      "sha256": "402009576f6b34b8cd9d3b13e83115526492a99c4fd362c512727edf95ef8f68"
+    },
+    {
+      "path": "shared/tennisnote-bottom-sheet.js",
+      "sha256": "2ab8c6e5aec90f19e884e35ac4f7dfc283ede16965c5d73fc0651a0828db77fa"
+    },
+    {
+      "path": "shared/tennisnote-comment-draft.js",
+      "sha256": "a795520949522015815b7cae650c154fe910cbce43ede91cee1b167c4751e141"
+    },
+    {
+      "path": "shared/tennisnote-curriculum-catalog.js",
+      "sha256": "f8a478930d8cc57009bad672a1fecfacd9d2f777600744efe21a06eabe44782e"
+    },
+    {
+      "path": "shared/tennisnote-curriculum-search.js",
+      "sha256": "784efb93303343b663ea7be8ced0abe80d933994ecfc79b8ad8657e4ef37d51a"
+    },
+    {
+      "path": "shared/tennisnote-data-client.js",
+      "sha256": "4c9cbedc91e1593be5fb9fc7c3661541e46854f8ac616fd81adfa053d4a25a07"
+    },
+    {
+      "path": "shared/tennisnote-escape-html.js",
+      "sha256": "897169658594ce7abebf4a1c632b78ef4bbca02975bf94dbc885ed7e899f6ecb"
+    },
+    {
+      "path": "shared/tennisnote-input-guard.js",
+      "sha256": "783cd553002585897fa7146da1d1462fdcf4e070cd527a71e72ea4ce1db3e3b1"
+    },
+    {
+      "path": "shared/tennisnote-issue-reporter.css",
+      "sha256": "de8537c82a5fc50de0ce71dbef8623183d9be8aae67967f3baffd4467286dbba"
+    },
+    {
+      "path": "shared/tennisnote-issue-reporter.js",
+      "sha256": "c6b4531e91d1d4260f1c721ed16757425e46ccef70a869e3891012fdefe72a85"
+    },
+    {
+      "path": "shared/tennisnote-mode-transition.js",
+      "sha256": "af3e963d9050fc0176bea07f96d5dbdfaa80cbaad3bd9e093ccc6c9f118972e7"
+    },
+    {
+      "path": "shared/tennisnote-mp4-faststart.js",
+      "sha256": "cdc245b0ead6e32c5dfba3d5e87396644a42796863451cfa99558ee2ae0f660b"
+    },
+    {
+      "path": "shared/tennisnote-native-push.js",
+      "sha256": "a9375d6bbb3a1bad75a8c4d854191763d85529bbbeec4a1cfe86be8fc6139968"
+    },
+    {
+      "path": "shared/tennisnote-personal-journal.js",
+      "sha256": "fde71100c2ccd35f6ad2ca6e4bfe0be934bf6395b26d4e196fe871f95aa5344a"
+    },
+    {
+      "path": "shared/tennisnote-product-catalog.js",
+      "sha256": "2b522f463e2f87c26ea50824d56429e489f8fffe21c173cb63af02b6d7e5cf12"
+    },
+    {
+      "path": "shared/tennisnote-release-updater.js",
+      "sha256": "4e622f94b097f923ac62f8b5f56d8ed6508cb67e3625562782cc22d761814763"
+    },
+    {
+      "path": "shared/tennisnote-release.js",
+      "sha256": "4f042105e7333a83375be06b71e91f92b40d32ef5e3c1236d2049ddab3fa5e24"
+    },
+    {
+      "path": "shared/tennisnote-runtime-environment.js",
+      "sha256": "13cbdecefccc49838a8607aa63fa3fc7a5fca2c7ec23999d2b180ea4891c5f6d"
+    },
+    {
+      "path": "shared/tennisnote-schedule-lanes.js",
+      "sha256": "84a6a25297c2f6a199b726a981ccedb9174df2c06588c1cabf15734a1651ee91"
+    },
+    {
+      "path": "shared/tennisnote-schedule-revision.js",
+      "sha256": "bf21215aa4205943b2bf63f44cfaa8c99e4efd2319db3eef5a45d8fc7134e93f"
+    },
+    {
+      "path": "shared/tennisnote-settlement-adjustment.js",
+      "sha256": "e4279280929ae5904dfe1d4d7b97bd7ca92b7c072cb7f562a5810498f2738a1e"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-batch.js",
+      "sha256": "a66ca7e3d167eed479897d76ccc8c964ec9594c6a5b0b6e56d1c7ecd880d2c6d"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-import.js",
+      "sha256": "c6decc66b0a837c7a1e96a34fd62527afa6498f2b444be4388a872767550792d"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-preview-ui.js",
+      "sha256": "09d4e6c62f752f844532fa1622fd28c87f4522519e1d1b29586f39499c4b7c49"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-snapshot.js",
+      "sha256": "35ea53c7994a9388bc2f95967a432face7cdc1a5b187cf6476077f2599b8e5df"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-transport.js",
+      "sha256": "6d1d5dbd534154437b5a5395dbe74d41d6d62fe21d1f9558abd30e4ef5bf19bf"
+    },
+    {
+      "path": "shared/tennisnote-single-sheet-worker.js",
+      "sha256": "915d6efce29990ee34f7677048d741d815abcad70fbd43ad692bf99c5adbfb9c"
+    },
+    {
+      "path": "shared/tennisnote-ticket-policy-history.js",
+      "sha256": "20b38f9a0bb0e1109c5b87bb17799b323860f7c0f7f8a69d32d24c22d4d10e96"
+    },
+    {
+      "path": "shared/tennisnote-ticket-state.js",
+      "sha256": "09ba7b7d5f238f080daadde1ac31d1298c2abc5ced20df5c2eabaa3ca177b2e4"
+    },
+    {
+      "path": "shared/tennisnote-ui-foundation.css",
+      "sha256": "7840c3435ceab526fcb6a000b082fcb222815b0f59a0c7ddea443bc560f81d76"
+    },
+    {
+      "path": "shared/tennisnote-ui-language.js",
+      "sha256": "e0ddd7da6ec90bc5f0211fd19508156657f2c7842c48f266f5b9cd263fbd0867"
+    },
+    {
+      "path": "shared/vendor/xlsx.full.min.js",
+      "sha256": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99"
+    },
+    {
+      "path": "shared/vendor/xlsx.LICENSE",
+      "sha256": "f9463066a83f512aaa2c4f5bda7514c82110ec46b703f477d112c90d33b7ed83"
+    },
+    {
+      "path": "storage.js",
+      "sha256": "d13a3959182e2b2f81aa3fea39ee8d4e31428a07d2d141117902c5be88741477"
+    },
+    {
+      "path": "styles.css",
+      "sha256": "3b1ed3f9f2038d83e396a6f7858896653780001877a51aa89ec20d04fc36542b"
+    },
+    {
+      "path": "support.html",
+      "sha256": "9b29a3051f651d5820f6a103cb38f62a0381553239ef706a5539d05c0963b5a0"
+    },
+    {
+      "path": "tennis-note-legal/assets/member-app-login.png",
+      "sha256": "42294737c550ba6749b7b6afb4f3a44fd9ab6bcab3b8c87689b6416a301e9865"
+    },
+    {
+      "path": "tennis-note-legal/commerce.html",
+      "sha256": "d7b741eba7fdc484c1445f4e0533973295a64d559417c7e6ba11f24c52ea1245"
+    },
+    {
+      "path": "tennis-note-legal/delete-account.html",
+      "sha256": "baffb516e54ff037603c28707690f13fc5905e74f9e39966ab876253cff8ed20"
+    },
+    {
+      "path": "tennis-note-legal/index.html",
+      "sha256": "00187def06ef39fffc68a244fea372e6fc291566a1b78eacce92850c6b636e9c"
+    },
+    {
+      "path": "tennis-note-legal/privacy.html",
+      "sha256": "f57ee2918e34bcfba57e0dee5df5ed755b3a97a5fd0e01668f13a60190edf00d"
+    },
+    {
+      "path": "tennis-note-legal/support.html",
+      "sha256": "27cb9a58159626a98848c3142194a7206b10b5eb2c312d9ebb29e308c46702c5"
+    },
+    {
+      "path": "tennis-note-legal/terms.html",
+      "sha256": "b49608c3bc2e268b64966f7669dce4efed3b5729a4dcb2a3a814a5ba55c48c80"
+    },
+    {
+      "path": "tennis-note-member-app/assets/app-icon.svg",
+      "sha256": "39beae01ab0d51ee82ea75e4de544d6725b384827a3ad848bce2c7361d63ba08"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/app-icon-180.png",
+      "sha256": "b5ca1e0b8a8b5aaf0fe93b5b3bf11bb7d1934b7c7a7a1024f09f44437c3fe2d8"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/app-icon-192.png",
+      "sha256": "67e7973b634e8215342ae61931592f81084910c4d9e5a7bca36dfa829cd23dcd"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/app-icon-512.png",
+      "sha256": "9519d18775bf43904e7882f088a96dfa65f741e3c9728478e021a734f14f10d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/launch-splash.png",
+      "sha256": "2c964239efc628280e90025373151a92c5d01567de04701ffaa30f8e86440125"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.119.png",
+      "sha256": "8d381feffd3509d405b4b7769aebb511e7072988ac0077f964d91c2a9c2c3d65"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.120.png",
+      "sha256": "8d381feffd3509d405b4b7769aebb511e7072988ac0077f964d91c2a9c2c3d65"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.121.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.122.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.123.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.124.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.125.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.126.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.127.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.128.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.129.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.130.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.131.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.132.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.133.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.134.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.135.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.136.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.137.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.138.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.139.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.140.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.141.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.142.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.143.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.144.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.145.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.146.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.147.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.148.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.149.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.150.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.151.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/brand/tennis-note-share-1.0.152.png",
+      "sha256": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2"
+    },
+    {
+      "path": "tennis-note-member-app/assets/ntrp-poster.jpg",
+      "sha256": "b1d5276d74028e8fadaaa1317c5a4624e55971fd2718872c85be693d5b326bef"
+    },
+    {
+      "path": "terms.html",
+      "sha256": "b49608c3bc2e268b64966f7669dce4efed3b5729a4dcb2a3a814a5ba55c48c80"
+    },
+    {
+      "path": "ui/billing.js",
+      "sha256": "6172f232fe9e921e6ac35a8cc99e868afdf6efc2e17e79df2883b7cf28639fcc"
+    },
+    {
+      "path": "ui/common.js",
+      "sha256": "684ebb8d8dc3f31120eb39093f17e5ae027d4b4e96b627a3c8e453753ab15615"
+    },
+    {
+      "path": "ui/member.js",
+      "sha256": "0bc3fc4b8816a9e645b5e51db8b7fa84d16a84c5880872bb27ade5bcf975dc25"
+    },
+    {
+      "path": "ui/schedule.js",
+      "sha256": "c355edf7718625228a00b21019789b4740f3d41b11acfdf1faacf2aa2880a513"
+    },
+    {
+      "path": "ui/settings.js",
+      "sha256": "c2d7f45dd7905eb8c367226479b62315fc13fcf843756f95dc80b6fc03ab5857"
+    },
+    {
+      "path": "views/billing.js",
+      "sha256": "19c5afd4f7302d05c5b5b2bc59431c4ca1e147466807302c205e71d9b108d31b"
+    },
+    {
+      "path": "views/common.js",
+      "sha256": "deac48fb59211a727ed6de42a98105ad81f5137320386e1a9c8fe51ba333a2e7"
+    },
+    {
+      "path": "views/dashboard.js",
+      "sha256": "43d1551ed80bc03a562aaad5e851453b84c43bf9dbc82c90c548fd48cd1c4dc6"
+    },
+    {
+      "path": "views/data.js",
+      "sha256": "0a84057e2837b146e397176a41f647fcc03d16422706873ba96f7f95a12cc0f3"
+    },
+    {
+      "path": "views/makeup.js",
+      "sha256": "cf0d03bfec34afaf37af5d28a77a20a35492a7843213400fe9bbf9e779c98772"
+    },
+    {
+      "path": "views/members.js",
+      "sha256": "9918597a18ee5438c8118a4f274975306f723b38b1262d391d06c47ca533fe1a"
+    },
+    {
+      "path": "views/notes.js",
+      "sha256": "1987b1b8f60b1a2981e5473c038a994b1d00b10bcd4dddb12ba2a141d755d235"
+    },
+    {
+      "path": "views/reports.js",
+      "sha256": "86a0f2bd46ad5f4e7b2afe246765c981b00f4c4ea4b8dee4eeecd272ebca6286"
+    },
+    {
+      "path": "views/schedule.js",
+      "sha256": "80f5ec6ec50b6e69e525a69fdc8ab238b567a63aac29c363a782e7e23b7827b1"
+    },
+    {
+      "path": "views/settings.js",
+      "sha256": "0606571c7e2ce3b9c972c9c0bc51aaca65902cff3e479871a9791fb2acf3fbc4"
+    },
+    {
+      "path": "views/tickets.js",
+      "sha256": "2c496d5ddab4c5cdacbbd0259abfb53755449279839179f20a8da0f0c0f3ef32"
+    }
+  ],
+  "runtimeSecrets": "SYNTHETIC_ONLY",
+  "networkAccess": false,
+  "actualLiveParityVerified": false,
+  "actualAuth": false,
+  "deployable": false
+}

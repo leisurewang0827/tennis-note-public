@@ -1,0 +1,2416 @@
+<!doctype html>
+<html lang="ko" data-tennisnote-surface="admin">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Tennis Note 관리자 웹</title>
+    <meta name="application-name" content="Tennis Note 관리자 웹" />
+    <link rel="canonical" href="https://tennisnote-admin.pages.dev/" />
+    <script>
+      if (window.location.hostname === "leisurewang0827.github.io"
+        && window.location.pathname.includes("/tennis-note-public/app/admin")) {
+        const target = new URL("https://tennisnote-admin.pages.dev/");
+        target.search = window.location.search;
+        target.hash = window.location.hash;
+        window.location.replace(target.toString());
+      }
+    </script>
+    <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.578" />
+    <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-18" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.578" />
+    <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
+    <meta name="robots" content="noindex,nofollow" />
+  <link rel="manifest" href="/admin-dev.webmanifest" />
+    <link rel="stylesheet" href="../shared/tennisnote-r4-marketplace.css?v=r4-marketplace-010b4a3834ac" />
+</head>
+  <body>
+    <aside data-tennisnote-internal-qa-banner="true" role="status" aria-label="개발계 안내" style="position:sticky;top:0;z-index:2147483647;padding:8px 12px;background:#7c2d12;color:#fff;text-align:center;font:700 13px/1.4 system-ui,sans-serif">개발계 · 실제 결제·푸시 차단</aside>
+    <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
+      <div class="operations-login-panel">
+        <div class="operations-login-brand">
+          <img src="./assets/brand/app-icon-192.png" alt="" />
+          <div>
+            <p>Tennis Note</p>
+            <h1 id="operationsLoginTitle">운영 화면 로그인</h1>
+          </div>
+        </div>
+        <p id="operationsLoginMessage" class="operations-login-message">관리자 또는 코치 계정으로 로그인해 주세요.</p>
+        <div id="operationsLoginControls">
+        <label class="operations-remember-row">
+          <input id="operationsRememberLogin" type="checkbox" checked />
+          <span><strong>로그인 상태 유지</strong><small>개인 PC에서만 사용해 주세요.</small></span>
+        </label>
+        <form id="operationsPasswordLoginForm" class="operations-password-login-form">
+          <label><span>관리자 이메일</span><input id="operationsLoginEmail" type="email" autocomplete="username" required /></label>
+          <label><span>비밀번호</span><input id="operationsLoginPassword" type="password" autocomplete="current-password" required /></label>
+          <button class="primary-button" type="submit">이메일로 로그인</button>
+          <button class="ghost-button" type="button" id="sendAdminPasswordResetButton">비밀번호 재설정 메일 보내기</button>
+          <button class="ghost-button" type="button" id="createAdminEmailAccountButton">공용 이메일 계정 만들기</button>
+        </form>
+        <div class="operations-login-actions">
+          <button class="provider-login-button kakao" type="button" data-admin-login-provider="카카오">카카오로 로그인</button>
+          <button class="provider-login-button naver" type="button" data-admin-login-provider="네이버">네이버로 로그인</button>
+        </div>
+        </div>
+        <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
+        <section id="r4MarketSeller" class="tn-market-panel" aria-labelledby="r4MarketSellerTitle" hidden>
+          <header class="tn-market-heading">
+            <h2 id="r4MarketSellerTitle">내 상품</h2>
+            <button id="r4MarketSellerRefresh" class="ghost-button" type="button">다시 확인</button>
+          </header>
+          <p id="r4MarketSellerStatus" role="status" aria-live="polite"></p>
+          <p class="tn-market-note">초안만 저장됩니다. 유료 판매는 준비 중입니다.</p>
+          <form id="r4MarketStartForm" class="tn-market-form" hidden>
+            <label>운영 형태<select name="kind" aria-label="운영 형태"><option value="business">사업장</option><option value="independent_coach">독립 코치</option></select></label>
+            <label>활동 이름<input name="displayName" minlength="2" maxlength="100" required /></label>
+            <button class="primary-button" type="submit">초안 만들기</button>
+          </form>
+          <label id="r4MarketWorkspaceLabel" hidden>운영 공간<select id="r4MarketWorkspace" aria-label="운영 공간"></select></label>
+          <form id="r4MarketDraftForm" class="tn-market-form" hidden>
+            <label>상품 유형<select name="kind" aria-label="상품 유형"><option value="single_lesson">단건 레슨</option><option value="lesson_pass">회차권</option></select></label>
+            <label>상품명<input name="title" minlength="2" maxlength="100" required /></label>
+            <div class="tn-market-fields">
+              <label>가격 (원)<input name="price" type="number" min="0" max="10000000" step="1" inputmode="numeric" required /></label>
+              <label>이용 횟수<input name="sessions" type="number" min="1" max="100" step="1" inputmode="numeric" value="1" required /></label>
+            </div>
+            <button class="primary-button" type="submit">초안 저장</button>
+          </form>
+          <ul id="r4MarketDrafts" class="tn-market-list"></ul>
+        </section>
+
+        <section id="r4Onboarding" aria-labelledby="r4OnboardingTitle" hidden>
+          <h2 id="r4OnboardingTitle">지점 신청</h2>
+          <div id="r4PhoneVerification" hidden>
+              <form id="r4PhoneVerificationForm" class="operations-password-login-form" autocomplete="off">
+                <label><span>휴대전화</span><input id="r4VerificationPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="01012345678" required /></label>
+                <button id="r4VerificationSend" class="ghost-button" type="button">인증번호 받기</button>
+                <label><span>인증번호</span><input id="r4VerificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" disabled required /></label>
+                <button id="r4VerificationConfirm" class="primary-button" type="submit" disabled>확인</button>
+                <p id="r4VerificationStatus" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+            <form id="r4ApplicationForm" class="operations-password-login-form" hidden>
+            <label>사업장 이름 <input name="organization" minlength="2" maxlength="100" required /></label>
+            <label>지점 이름 <input name="branch" minlength="2" maxlength="100" required /></label>
+            <button class="primary-button" type="submit" disabled>지점 신청</button>
+          </form>
+          <div id="r4ApplicationList"></div>
+          <button id="r4ApplicationRefresh" class="ghost-button" type="button">상태 새로 확인</button>
+          <p id="r4ApplicationStatus" aria-live="polite"></p>
+        </section>
+        <section id="r4BranchHoursPanel" aria-labelledby="r4BranchHoursTitle" hidden>
+          <h2 id="r4BranchHoursTitle">내 지점 운영시간</h2>
+          <p>승인된 지점만 관리할 수 있습니다.</p>
+          <label>승인된 지점 <select id="r4ManagedBranch"></select></label>
+          <form id="r4BranchHoursForm" class="operations-password-login-form" hidden>
+            <label>시작 시간 <input id="r4BranchOpenStart" type="time" step="1" required /></label>
+            <label>종료 시간 <input id="r4BranchOpenEnd" type="time" step="1" required /></label>
+            <button class="primary-button" type="submit">운영시간 저장</button>
+          </form>
+          <p id="r4BranchHoursStatus" aria-live="polite"></p>
+          <form id="r4BranchOperations" class="operations-password-login-form" aria-label="내 지점 운영 설정" hidden>
+            <label>지점 설정 <select name="action">
+              <option value="policy">수업 정책</option>
+              <option value="product">회원권 상품 등록</option>
+              <option value="import">엑셀 초기 등록</option>
+            </select></label>
+            <fieldset></fieldset>
+            <button class="primary-button" type="submit" disabled>정책 저장</button>
+            <p role="status" aria-live="polite"></p>
+          </form>
+          <form id="r4FirstLessonSetup" class="operations-password-login-form" aria-label="첫 수업 준비" hidden>
+            <p>이 지점의 첫 코치·20분 5회권 상품·회원을 등록합니다. 결제나 계정 연결은 하지 않습니다.</p>
+            <label>첫 코치 이름 <input name="coachName" minlength="2" maxlength="60" required /></label>
+            <label>첫 상품 이름 <input name="productName" minlength="2" maxlength="80" required /></label>
+            <label>첫 회원 이름 <input name="memberName" minlength="2" maxlength="60" required /></label>
+            <button class="primary-button" type="submit" disabled>첫 수업 준비</button>
+          </form>
+          <form id="r4BranchSaveForm" class="operations-password-login-form" aria-label="지점 업무 저장" hidden>
+            <label>회원권 <select name="ticket" required></select></label>
+            <label>저장할 항목 <select name="action">
+              <option value="memo">회원권 메모</option>
+              <option value="payment">미확인 수동 결제</option>
+              <option value="lesson">단일 수업</option>
+            </select></label>
+            <fieldset data-r4-write="memo" disabled>
+              <label>회원권 메모 <textarea name="memo" maxlength="500"></textarea></label>
+            </fieldset>
+            <fieldset data-r4-write="payment" hidden disabled>
+              <label>미확인 수동 결제 <select name="payment" required></select></label>
+              <label>금액(원) <input name="amount" type="number" min="1" max="2147483647" step="1" required /></label>
+            </fieldset>
+            <fieldset data-r4-write="lesson" hidden disabled>
+              <label>담당 코치 <select name="coach" required></select></label>
+              <label>수업 날짜 <input name="date" type="date" required /></label>
+              <label>시작 시간 <input name="time" type="time" required /></label>
+            </fieldset>
+            <button class="primary-button" type="submit" disabled>저장</button>
+          </form>
+          <p id="r4BranchSaveStatus" aria-live="polite"></p>
+        </section>
+        <small class="operations-access-note">코치는 회원·시간표·수업기록만 이용할 수 있습니다.</small>
+        <small class="release-version" data-tennisnote-release="detail"></small>
+      </div>
+    </section>
+    <section id="adminBrandSplash" class="brand-splash" role="status" aria-label="Tennis Note 관리자 불러오는 중">
+      <img src="./assets/brand/launch-splash.png" alt="" />
+      <span>Tennis Note 관리자 불러오는 중</span>
+    </section>
+    <main id="adminAppShell" class="app-shell" hidden>
+      <aside id="adminSidebar" class="sidebar" aria-label="주 메뉴">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">TN</div>
+          <div>
+            <strong>테니스노트</strong>
+            <span>테니스클럽하우스 운영</span>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="관리자 화면">
+          <div id="adminPrimaryMenu" class="admin-nav-section" aria-label="주 메뉴">
+            <button class="nav-item is-active" type="button" data-view="dashboard">대시보드</button>
+            <button class="nav-item" type="button" data-view="schedule">레슨시간표</button>
+            <button class="nav-item" type="button" data-view="members">회원·결제</button>
+          </div>
+          <button id="adminMoreMenuButton" class="nav-item admin-more-toggle" type="button" aria-controls="adminMoreMenu" aria-expanded="false">
+            <span>더보기</span><span class="admin-more-toggle-icon" aria-hidden="true">⌄</span>
+          </button>
+          <div id="adminMoreMenu" class="admin-nav-section admin-more-menu" aria-label="더보기 메뉴" hidden>
+            <button class="nav-item" type="button" data-view="reports">경영 리포트</button>
+            <button class="nav-item" type="button" data-view="notes">기록/차감 확인</button>
+            <button class="nav-item" type="button" data-view="issues">개선·오류 접수</button>
+            <button class="nav-item" type="button" data-view="settings">운영 설정</button>
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <small class="release-version" data-tennisnote-release="detail"></small>
+          <button id="adminSidebarLogoutButtonBottom" class="ghost-button" type="button" data-admin-auth-action="logout" hidden>로그아웃</button>
+        </div>
+      </aside>
+      <button id="adminMenuBackdrop" class="admin-menu-backdrop" type="button" aria-label="메뉴 닫기" hidden></button>
+
+      <section class="workspace">
+        <header class="topbar">
+          <button id="adminMenuButton" class="admin-menu-button" type="button" aria-controls="adminSidebar" aria-expanded="false">
+            <span aria-hidden="true">☰</span><span>메뉴</span>
+          </button>
+          <div>
+            <p class="eyebrow">테니스클럽하우스</p>
+            <h1 id="viewTitle">대시보드</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="admin-surface-label">관리자 웹 전용</span>
+            <span id="activeOperationBranchContext" class="operation-branch-context" hidden></span>
+        <div class="topbar-actions-placeholder">
+          <small class="release-version" data-tennisnote-release="detail"></small>
+          <button id="adminSidebarLogoutButton" class="ghost-button" type="button" data-admin-auth-action="logout" hidden>로그아웃</button>
+        </div>
+            <div class="global-search-shell">
+              <label class="search-box">
+                <span>검색</span>
+                <input id="globalSearch" type="search" placeholder="회원, 코치, 시간, 상태" autocomplete="off" aria-controls="globalSearchResults" aria-expanded="false" />
+              </label>
+              <div id="globalSearchResults" class="global-search-results" role="listbox" aria-label="통합 검색 결과" hidden></div>
+            </div>
+          </div>
+        </header>
+
+        <div id="adminConnectivityStatus" class="connectivity-status" role="status" aria-live="polite" hidden>
+          <span id="adminConnectivityMessage"></span>
+        </div>
+        <div id="adminSaveState" class="admin-save-state" role="status" aria-live="polite">
+          아직 저장한 변경이 없습니다.
+        </div>
+
+        <section id="dashboardView" class="view is-active" aria-label="운영 대시보드">
+          <div class="metric-grid is-loading" data-dashboard-group="metrics" aria-busy="true">
+            <button class="metric-card" type="button" data-jump="schedule" data-dashboard-widget="metric-lessons" style="text-align: left">
+              <span>오늘 수업</span>
+              <strong id="metricLessons">—</strong>
+              <small>최신 자료를 불러오는 중</small>
+            </button>
+            <button class="metric-card warning" type="button" data-jump="schedule" data-dashboard-widget="metric-changes" style="text-align: left">
+              <span>변경 승인</span>
+              <strong id="metricMakeups">—</strong>
+              <small>최신 자료를 불러오는 중</small>
+            </button>
+            <button class="metric-card accent" type="button" data-jump="notes" data-dashboard-widget="metric-records" style="text-align: left">
+              <span>기록/차감 대기</span>
+              <strong id="metricNotes">—</strong>
+              <small>최신 자료를 불러오는 중</small>
+            </button>
+            <button class="metric-card calm" type="button" data-jump="billing" data-dashboard-widget="metric-payments" style="text-align: left">
+              <span>결제 대기</span>
+              <strong id="metricBilling">—</strong>
+              <small>최신 자료를 불러오는 중</small>
+            </button>
+          </div>
+
+          <section class="admin-today-grid" aria-label="오늘 운영 처리판" data-dashboard-group="operations">
+            <article class="panel today-command-panel" data-dashboard-widget="tasks">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">오늘 운영</p>
+                  <h2>오늘 처리할 일</h2>
+                  <button class="ghost-button" type="button" data-jump="settings" data-settings-tab="layout">화면 구성</button>
+                </div>
+                <button class="ghost-button" type="button" data-jump="billing">결제/정산 보기</button>
+              </div>
+              <div id="adminTaskList" class="ops-list"></div>
+              <div id="adminTaskPager" class="dashboard-pager" aria-label="오늘 처리할 일 페이지" hidden></div>
+            </article>
+
+            <article class="panel" data-dashboard-widget="members">
+              <div class="panel-heading">
+                <h2>회원 현황</h2>
+                <button class="ghost-button" type="button" data-jump="members">회원 보기</button>
+              </div>
+              <div id="memberStatusCards" class="member-status-grid"></div>
+              <div id="memberStatusPager" class="dashboard-pager" aria-label="회원 현황 페이지" hidden></div>
+            </article>
+
+            <article class="panel" data-dashboard-widget="coaches">
+              <div class="panel-heading">
+                <h2>코치 업무</h2>
+                <button class="ghost-button" type="button" data-jump="notes">기록 확인</button>
+              </div>
+              <div id="coachWorkCards" class="coach-work-grid"></div>
+            </article>
+          </section>
+          <div class="dashboard-grid dashboard-grid-single" data-dashboard-group="lessons">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>오늘 레슨</h2>
+                <button class="ghost-button" type="button" data-jump="schedule">전체 보기</button>
+              </div>
+              <div id="todayLessons" class="lesson-stack"></div>
+            </section>
+
+          </div>
+
+          <div class="dashboard-grid lower-grid" data-dashboard-group="insights">
+            <section class="panel" data-dashboard-widget="notices">
+              <div class="panel-heading">
+                <h2>공지·알림</h2>
+                <button id="openNoticeSettingsButton" class="ghost-button" type="button">관리</button>
+              </div>
+              <div id="dashboardNoticeSummary" class="dashboard-notification-summary"></div>
+            </section>
+            <section class="panel" data-dashboard-widget="reports">
+              <div class="panel-heading">
+                <h2>운영 요약</h2>
+                <span class="source-pill">리포트 핵심</span>
+              </div>
+              <div id="dashboardReportSummary" class="dashboard-report-summary"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="issuesView" class="view" aria-label="개선·오류 접수">
+          <section class="panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">서비스 개선</p><h2>개선·오류 접수</h2></div>
+              <div class="toolbar-actions">
+                <label class="compact-field">
+                  <span>상태</span>
+                  <select data-product-report-status>
+                    <option value="active">처리 중</option>
+                    <option value="resolved">완료·종료</option>
+                    <option value="all">전체</option>
+                  </select>
+                </label>
+                <button class="ghost-button" type="button" data-product-report-refresh>새로고침</button>
+                <button class="primary-button" type="button" data-open-product-report>직접 접수</button>
+              </div>
+            </div>
+            <p class="result-summary" data-product-report-summary aria-live="polite"></p>
+            <div class="tn-report-list" data-product-report-list><p>접수 내역을 불러오려면 새로고침을 눌러주세요.</p></div>
+            <nav class="tn-report-pager" data-product-report-pager aria-label="개선 오류 접수 페이지" hidden></nav>
+          </section>
+        </section>
+
+        <section id="membersView" class="view" aria-label="회원·회원권·결제">
+          <nav class="member-payment-workspace-tabs" aria-label="회원·결제 업무">
+            <button class="is-active" type="button" data-member-payment-view="members">회원권 목록</button>
+            <button type="button" data-member-payment-view="billing">결제 확인·정산</button>
+          </nav>
+          <div class="toolbar">
+            <div class="segmented-control member-primary-filters" role="group" aria-label="자주 쓰는 회원 상태">
+              <button class="segment is-active" type="button" data-member-filter="active"><span>수강중</span><strong data-member-filter-count="active">…</strong></button>
+              <button class="segment" type="button" data-member-filter="expiring"><span>만료임박</span><strong data-member-filter-count="expiring">…</strong></button>
+              <button class="segment" type="button" data-member-filter="journal" data-admin-only-member-filter><span>앱가입</span><strong data-member-filter-count="journal">…</strong></button>
+              <button class="segment" type="button" data-member-filter="expired" title="과거 DB에서 이관한 만료 회원 포함"><span>만료회원</span><strong data-member-filter-count="expired">…</strong></button>
+            </div>
+            <details class="member-more-filters">
+              <summary class="ghost-button">기타 상태</summary>
+              <div class="member-more-filter-panel">
+                <button class="segment" type="button" data-member-filter="pending"><span>가입대기</span><strong data-member-filter-count="pending">…</strong></button>
+                <button class="segment" type="button" data-member-filter="app_link" data-admin-only-member-filter><span>앱 연결 필요</span><strong data-member-filter-count="app_link">…</strong></button>
+                <button class="segment" type="button" data-member-filter="deletion" data-admin-only-member-filter><span>탈퇴요청</span><strong data-member-filter-count="deletion">…</strong></button>
+                <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter><span>삭제회원</span><strong data-member-filter-count="inactive">…</strong></button>
+              </div>
+            </details>
+            <div class="toolbar-actions">
+              <button id="openSingleSheetPreviewButton" class="ghost-button" type="button">엑셀 등록</button>
+              <details class="compact-action-menu member-data-menu">
+                <summary class="ghost-button">도구</summary>
+                <div class="compact-action-menu-panel">
+                  <button id="downloadMemberImportTemplateButton" class="ghost-button" type="button">빈 양식 다운로드</button>
+                  <button id="uploadMemberImportWorkbookButton" class="ghost-button" type="button">작성 파일 올리기</button>
+                  <button id="openDataToolsButton" class="ghost-button" type="button">검증·반영 화면</button>
+                  <button id="exportMembersButton" class="ghost-button" type="button">현재 목록 엑셀 내보내기</button>
+                </div>
+              </details>
+              <button id="addMemberButton" class="primary-button" type="button">회원 등록</button>
+            </div>
+          </div>
+          <section id="memberEditorModeBar" class="member-editor-mode-bar" data-member-scope="active expiring expired pending inactive" aria-label="회원표 바로 편집">
+            <button id="toggleMemberAdminEdit" class="secondary-button" type="button" aria-pressed="false">회원 수정 잠금 해제</button>
+            <p id="memberEditorModeSummary">수정을 누르면 PIN 확인 후 선택한 행만 바로 편집합니다.</p>
+            <span id="memberEditorModeSaveState" aria-live="polite">잠김</span>
+          </section>
+          <div id="adminPendingUsersPanel" class="admin-pending-users-panel" data-member-scope="pending" data-member-admin-only hidden></div>
+          <section class="panel app-signup-guide" data-member-scope="journal" data-member-admin-only hidden aria-label="앱가입 회원 연결 안내">
+            <div>
+              <strong>앱만 가입한 회원</strong>
+              <span>한 회원은 로그인 하나만 사용합니다. 이름 또는 휴대전화 뒤 4자리로 찾아 기존 DB에 연결하거나 신규 수강을 등록하세요.</span>
+            </div>
+            <ol>
+              <li><strong>기존 회원 연결</strong><span>이미 수강 DB에 있던 회원</span></li>
+              <li><strong>수강 등록</strong><span>처음 수강하는 신규 회원</span></li>
+            </ol>
+            <button id="manualCreateMemberButton" class="ghost-button" type="button">검색 결과 없으면 직접 신규 등록</button>
+          </section>
+          <section class="panel app-signup-guide" data-member-scope="app_link" data-member-admin-only hidden aria-label="앱 연결 필요 회원 안내">
+            <div>
+              <strong>기존 수강 DB와 앱 로그인이 분리된 회원</strong>
+              <span>전화번호·이름이 일치하고 생년이 충돌하지 않는 현재 또는 최근 만료 회원만 표시합니다. 회원을 눌러 앱 계정을 최종 확인해 연결하세요.</span>
+            </div>
+            <ol>
+              <li><strong>자동 연결</strong><span>새 로그인부터 정확히 한 명이면 서버가 연결</span></li>
+              <li><strong>관리자 확인</strong><span>기존 분리 계정은 회원권·수업을 보존해 연결</span></li>
+            </ol>
+          </section>
+          <div class="member-directory-layout" data-member-scope="active expiring expired pending journal app_link inactive">
+            <section class="panel table-panel">
+              <div class="member-list-toolbar" aria-label="회원 목록 필터">
+                <label data-member-list-filter="search">
+                  <span>회원 검색</span>
+                  <input id="memberListSearch" type="search" placeholder="이름 또는 시간 검색" />
+                </label>
+                <label data-member-list-filter="coach">
+                  <span>담당 코치</span>
+                  <select id="memberCoachFilter"></select>
+                </label>
+                <label data-member-list-filter="ticket">
+                  <span>회원권</span>
+                  <select id="memberTicketFilter">
+                    <option value="all">전체 회원권</option>
+                    <option value="regular">정규권</option>
+                    <option value="coupon">쿠폰제</option>
+                    <option value="none">회원권 없음</option>
+                  </select>
+                </label>
+                <label data-member-list-filter="processing">
+                  <span>처리 상태</span>
+                  <select id="memberTicketGridFilter">
+                    <option value="all">전체</option>
+                    <option value="review">확인 필요</option>
+                    <option value="active">사용 중</option>
+                    <option value="pending_payment">입금 대기</option>
+                    <option value="expiring">만료 임박</option>
+                    <option value="link_error">연결 오류</option>
+                  </select>
+                </label>
+                <div class="member-filter-result">
+                  <strong id="memberFilterSummary" class="member-filter-summary"></strong>
+                  <button id="toggleMemberTableView" class="ghost-button member-table-view-toggle" type="button" aria-pressed="true">상세 보기</button>
+                  <button id="resetMemberFilters" class="ghost-button member-filter-reset" type="button" hidden>검색 초기화</button>
+                  <button id="showChangedMemberRows" class="ghost-button" type="button" hidden>변경된 행만</button>
+                  <button id="showFailedMemberRows" class="ghost-button" type="button" hidden>저장 실패만</button>
+                  <button id="saveVisibleMemberRows" class="primary-button member-page-save" type="button" hidden>현재 페이지 전체 저장</button>
+                </div>
+              </div>
+              <div id="memberBulkToolbar" class="bulk-action-toolbar" hidden>
+                <strong><span id="memberBulkCount">0</span>명 선택</strong>
+                <button id="selectAllFilteredMembers" class="ghost-button" type="button">전체 선택</button>
+                <select id="memberBulkAction" aria-label="회원 일괄 작업">
+                  <option value="">작업 선택</option>
+                  <option value="reenroll">회원권 일괄 재등록</option>
+                  <option value="expire_tickets">회원권 만료 처리</option>
+                  <option value="deactivate">삭제회원으로 이동</option>
+                  <option value="restore">회원 복원</option>
+                  <option value="permanent_delete" hidden>삭제회원 영구 삭제</option>
+                </select>
+                <div id="memberBulkRenewalFields" class="member-bulk-renewal-fields" hidden>
+                  <label>
+                    <span>새 회원권</span>
+                    <select id="memberBulkRenewalProduct" aria-label="일괄 재등록 회원권"></select>
+                  </label>
+                  <label>
+                    <span>결제수단</span>
+                    <select id="memberBulkRenewalPaymentMethod" aria-label="일괄 재등록 결제수단">
+                      <option value="bank_transfer">계좌이체</option>
+                      <option value="card">카드결제</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>결제일</span>
+                    <input id="memberBulkRenewalPaymentDate" type="date" />
+                  </label>
+                  <label>
+                    <span>시작일</span>
+                    <input id="memberBulkRenewalStartDate" type="date" aria-describedby="memberBulkRenewalStartHint" />
+                    <small id="memberBulkRenewalStartHint">비우면 기존 회원권 종료 다음 날</small>
+                  </label>
+                  <label class="member-bulk-renewal-toggle">
+                    <input id="memberBulkRenewalKeepSchedule" type="checkbox" checked />
+                    <span>기존 고정시간 연장</span>
+                  </label>
+                  <p id="memberBulkRenewalResult" class="member-bulk-renewal-result" aria-live="polite"></p>
+                </div>
+                <button id="runMemberBulkAction" class="small-button" type="button">적용</button>
+                <button id="deleteSelectedMembers" class="small-button danger-button" type="button">선택 삭제</button>
+                <button id="clearMemberBulkSelection" class="ghost-button" type="button">선택 해제</button>
+              </div>
+              <table id="memberDirectoryTable" class="member-directory-table is-simple">
+                <thead>
+                  <tr>
+                    <th class="row-select-cell member-select-column"><input id="selectVisibleMembers" type="checkbox" aria-label="현재 목록 전체 선택" /></th>
+                    <th class="member-status-column">상태</th>
+                    <th class="member-name-column">회원</th>
+                    <th class="member-auth-column">앱 연결</th>
+                    <th class="member-ticket-column">상품</th>
+                    <th class="member-scope-column">평일/주말</th>
+                    <th class="member-coach-column">코치</th>
+                    <th class="member-partner-column">파트너</th>
+                    <th class="member-date-column">시작일</th>
+                    <th class="member-date-column">만료일</th>
+                    <th class="member-usage-column">총/사용/잔여</th>
+                    <th class="member-payment-date-column">결제일</th>
+                    <th class="member-payment-method-column">결제 상태</th>
+                    <th class="member-payment-amount-column">금액·정산</th>
+                    <th class="member-settlement-column">정산</th>
+                    <th class="member-actions-column">처리</th>
+                  </tr>
+                </thead>
+                <tbody id="memberRows"></tbody>
+              </table>
+              <div id="memberQuickEditPopover" class="member-quick-edit-popover" role="dialog" aria-modal="false" aria-label="회원 빠른 편집" hidden></div>
+              <div id="memberListPager" class="dashboard-pager member-list-pager" aria-label="회원 목록 페이지" hidden></div>
+            </section>
+          </div>
+          <details class="panel admin-secondary-panel holding-admin-panel" data-member-scope="active" data-member-admin-only aria-label="홀딩 요청 관리">
+            <summary class="admin-secondary-summary">
+              <span class="admin-secondary-title"><small>Holding</small><strong>홀딩 요청</strong></span>
+              <span class="source-pill">관리자 확인</span>
+            </summary>
+            <p class="setting-help">개인 사유는 기간만 확인하고, 부상 증빙은 관리자만 열람합니다.</p>
+            <div id="holdingRequestAdminList" class="holding-admin-list"></div>
+          </details>
+          <details class="panel admin-secondary-panel account-deletion-admin-panel" data-member-scope="deletion" data-member-admin-only aria-label="회원 탈퇴 요청 관리" hidden>
+            <summary class="admin-secondary-summary">
+              <span class="admin-secondary-title"><small>Account</small><strong>회원 탈퇴·데이터 삭제 요청</strong></span>
+              <span class="source-pill">관리자 처리</span>
+            </summary>
+            <p class="setting-help">결제·환불·잔여 수업과 법정 보관 대상을 확인한 뒤 처리 상태를 변경합니다.</p>
+            <div id="accountDeletionServerStatus" class="account-deletion-server-status" role="status" aria-live="polite">
+              <div>
+                <strong>삭제 서버 확인 중</strong>
+                <span>실행 전에 서버와 DB 안전 계약을 확인합니다.</span>
+              </div>
+              <button class="ghost-button" type="button" data-retry-account-deletion-readiness>다시 확인</button>
+            </div>
+            <div id="accountDeletionAdminList" class="holding-admin-list account-deletion-admin-list"></div>
+          </details>
+        </section>
+
+        <section id="scheduleView" class="view" aria-label="레슨시간표">
+          <details id="scheduleChangeApprovalQueue" class="panel schedule-change-approval" open>
+            <summary>
+              <span><strong>24시간 이내 변경 승인</strong><small>담당 코치 또는 관리자가 처리합니다.</small></span>
+              <b id="scheduleChangeApprovalCount">0건</b>
+            </summary>
+            <div id="scheduleChangeApprovalRows" class="schedule-change-approval-list" aria-live="polite"></div>
+          </details>
+          <section id="scheduleV2Workspace" class="panel schedule-v2-workspace" aria-label="새 레슨시간표 작업대">
+            <header class="schedule-v2-head">
+              <div>
+                <small>관리자 시간표</small>
+                <h2>레슨시간표</h2>
+                <p id="scheduleV2RangeLabel">시간표 불러오는 중</p>
+              </div>
+              <div class="schedule-v2-head-actions">
+                <button type="button" data-v2-week-step="-1" aria-label="이전 주" title="이전 주">‹</button>
+                <button type="button" id="scheduleV2TodayButton">오늘</button>
+                <button type="button" data-v2-week-step="1" aria-label="다음 주" title="다음 주">›</button>
+                <button type="button" id="scheduleV2RefreshButton" title="서버에서 다시 불러오기">새로고침</button>
+              </div>
+            </header>
+            <div id="scheduleV2Status" class="schedule-v2-status" role="status">로그인과 지점을 확인하고 있습니다.</div>
+            <details id="scheduleV2AdvancedTools" class="schedule-v2-advanced-tools">
+              <summary>
+                <span><strong>고급 관리</strong><small>회원 연결 점검 · 정리 기록 · 운영 규칙</small></span>
+                <b>필요할 때 열기</b>
+              </summary>
+              <div class="schedule-v2-advanced-tools-body">
+                <details id="scheduleV2IntegrityPanel" class="schedule-v2-integrity-panel">
+                  <summary><span>회원 연결 점검</span><strong id="scheduleV2IntegritySummary">확인 전</strong></summary>
+                  <p>먼저 읽기 전용으로 점검하며 점검만으로는 자동 수정하지 않습니다. 충돌 없이 전부 생성 가능한 회원권만 관리자가 별도로 확정하고, 규칙 누락·시간 충돌 항목은 변경하지 않습니다.</p>
+                  <div class="inline-actions">
+                    <button id="scheduleV2IntegrityButton" class="ghost-button" type="button">전체 회원 점검</button>
+                    <button id="scheduleV2IntegrityApplyButton" class="primary-button" type="button" disabled>확정 가능한 일정 생성</button>
+                  </div>
+                  <div id="scheduleV2IntegrityList" class="schedule-v2-integrity-list" aria-live="polite"></div>
+                </details>
+                <details id="scheduleV2ParallelCheck" class="schedule-v2-parallel-check" hidden>
+                  <summary>
+                    <span>기존 시간표 비교</span>
+                    <strong id="scheduleV2ParallelSummary">확인 전</strong>
+                  </summary>
+                  <p id="scheduleV2ParallelDescription">같은 주의 기존 시간표와 새 시간표를 읽기 전용으로 비교합니다.</p>
+                  <div id="scheduleV2ParallelDifferences" class="schedule-v2-parallel-differences"></div>
+                </details>
+                <details id="scheduleV2ArchivedHistoryPanel" class="schedule-v2-archived-history">
+                  <summary>
+                    <span>자동 정리 기록</span>
+                    <strong id="scheduleV2ArchivedHistoryCount">0건</strong>
+                  </summary>
+                  <p>삭제회원과 회원권 상태·기간·횟수 때문에 자동 제외된 수업입니다. 기록은 보존하되 기본 시간표에서는 숨깁니다.</p>
+                  <button id="scheduleV2ArchivedHistoryToggle" class="ghost-button" type="button" aria-pressed="false">시간표에 표시</button>
+                  <div id="scheduleV2ArchivedHistoryList" class="schedule-v2-archived-history-list"></div>
+                </details>
+                <button id="scheduleV2PolicyButton" class="ghost-button schedule-v2-policy-open" type="button" aria-expanded="false">운영 규칙 열기</button>
+                <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
+                  <section class="schedule-v2-member-change-policy schedule-v2-same-day-absence-policy" aria-labelledby="scheduleV2SameDayAbsencePolicyTitle">
+                    <header>
+                      <div><small>회원 앱</small><strong id="scheduleV2SameDayAbsencePolicyTitle">당일 불참·다시 참석</strong></div>
+                      <span>신청 당시 규칙 보존</span>
+                    </header>
+                    <div class="schedule-v2-member-change-policy-fields">
+                      <label><span>오늘 못 가요</span><select name="memberSameDayAbsenceEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                      <label><span>회원권 차감</span><select name="memberSameDayAbsenceDeductEnabled"><option value="true">1회 차감</option><option value="false">차감 안 함</option></select></label>
+                    </div>
+                    <details class="schedule-v2-policy-details">
+                      <summary>상세 설정</summary>
+                      <div class="schedule-v2-member-change-policy-fields">
+                        <label><span>불참 사유</span><select name="memberSameDayAbsenceReasonMode"><option value="none">받지 않음</option><option value="optional">선택</option><option value="required">필수</option></select></label>
+                        <label><span>코치 승인</span><select name="memberSameDayAbsenceRequiresCoachApproval"><option value="false">필요 없음</option><option value="true">승인 필요</option></select></label>
+                        <label><span>다시 참석</span><select name="memberSameDayRestoreEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                        <label><span>복귀 마감</span><span class="schedule-v2-policy-number"><input name="memberSameDayRestoreCutoffMinutes" type="number" min="0" max="1440" step="10" value="0" inputmode="numeric" /><em>분 전</em></span></label>
+                        <label><span>보강</span><select name="memberSameDayAbsenceMakeupEnabled"><option value="false">발생 안 함</option><option value="true">발생</option></select></label>
+                        <label><span>그룹수업</span><select name="memberSameDayAbsenceGroupMode"><option value="individual">신청 회원만 처리</option><option value="blocked">앱 신청 불가</option></select></label>
+                      </div>
+                    </details>
+                    <p id="scheduleV2SameDayAbsencePolicyPreview" class="schedule-v2-member-change-policy-preview" aria-live="polite"></p>
+                  </section>
+                  <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
+                  <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
+                  <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
+                  <label><span>잠긴 시간 코치 등록</span><select name="allowCoachLockedTimeOverride"><option value="true">허용</option><option value="false">허용 안 함</option></select></label>
+                  <label><span>휴무일 코치 등록</span><select name="allowCoachHolidayOverride"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
+                  <label><span>보강 인접 간격</span><input name="makeupAnchorGapMinutes" type="number" min="0" max="100" step="1" value="40" inputmode="numeric" required /><small>0~100분 · 기본 40분</small></label>
+                  <button id="scheduleV2PolicySaveButton" class="primary-button" type="button">규칙 저장</button>
+                </div>
+              </div>
+            </details>
+            <div class="schedule-v2-toolbar">
+              <div id="scheduleV2DayTabs" class="schedule-v2-day-tabs" role="tablist" aria-label="날짜 선택"></div>
+              <label class="schedule-v2-search">
+                <span>회원 찾기</span>
+                <input id="scheduleV2LessonSearch" type="search" autocomplete="off" placeholder="이름 입력" />
+              </label>
+              <div class="schedule-v2-toolbar-actions">
+                <button id="scheduleV2FeedbackFilter" type="button" aria-pressed="false">피드백 미작성만</button>
+                <button id="scheduleV2ClosureButton" type="button">운영일·휴무</button>
+              </div>
+            </div>
+            <div class="schedule-v2-layout">
+              <div class="schedule-v2-main">
+                <div class="schedule-v2-legend" aria-label="수업 종류">
+                  <span data-kind="regular">정규</span><span data-kind="changed">보강·쿠폰·원데이</span><span data-kind="complete">피드백 완료</span><span data-kind="problem">피드백 필요·노쇼</span><span data-kind="pending">승인 대기</span><span data-kind="closure">휴무</span>
+                </div>
+                <div id="scheduleV2Grid" class="schedule-v2-grid" aria-live="polite">
+                  <div class="schedule-v2-loading">시간표 불러오는 중</div>
+                </div>
+              </div>
+              <details class="schedule-v2-queue" aria-labelledby="scheduleV2QueueTitle">
+                <summary class="schedule-v2-queue-head">
+                  <div><small>정규권</small><strong id="scheduleV2QueueTitle">시간 미배정</strong></div>
+                  <span id="scheduleV2QueueCount">0명</span>
+                </summary>
+                <p>회원권은 있지만 미래 정규시간이 부족한 회원입니다.</p>
+                <div id="scheduleV2QueueList" class="schedule-v2-queue-list"></div>
+              </details>
+            </div>
+          </section>
+
+          <section id="scheduleV2Editor" class="schedule-v2-editor" role="dialog" aria-modal="true" aria-labelledby="scheduleV2EditorTitle" hidden>
+            <button class="schedule-v2-editor-backdrop" type="button" data-v2-close-editor aria-label="편집창 닫기"></button>
+            <form id="scheduleV2EditorForm" class="schedule-v2-editor-sheet">
+              <header>
+                <div><small>빠른 편집</small><h3 id="scheduleV2EditorTitle">수업 추가</h3><p id="scheduleV2SlotLabel"></p></div>
+                <button type="button" data-v2-close-editor aria-label="닫기">×</button>
+              </header>
+              <section id="scheduleV2LessonSummary" class="schedule-v2-lesson-summary" hidden>
+                <div><span>회원</span><strong id="scheduleV2SummaryMember">회원 확인</strong></div>
+                <div><span>일정</span><strong id="scheduleV2SummarySchedule">날짜 · 시간 · 코치</strong></div>
+                <div><span>회원권</span><strong id="scheduleV2SummaryTicket">총/소진/잔여 확인</strong></div>
+                <div><span>상태</span><strong id="scheduleV2SummaryStatus">예정</strong></div>
+              </section>
+              <section id="scheduleV2SummaryActions" class="schedule-v2-summary-actions" aria-label="수업 빠른 작업" hidden>
+                <button class="primary-button" type="button" data-v2-editor-mode="outcome">피드백·출석</button>
+                <button type="button" data-v2-editor-mode="schedule">시간 변경</button>
+                <button type="button" data-v2-editor-mode="more">취소·대타·이력</button>
+              </section>
+              <nav id="scheduleV2EditorModes" class="schedule-v2-editor-modes" aria-label="수업 작업 선택" hidden>
+                <button type="button" data-v2-editor-mode="summary" aria-pressed="true">수업 보기</button>
+                <button type="button" data-v2-editor-mode="schedule" aria-pressed="false">시간 변경</button>
+                <button type="button" data-v2-editor-mode="outcome" aria-pressed="false">피드백·출석</button>
+                <button type="button" data-v2-editor-mode="more" aria-pressed="false">기타</button>
+              </nav>
+              <details id="scheduleV2SlotAdjustments" class="schedule-v2-slot-adjustments" data-v2-editor-section="schedule">
+                <summary><span>선택한 시간</span><strong id="scheduleV2SlotAdjustmentSummary">날짜 · 시간 · 코치</strong></summary>
+                <div class="schedule-v2-slot-controls">
+                  <label><span>날짜</span><input name="lessonDate" type="date" required /></label>
+                  <label><span>시간</span><select name="startTime" required></select></label>
+                  <label><span>코치</span><select name="coachRoleId" required></select></label>
+                </div>
+              </details>
+              <fieldset id="scheduleV2RegularEditScope" class="schedule-v2-edit-scope" data-v2-editor-section="schedule" hidden>
+                <legend>변경 범위</legend>
+                <label><input type="radio" name="regularEditScope" value="single" checked /><span>이번 수업만 변경</span></label>
+                <label><input type="radio" name="regularEditScope" value="future" /><span>이 날짜부터 매주 변경</span></label>
+                <small id="scheduleV2RegularEditScopeGuide">선택한 회차만 바꾸고 나머지 정규시간은 유지합니다.</small>
+              </fieldset>
+              <fieldset class="schedule-v2-kind-picker" data-v2-editor-section="schedule">
+                <legend>수업 종류</legend>
+                <label><input type="radio" name="scheduleKind" value="regular" checked /><span>정규</span></label>
+                <label><input type="radio" name="scheduleKind" value="makeup" /><span>보강</span></label>
+                <label><input type="radio" name="scheduleKind" value="coupon" /><span>쿠폰</span></label>
+                <label><input type="radio" name="scheduleKind" value="one_day" /><span>원데이</span></label>
+              </fieldset>
+              <section class="schedule-v2-member-picker" data-v2-editor-section="schedule" aria-label="수업 회원 선택">
+                <label class="schedule-v2-member-search"><span>회원 검색</span><input id="scheduleV2MemberSearch" type="search" autocomplete="off" placeholder="이름·연락처 끝 4자리·출생연도" /></label>
+                <div id="scheduleV2MemberResults" class="schedule-v2-member-results"></div>
+                <div id="scheduleV2SelectedTicket" class="schedule-v2-selected-ticket">회원을 선택해 주세요.</div>
+              </section>
+              <details id="scheduleV2OneDayIntake" class="schedule-v2-one-day-intake" data-v2-editor-section="schedule" hidden>
+                <summary><span>접수·수납 정보 (선택)</span><strong id="scheduleV2OneDayIntakeSummary">현장 · 미수납</strong></summary>
+                <div class="schedule-v2-one-day-intake-grid">
+                  <label><span>예약 경로</span><select name="oneDayBookingSource"><option value="walk_in">현장</option><option value="phone">전화</option><option value="naver_booking">네이버예약</option><option value="kakao_channel">카카오채널</option><option value="other">기타</option></select></label>
+                  <label><span>수납 상태</span><select name="oneDayPaymentStatus"><option value="unpaid">미수납</option><option value="paid">수납 완료</option><option value="complimentary">서비스</option></select></label>
+                  <label><span>결제수단</span><select name="oneDayPaymentMethod"><option value="">선택 안 함</option><option value="cash">현금</option><option value="card">카드</option><option value="bank_transfer">계좌이체</option><option value="online">온라인</option><option value="other">기타</option></select></label>
+                  <label><span>수납 금액</span><input name="oneDayPaymentAmount" type="number" min="0" max="99999999" step="1" inputmode="numeric" value="0" /></label>
+                </div>
+                <small>운영 기록용입니다. PG 결제·회원권·횟수 차감은 만들지 않습니다.</small>
+              </details>
+              <fieldset class="schedule-v2-duration-picker" data-v2-editor-section="schedule">
+                <legend>수업 시간</legend>
+                <label><input type="radio" name="durationMinutes" value="20" checked /><span>20분</span></label>
+                <label><input type="radio" name="durationMinutes" value="30" /><span>30분</span></label>
+                <label><input type="radio" name="durationMinutes" value="40" /><span>40분</span></label>
+                <label><input type="radio" name="durationMinutes" value="60" /><span>60분</span></label>
+              </fieldset>
+              <label id="scheduleV2SeriesOption" class="schedule-v2-series-option" data-v2-editor-section="schedule"><input type="checkbox" name="fillSeries" /><span><strong id="scheduleV2SeriesTitle">잔여 횟수만큼 미래 정규수업 생성</strong><small id="scheduleV2SeriesGuide">같은 요일·시간으로 회원권 종료일까지 생성합니다.</small></span></label>
+              <label class="schedule-v2-note" data-v2-editor-section="schedule"><span>메모 (선택)</span><input name="note" type="text" maxlength="120" /></label>
+              <details id="scheduleV2SubstitutePanel" class="schedule-v2-substitute" data-v2-editor-section="more" hidden>
+                <summary><span>이 회차 대타</span><strong id="scheduleV2SubstituteSummary">지정 없음</strong></summary>
+                <div class="schedule-v2-substitute-grid">
+                  <label><span>대타 코치</span><select name="substituteCoachRoleId"></select></label>
+                  <label><span>정산</span><select name="substituteSettlementMode"><option value="actual_coach">대타 코치 귀속</option><option value="hourly">시급</option><option value="none">정산 없음</option></select></label>
+                  <label id="scheduleV2SubstituteHourlyField" hidden><span>시급</span><input name="substituteHourlyAmount" type="number" min="1" step="1000" inputmode="numeric" /></label>
+                  <label><span>메모 (선택)</span><input name="substituteReason" type="text" maxlength="120" /></label>
+                </div>
+                <div class="schedule-v2-substitute-actions">
+                  <button id="scheduleV2CancelSubstituteButton" class="danger-button" type="button" hidden>대타 취소</button>
+                  <button id="scheduleV2AssignSubstituteButton" class="primary-button" type="button">대타 저장</button>
+                </div>
+                <small>시간표는 원 담당 코치 열에 유지되고, 대타 코치가 이 회차의 피드백과 차감을 처리합니다.</small>
+              </details>
+              <details id="scheduleV2OutcomePanel" class="schedule-v2-outcomes" data-v2-editor-section="outcome" hidden>
+                <summary><span>피드백·출석</span><strong id="scheduleV2OutcomeSummary">처리 전</strong></summary>
+                <div id="scheduleV2OutcomeList" class="schedule-v2-outcome-list"></div>
+                <datalist id="scheduleV2CurriculumOptions"></datalist>
+                <div id="scheduleV2OutcomeActions" class="schedule-v2-outcome-actions">
+                  <button id="scheduleV2FinalizeOutcomeButton" class="primary-button" type="button">수업 처리 완료</button>
+                </div>
+                <small>완료·노쇼만 차감할 수 있습니다. 불참은 차감 없이 보강 권한을 만듭니다.</small>
+              </details>
+              <details id="scheduleV2LessonHistoryPanel" class="schedule-v2-audit-panel" data-v2-editor-section="more" hidden>
+                <summary><span>변경 이력</span><strong id="scheduleV2LessonHistorySummary">열어보기</strong></summary>
+                <div id="scheduleV2LessonHistoryList" class="schedule-v2-lesson-history-list"></div>
+              </details>
+              <div id="scheduleV2EditorMessage" class="schedule-v2-editor-message" role="status"></div>
+              <footer>
+                <button id="scheduleV2CancelLessonButton" class="danger-button" type="button" data-v2-editor-section="more" hidden>수업 취소</button>
+                <button id="scheduleV2DeleteLessonButton" class="danger-button" type="button" data-v2-editor-section="more" hidden>수업 삭제</button>
+                <span></span>
+                <button type="button" data-v2-close-editor>닫기</button>
+                <button id="scheduleV2SaveButton" class="primary-button" type="submit" data-v2-editor-section="schedule">시간표에 저장</button>
+              </footer>
+            </form>
+          </section>
+
+          <section id="scheduleV2ClosureEditor" class="schedule-v2-editor schedule-v2-closure-editor" role="dialog" aria-modal="true" aria-labelledby="scheduleV2ClosureTitle" hidden>
+            <button class="schedule-v2-editor-backdrop" type="button" data-v2-close-closure aria-label="운영일 설정 닫기"></button>
+            <form id="scheduleV2ClosureForm" class="schedule-v2-editor-sheet schedule-v2-closure-sheet">
+              <header>
+                <div><small>운영시간</small><h3 id="scheduleV2ClosureTitle">운영일·휴무 설정</h3><p>휴무, 정상 운영, 단축 운영을 날짜별로 지정합니다.</p></div>
+                <button type="button" data-v2-close-closure aria-label="닫기">×</button>
+              </header>
+              <div class="schedule-v2-closure-fields">
+                <label><span>날짜</span><input name="closureDate" type="date" required /></label>
+                <label><span>운영 구분</span><select name="operationMode"><option value="closed">휴무</option><option value="normal">정상 운영</option><option value="shortened">단축 운영</option></select></label>
+                <label id="scheduleV2ClosureRangeField"><span>휴무 범위</span><select name="closureRange"><option value="all_day">하루 전체</option><option value="partial">시간 지정</option></select></label>
+                <label><span>표시 이름</span><input name="closureLabel" type="text" maxlength="40" value="휴무" required /></label>
+              </div>
+              <div id="scheduleV2ClosureTimeFields" class="schedule-v2-closure-time-fields" hidden>
+                <label><span>시작</span><input name="closureStartTime" type="time" step="600" /></label>
+                <label><span>종료</span><input name="closureEndTime" type="time" step="600" /></label>
+              </div>
+              <p id="scheduleV2OperationGuide" class="schedule-v2-operation-guide">휴무 시간에는 회원이 신청할 수 없습니다. 기존 수업은 처리 방법을 따로 확인합니다.</p>
+              <div id="scheduleV2OperationList" class="schedule-v2-closure-list" aria-live="polite"></div>
+              <div id="scheduleV2ClosureList" class="schedule-v2-closure-list" aria-live="polite"></div>
+              <section id="scheduleV2ClosureImpact" class="schedule-v2-closure-impact" aria-labelledby="scheduleV2ClosureImpactTitle" hidden>
+                <div>
+                  <strong id="scheduleV2ClosureImpactTitle">기존 수업 처리</strong>
+                  <p id="scheduleV2ClosureImpactSummary"></p>
+                </div>
+                <div id="scheduleV2ClosureImpactList" class="schedule-v2-closure-impact-list"></div>
+                <label><span>휴무 사유</span><input id="scheduleV2ClosureReason" type="text" maxlength="200" value="센터 휴무" /></label>
+                <div class="schedule-v2-closure-impact-actions">
+                  <button id="scheduleV2ClosureKeepLessonsButton" type="button">기존 수업 유지</button>
+                  <button id="scheduleV2ClosureApplyHolidayButton" class="danger-button" type="button">휴무·차감 없음으로 처리</button>
+                </div>
+              </section>
+              <div id="scheduleV2ClosureMessage" class="schedule-v2-editor-message" role="status"></div>
+              <footer>
+                <button id="scheduleV2ClosureResetButton" type="button">새로 입력</button>
+                <span></span><span></span>
+                <button type="button" data-v2-close-closure>닫기</button>
+                <button id="scheduleV2ClosureSaveButton" class="primary-button" type="submit">운영일 저장</button>
+              </footer>
+            </form>
+          </section>
+
+          <div class="toolbar schedule-main-toolbar">
+            <div class="schedule-toolbar-groups">
+              <div class="segmented-control" role="group" aria-label="시간표 형식">
+                <button class="segment is-active" type="button" data-schedule-view="week">주간 전체</button>
+                <button class="segment" type="button" data-schedule-view="coach">코치별 전체</button>
+              </div>
+              <div class="segmented-control" role="group" aria-label="시간표 상태">
+                <button class="segment is-active" type="button" data-schedule-filter="all">전체</button>
+                <button class="segment" type="button" data-schedule-filter="pending">확인대기</button>
+              </div>
+            </div>
+            <div class="toolbar-actions schedule-primary-actions">
+              <span class="schedule-save-status" role="status">등록·수정 시 서버에 자동 저장</span>
+              <details class="compact-action-menu schedule-tools-menu">
+                <summary class="ghost-button">편집 도구</summary>
+                <div class="compact-action-menu-panel">
+                  <button id="openScheduleSettingsButton" class="ghost-button" type="button">근무시간·브레이크</button>
+                  <button id="openSubstituteModal" class="ghost-button" type="button">대타 지정</button>
+                  <button id="toggleScheduleBulkMode" class="ghost-button" type="button" aria-pressed="false">여러 수업 수정</button>
+                  <button id="toggleScheduleOpenSlotMode" class="ghost-button" type="button" aria-pressed="false">여러 빈칸 선택</button>
+                  <button id="openScheduleSheetPaste" class="ghost-button" type="button">표 붙여넣기</button>
+                </div>
+              </details>
+              <button id="toggleScheduleEditMode" class="ghost-button" type="button" aria-pressed="false">시간표 편집</button>
+              <button id="saveScheduleList" type="button" hidden aria-hidden="true" tabindex="-1">목록 저장</button>
+              <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
+            </div>
+          </div>
+          <section class="reservation-strip">
+            <article>
+              <span>오늘 예약</span>
+              <strong id="scheduleMetricToday">0회</strong>
+              <small>테니스노트 시간표 기준</small>
+            </article>
+            <article>
+              <span>확인대기</span>
+              <strong id="scheduleMetricPending">0건</strong>
+              <small>코치 확인 필요</small>
+            </article>
+            <article>
+              <span>수업 단위</span>
+              <strong>20/30분</strong>
+              <small>40/60분은 연속 사용</small>
+            </article>
+          </section>
+          <section class="panel schedule-panel">
+            <div class="sheet-caption">
+              <strong id="adminWeekTitle">7월 1주차 레슨관리표</strong>
+              <span id="adminWeekNote">기본 수업은 20분/30분, 40분/60분은 회원권 연속 사용으로 표시</span>
+            </div>
+            <div id="adminWeekSwitcher" class="week-switcher admin-week-switcher" aria-label="관리자 시간표 주차 선택"></div>
+            <div class="schedule-member-search" role="search">
+              <label for="adminScheduleMemberSearch">회원 시간 찾기</label>
+              <input id="adminScheduleMemberSearch" type="search" autocomplete="off" placeholder="이름 입력" />
+              <button id="clearAdminScheduleMemberSearch" class="ghost-button" type="button" hidden>검색 지우기</button>
+              <div id="adminScheduleMemberSearchResult" aria-live="polite"></div>
+            </div>
+            <div class="schedule-assignment-picker">
+              <label for="scheduleAssignmentSearch">정규시간 배정</label>
+              <input id="scheduleAssignmentSearch" type="search" autocomplete="off" placeholder="회원 또는 코치 검색" />
+              <select id="scheduleAssignmentStatusFilter" aria-label="정규시간 배정 상태 필터">
+                <option value="all">전체</option>
+                <option value="partial">일부</option>
+                <option value="unassigned">미배정</option>
+              </select>
+              <select id="scheduleAssignmentTicket" aria-label="시간표에 배정할 회원 선택">
+                <option value="">회원 선택</option>
+              </select>
+              <span id="scheduleAssignmentCount">0명</span>
+            </div>
+            <div id="scheduleAssignmentBar" class="schedule-assignment-bar" hidden>
+              <div>
+                <strong id="scheduleAssignmentMember">회원 배정 중</strong>
+                <span id="scheduleAssignmentDetail">담당 코치의 빈 시간을 선택하세요.</span>
+              </div>
+              <div class="schedule-assignment-actions">
+                <button id="nextScheduleAssignment" class="ghost-button" type="button">다음 회원</button>
+                <button id="clearScheduleAssignment" class="ghost-button" type="button">배정 종료</button>
+              </div>
+            </div>
+            <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
+            <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
+            <details class="schedule-edit-guide" aria-label="시간표 사용법">
+              <summary>상황별 처리 방법</summary>
+              <ul>
+                <li><strong>당일 쿠폰:</strong> 빈칸 → 수업 추가 → 쿠폰수업을 선택합니다.</li>
+                <li><strong>사전 불참:</strong> 기존 수업 → 불참 처리. 횟수는 차감하지 않고 보강 자리가 열립니다.</li>
+                <li><strong>노쇼:</strong> 기존 수업 → 기록 처리 → 차감 또는 미차감을 선택합니다.</li>
+                <li><strong>시간 변경:</strong> 기존 수업 → 날짜·시간 수정 → 선택한 수업만 또는 이후 전체를 선택합니다.</li>
+                <li><strong>대타·여러 수업:</strong> 편집 도구에서 대상 수업을 선택한 뒤 처리합니다.</li>
+              </ul>
+            </details>
+            <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
+              <strong><span id="scheduleBulkCount">0</span>개 선택</strong>
+              <div id="scheduleBulkPreview" class="schedule-bulk-preview" aria-live="polite"></div>
+              <div class="schedule-bulk-actions">
+                <button class="ghost-button" type="button" data-shift-schedule-lessons="-10">10분 앞</button>
+                <button class="ghost-button" type="button" data-shift-schedule-lessons="10">10분 뒤</button>
+                <button id="bulkScheduleSubstitute" class="ghost-button" type="button">대타 지정</button>
+                <button id="copyScheduleLesson" class="ghost-button" type="button">수업 복사</button>
+                <button id="clearScheduleBulkSelection" class="ghost-button" type="button">선택 해제</button>
+                <button id="closeScheduleBulkMode" class="ghost-button" type="button">끝내기</button>
+              </div>
+            </div>
+            <div id="schedulePasteToolbar" class="schedule-paste-toolbar" hidden>
+              <strong id="schedulePasteSummary">복사한 수업</strong>
+              <span>같은 코치의 빈 칸을 선택하면 내용을 채워서 엽니다.</span>
+              <button id="clearScheduleLessonClipboard" class="ghost-button" type="button">복사 종료</button>
+            </div>
+            <div id="scheduleOpenSlotToolbar" class="schedule-open-slot-toolbar" hidden>
+              <strong><span id="scheduleOpenSlotCount">0</span>칸 선택</strong>
+              <div id="scheduleOpenSlotPreview" class="schedule-bulk-preview schedule-open-slot-preview" aria-live="polite">
+                빈 시간을 선택하면 반복 등록과 붙여넣기 가능 여부를 먼저 확인합니다.
+              </div>
+              <div class="schedule-bulk-actions">
+                <button id="createLessonFromOpenSlots" class="primary-button" type="button">선택칸 수업 추가</button>
+                <button id="clearScheduleOpenSlotSelection" class="ghost-button" type="button">선택 해제</button>
+                <button id="closeScheduleOpenSlotMode" class="ghost-button" type="button">끝내기</button>
+              </div>
+            </div>
+            <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
+            <div class="schedule-sheet-paste">
+              <div id="scheduleSheetPastePanel" class="schedule-sheet-paste-panel" hidden>
+                <div class="schedule-sheet-paste-head">
+                  <strong>엑셀/구글시트 붙여넣기 미리보기</strong>
+                  <button id="closeScheduleSheetPaste" class="ghost-button" type="button">닫기</button>
+                </div>
+                <textarea id="scheduleSheetPasteInput" rows="4" placeholder="요일	시간	코치	회원	수업종류	분"></textarea>
+                <div class="schedule-sheet-paste-actions">
+                  <button id="previewScheduleSheetPaste" class="primary-button" type="button">미리보기</button>
+                  <button id="saveScheduleSheetPaste" class="primary-button" type="button" disabled>확인한 줄 일괄 등록</button>
+                  <button id="clearScheduleSheetPaste" class="ghost-button" type="button">지우기</button>
+                  <span>문제 없는 줄만 서버에 저장합니다.</span>
+                </div>
+                <div id="scheduleSheetPastePreview" class="schedule-sheet-paste-preview" aria-live="polite"></div>
+              </div>
+            </div>
+            <div class="admin-schedule-scroll" data-schedule-scroll>
+              <div id="scheduleGrid" class="schedule-sheet"></div>
+              <div id="coachScheduleGrid" class="coach-day-sheet" hidden></div>
+            </div>
+          </section>
+        </section>
+
+        <section id="makeupView" class="view" aria-label="보강권 관리">
+          <section class="policy-strip">
+            <div>
+              <strong>불참 처리</strong>
+              <span>차감 없이 보강권 생성</span>
+            </div>
+            <div>
+              <strong>회원 예약</strong>
+              <span>빈 시간 검증 후 즉시 예약</span>
+            </div>
+            <div>
+              <strong>별도 승인 없음</strong>
+              <span>변경 승인은 시간표에서 처리</span>
+            </div>
+          </section>
+          <section class="panel table-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>회원</th>
+                  <th>발생 수업</th>
+                  <th>예약 수업</th>
+                  <th>보강권</th>
+                  <th>상태</th>
+                  <th>처리</th>
+                </tr>
+              </thead>
+              <tbody id="makeupRows"></tbody>
+            </table>
+          </section>
+        </section>
+
+        <section id="billingView" class="view" aria-label="결제 확인·정산">
+          <nav class="member-payment-workspace-tabs" aria-label="회원·결제 업무">
+            <button type="button" data-member-payment-view="members">회원권 목록</button>
+            <button class="is-active" type="button" data-member-payment-view="billing">결제 확인·정산</button>
+          </nav>
+          <section class="billing-action-grid" aria-label="결제 운영 요약">
+            <article class="billing-action-card">
+              <span>확인 필요</span>
+              <strong id="billingRequestCount">0건</strong>
+              <small>오류·오래된 결제만 확인</small>
+            </article>
+            <article class="billing-action-card">
+              <span>입금·결제 대기</span>
+              <strong id="billingCheckCount">0건</strong>
+              <small>진행 중인 요청을 한 건씩 표시</small>
+            </article>
+            <article class="billing-action-card">
+              <span>연장 필요</span>
+              <strong id="ticketRechargeCount">0개 회원권</strong>
+              <small>잔여 횟수 부족 회원권</small>
+            </article>
+            <article class="billing-action-card">
+              <span id="billingMonthTotalLabel">이번 달 회원권 매출</span>
+              <strong id="billingMonthPaidAmount">0원</strong>
+              <small id="billingMonthPaidCount">매출 귀속 0건</small>
+              <small id="billingActualPaidSummary">실제 결제일 기준 0건 · 0원</small>
+            </article>
+          </section>
+          <div class="billing-month-toolbar">
+            <label for="billingMonthFilter">정산 월</label>
+            <input id="billingMonthFilter" type="month" />
+            <span>운영 결제는 요청일, 매출·정산은 결제일과 귀속 월을 기준으로 표시합니다.</span>
+          </div>
+          <div class="billing-settings-actions" aria-label="결제 설정">
+            <button id="openOnsitePaymentButton" class="primary-button" type="button">현장결제 등록</button>
+            <button id="openProductSettingsButton" class="ghost-button" type="button">상품·할인 설정</button>
+          </div>
+          <div id="paymentAdminGateStatus" class="payment-admin-gate-status"></div>
+          <div class="billing-approval-guide" aria-label="결제 승인 흐름">
+            <strong>입금·결제 확인 후 승인 한 번</strong>
+            <span>정상 건은 결제·회원권 연결 완료로 끝납니다. 실패·대기 건만 처리 상세를 펼쳐 확인하세요.</span>
+          </div>
+          <section class="panel payment-queue-panel" aria-label="결제 처리 단계">
+            <div class="panel-heading">
+              <h2>결제 처리 단계</h2>
+              <div class="segmented-control billing-status-tabs" role="group" aria-label="결제 상태">
+                <button class="segment is-active" type="button" data-billing-filter="action">확인 필요 <span data-billing-count="action">0</span></button>
+                <button class="segment" type="button" data-billing-filter="verifying">결제 대기 <span data-billing-count="verifying">0</span></button>
+                <button class="segment" type="button" data-billing-filter="done">완료 <span data-billing-count="done">0</span></button>
+                <button class="segment" type="button" data-billing-filter="refund">취소·환불 <span data-billing-count="refund">0</span></button>
+              </div>
+            </div>
+          </section>
+          <details class="panel payment-charge-panel billing-secondary-details" aria-label="회원권 충전 추적">
+            <summary>결제 시도·오류 이력 보기</summary>
+            <div class="panel-heading">
+              <h2>최근 결제 흐름</h2>
+              <span class="source-pill">동일 요청은 한 건으로 묶어 표시</span>
+            </div>
+            <div id="paymentChargeAudit" class="payment-charge-audit"></div>
+          </details>
+          <div class="dashboard-grid">
+            <section class="panel table-panel payment-sheet-panel">
+              <div class="panel-heading">
+                <div><h2>결제 확인·승인</h2><span class="source-pill">한 결제당 한 줄</span></div>
+                <button class="ghost-button" type="button" id="syncServerPaymentsButton">서버 결제 새로고침</button>
+              </div>
+              <div id="serverPaymentSyncStatus" class="payment-sync-status"></div>
+              <table class="payment-sheet-table">
+                <thead>
+                  <tr>
+                    <th>상태</th>
+                    <th>회원</th>
+                    <th>상품·회원권</th>
+                    <th>결제</th>
+                    <th>확인</th>
+                    <th>처리</th>
+                    <th>코치·정산</th>
+                  </tr>
+                </thead>
+                <tbody id="billingRows"></tbody>
+              </table>
+              <nav id="billingPager" class="dashboard-pager" aria-label="결제 목록 페이지" hidden></nav>
+            </section>
+          </div>
+          <details class="billing-secondary-details billing-lower-details">
+            <summary>정산·연장 내역</summary>
+            <div class="dashboard-grid lower-grid">
+            <section class="panel table-panel">
+              <div class="panel-heading">
+                <h2>코치 정산 미리보기</h2>
+                <span class="source-pill">실결제 기준 · 카드 결제는 현금가 정산</span>
+              </div>
+              <div id="coachSettlementSummary" class="coach-settlement-summary" aria-live="polite"></div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>회원</th>
+                    <th>담당/진행 코치</th>
+                    <th>실결제</th>
+                    <th>정산 기준</th>
+                    <th>방식</th>
+                    <th>최종 정산</th>
+                  </tr>
+                </thead>
+                <tbody id="coachSettlementPreviewRows"></tbody>
+              </table>
+              <nav id="coachSettlementPreviewPager" class="dashboard-pager" aria-label="코치 정산 목록 페이지" hidden></nav>
+              <section id="adminSettlementHistory" class="admin-settlement-history" aria-label="월 정산 확정 이력" aria-busy="false">
+                <h3>확정 이력 조회</h3>
+                <div class="admin-settlement-history-controls">
+                  <label for="adminSettlementHistoryCoach">대상 코치</label>
+                  <select id="adminSettlementHistoryCoach"><option value="">코치 선택</option></select>
+                  <button id="adminSettlementHistoryRead" type="button" class="ghost-button" disabled>확정 이력 조회</button>
+                </div>
+                <p id="adminSettlementHistoryMessage" role="status">코치를 선택한 뒤 확정 이력을 조회해 주세요.</p>
+                <dl id="adminSettlementHistoryDetails" hidden></dl>
+                <div id="adminR3SettlementWriter" class="admin-settlement-history-writer" aria-label="월 정산 계산본 확인 및 수동 기록">
+                  <div class="admin-settlement-history-controls">
+                    <button id="adminR3SettlementPreview" type="button" class="ghost-button" disabled>계산 결과 확인</button>
+                    <button id="adminR3SettlementConfirm" type="button" class="ghost-button" disabled hidden>확정 계산본 저장</button>
+                  </div>
+                  <p id="adminR3SettlementWriterMessage" role="status" aria-live="polite">계산 결과를 먼저 확인해 주세요.</p>
+                  <dl id="adminR3SettlementPreviewDetails" hidden></dl>
+                  <details id="adminR3PayoutDetails" hidden>
+                    <summary>수동 지급 기록 · 실제 송금 아님</summary>
+                    <p id="adminR3PayoutMessage" role="status" aria-live="polite">수동 기록 상태를 확인해 주세요.</p>
+                    <dl id="adminR3PayoutReadback"></dl>
+                    <div class="admin-settlement-history-controls">
+                      <label for="adminR3PayoutDate">기록 날짜</label><input id="adminR3PayoutDate" type="date" />
+                      <label for="adminR3PayoutMethod">기록 방식</label>
+                      <select id="adminR3PayoutMethod"><option value="bank_transfer">계좌이체 기록</option><option value="cash">현금 기록</option><option value="other_manual">기타 수동 기록</option></select>
+                      <button id="adminR3PayoutRecord" type="button" class="ghost-button" disabled>전액 지급 기록 추가</button>
+                    </div>
+                    <div class="admin-settlement-history-controls">
+                      <label for="adminR3PayoutReverseReason">기록 정정 사유</label>
+                      <select id="adminR3PayoutReverseReason"><option value="">사유 선택</option><option value="duplicate_record">중복 기록</option><option value="wrong_date">날짜 오류</option><option value="wrong_method">방식 오류</option><option value="other_recording_error">기타 기록 오류</option></select>
+                      <button id="adminR3PayoutReverse" type="button" class="ghost-button" disabled>지급 기록 정정</button>
+                    </div>
+                    <small>미지급 정산의 가감 조정은 원본 계산과 사유를 보존하고 코치 재확인을 받습니다. 부분 지급·이의 중 지급·실제 송금·환불은 실행하지 않습니다.</small>
+                  </details>
+                </div>
+              </section>
+            </section>
+            <section class="panel table-panel">
+              <div class="panel-heading">
+                <h2>연장 확인 필요</h2>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>회원</th>
+                    <th>상품</th>
+                    <th>잔여</th>
+                    <th>권장 처리</th>
+                    <th>충전</th>
+                  </tr>
+                </thead>
+                <tbody id="rechargeRows"></tbody>
+              </table>
+              <nav id="rechargePager" class="dashboard-pager" aria-label="연장 확인 목록 페이지" hidden></nav>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>결제 처리 로그</h2>
+              </div>
+              <ul id="billingLog" class="billing-log"></ul>
+            </section>
+            </div>
+          </details>
+        </section>
+
+        <section id="notesView" class="view" aria-label="기록·차감 상태">
+          <section class="record-action-grid" aria-label="기록 차감 요약">
+            <article class="billing-action-card">
+              <span>운영 요청</span>
+              <strong id="recordPendingCount">0건</strong>
+              <small>결제 연결·보강 승인 등</small>
+            </article>
+            <article class="billing-action-card">
+              <span>피드·작성</span>
+              <strong id="recordFeedbackCount">0건</strong>
+              <small>정상 미작성·초안·회원 운동일지</small>
+            </article>
+            <article class="billing-action-card">
+              <span>차감 완료</span>
+              <strong id="recordDoneCount">0건</strong>
+              <small>회원권 횟수 반영 완료</small>
+            </article>
+            <article class="billing-action-card">
+              <span>실제 오류</span>
+              <strong id="recordIssueCount">0건</strong>
+              <small>완료 기록·차감·회원권 연결 불일치</small>
+            </article>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>기록·차감 상태</h2>
+                <span class="source-pill">회원 피드 · 코치 코멘트 · 다음 커리큘럼 · 횟수 차감</span>
+              </div>
+            </div>
+            <div class="segmented-control compact-segments" role="group" aria-label="기록 상태">
+              <button class="segment is-active" type="button" data-record-filter="pending">운영 요청</button>
+              <button class="segment" type="button" data-record-filter="feedback">피드·작성</button>
+              <button class="segment" type="button" data-record-filter="done">차감 완료</button>
+              <button class="segment" type="button" data-record-filter="issue">실제 오류</button>
+            </div>
+            <div class="record-filter-bar" aria-label="기록 상세 필터">
+              <label class="record-search-field">
+                <span>회원·날짜·코치 검색</span>
+                <input id="recordSearch" type="search" autocomplete="off" placeholder="이름, 날짜 또는 코치" />
+              </label>
+              <label><span>담당 코치</span><select id="recordCoachFilter"><option value="all">전체 코치</option></select></label>
+              <label>
+                <span>운영 요청 분류</span>
+                <select id="recordPendingTypeFilter">
+                  <option value="all">전체 운영 요청</option>
+                  <option value="lesson">기타 운영</option>
+                  <option value="payment">결제 연결</option>
+                  <option value="makeup">보강·변경</option>
+                  <option value="feedback">회원 피드</option>
+                </select>
+              </label>
+            </div>
+            <div id="recordResultSummary" class="record-result-summary" aria-live="polite"></div>
+            <div id="recordAuditRows" class="record-audit-list"></div>
+            <nav id="recordAuditPager" class="dashboard-pager" aria-label="기록 목록 페이지" hidden></nav>
+          </section>
+        </section>
+
+        <section id="reportsView" class="view management-report-view" aria-label="경영 리포트">
+          <header class="management-report-toolbar">
+            <div>
+              <p class="eyebrow">경영 리포트</p>
+              <h2>운영 숫자와 장부 상태를 한눈에</h2>
+              <p>회원·수업·피드백·결제는 테니스노트 운영 데이터로 계산하고, Google 장부 원본은 DB에 복제하지 않습니다.</p>
+            </div>
+            <div class="toolbar-actions management-report-actions">
+              <label class="compact-field">
+                <span>조회 월</span>
+                <input id="managementReportMonth" type="month" />
+              </label>
+              <button id="openReportLayoutSettingsButton" class="ghost-button" type="button">보드 구성</button>
+            </div>
+          </header>
+
+          <section class="panel management-report-widget management-report-summary" data-report-widget="summary">
+            <div class="panel-heading">
+              <div><p class="eyebrow">실시간 운영 DB</p><h2 id="managementReportPeriodLabel">선택 월 요약</h2></div>
+              <span class="source-pill">운영 데이터</span>
+            </div>
+            <div id="reportMetrics" class="metric-grid"></div>
+          </section>
+
+          <section class="panel management-report-widget" data-report-widget="members">
+            <div class="panel-heading">
+              <div><p class="eyebrow">등록·회원권</p><h2>회원 흐름</h2></div>
+              <button class="ghost-button" type="button" data-jump="members">회원관리 열기</button>
+            </div>
+            <div id="managementMemberReport" class="management-report-list"></div>
+          </section>
+
+          <section class="panel management-report-widget" data-report-widget="quality">
+            <div class="panel-heading">
+              <div><p class="eyebrow">수업 품질</p><h2>피드백·출석</h2></div>
+              <button class="ghost-button" type="button" data-jump="notes">기록 확인</button>
+            </div>
+            <div id="managementQualityReport" class="management-report-list"></div>
+          </section>
+
+          <section class="panel management-report-widget" data-report-widget="finance">
+            <div class="panel-heading">
+              <div><p class="eyebrow">매출·비용·손익</p><h2>재무 자료 상태</h2></div>
+              <div class="management-report-source-actions">
+                <span id="managementFinanceSourceStatus" class="source-pill">원본 비저장</span>
+                <button id="refreshDriveReportButton" class="ghost-button" type="button">Drive 확인</button>
+              </div>
+            </div>
+            <div id="managementFinanceReport" class="management-report-list"></div>
+          </section>
+
+          <section class="panel management-report-widget" data-report-widget="sources">
+            <div class="panel-heading">
+              <div><h2>자료 정보</h2></div>
+              <span class="source-pill">읽기 전용</span>
+            </div>
+            <p class="setting-help">리포트의 자료와 연결 상태를 확인합니다.</p>
+            <details><summary>자세히 보기</summary><div id="managementSourcePlan" class="management-source-plan"></div></details>
+          </section>
+        </section>
+
+        <section id="dataView" class="view" aria-label="데이터 관리">
+          <section class="data-management-grid">
+            <article class="panel data-import-panel">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <h2>회원DB 엑셀 등록</h2>
+                </div>
+                <span class="source-pill">반영 전 검증</span>
+              </div>
+              <p class="setting-help">간편 양식에 회원을 한 명씩 적어 올립니다. 시간표는 반영하지 않습니다.</p>
+              <div class="import-step-grid">
+                <article>
+                  <strong>1. 회원 명단</strong>
+                  <span>회원DB에 한 명씩 한 줄로 입력</span>
+                </article>
+                <article>
+                  <strong>2. 검증</strong>
+                  <span>중복, 회원권, 횟수, 1:2, 코치, 시간 충돌 확인</span>
+                </article>
+                <article>
+                  <strong>3. 확정</strong>
+                  <span>서버 미리보기 후 한 번에 반영하고 다시 대조</span>
+                </article>
+              </div>
+              <div class="data-action-row">
+                <button id="downloadImportTemplateButton" class="primary-button" type="button">빈 양식 다운로드</button>
+              </div>
+              <label class="file-drop-zone" for="dataImportFile">
+                <input id="dataImportFile" type="file" accept=".xlsx,.xls,.csv,.tsv" />
+                <strong>작성한 엑셀 올리기</strong>
+                <span>.xlsx 파일을 올리면 검증 후 서버에 반영할 수 있습니다.</span>
+              </label>
+              <div id="dataImportStatus" class="data-import-status"></div>
+              <div id="dataImportAuthStatus" class="data-import-status"></div>
+              <div class="data-action-row">
+                <button id="dataImportCommitButton" class="primary-button" type="button" disabled>파일 검증</button>
+                <button id="dataImportApplyButton" class="danger-button" type="button" disabled>검증 결과 DB 반영</button>
+                <button id="clearDataImportButton" class="ghost-button" type="button">검증 결과 초기화</button>
+              </div>
+            </article>
+
+            <article class="panel data-export-panel">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <h2>데이터 내보내기</h2>
+                </div>
+                <span class="source-pill">관리자 전용</span>
+              </div>
+              <p class="setting-help">운영 중 필요한 회원, 회원권, 결제, 시간표, 상품, 코치 데이터를 엑셀/CSV/JSON으로 내려받는 화면입니다. 실제 서비스에서는 관리자 권한과 내보내기 이력을 남깁니다.</p>
+              <div class="export-option-grid">
+                <label class="field-row">
+                  <span>내보낼 데이터</span>
+                  <select id="dataExportDataset">
+                    <option value="all">전체 운영 데이터</option>
+                    <option value="members">회원</option>
+                    <option value="tickets">회원권</option>
+                    <option value="lessons">레슨시간표</option>
+                    <option value="weeklySchedule">현재 주간 레슨표</option>
+                    <option value="payments">결제/정산</option>
+                    <option value="products">상품/가격</option>
+                    <option value="coaches">코치/근무</option>
+                  </select>
+                </label>
+                <label class="field-row">
+                  <span>파일 형식</span>
+                  <select id="dataExportFormat">
+                    <option value="xlsx">Excel</option>
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </label>
+                <label class="toggle-row export-toggle">
+                  <input id="dataExportPrivateFields" type="checkbox" />
+                  <span>연락처 같은 민감 필드 포함</span>
+                </label>
+              </div>
+              <div id="dataExportPreview" class="data-export-preview"></div>
+              <div class="data-action-row">
+                <button id="downloadDataExportButton" class="primary-button" type="button">내보내기</button>
+                <button id="downloadSafeBackupButton" class="ghost-button" type="button">안전 백업 JSON</button>
+              </div>
+            </article>
+
+          </section>
+        </section>
+
+        <section id="settingsView" class="view" aria-label="운영 설정">
+          <div class="settings-tabs" role="tablist" aria-label="운영 설정 구분">
+            <button class="settings-tab is-active" type="button" role="tab" data-settings-tab="operation">운영시간</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="membership">회원권·정책</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="notifications">공지·알림</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="coach">코치·직원</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="layout">화면 구성</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="security">보안</button>
+          </div>
+          <div class="settings-grid">
+            <section id="adminSecurityPanel" class="panel admin-security-panel settings-tab-panel" data-settings-panel="security"></section>
+
+            <section class="panel admin-layout-panel settings-tab-panel" data-settings-panel="layout">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">공용 화면</p>
+                  <h2>메뉴·대시보드 구성</h2>
+                </div>
+                <span id="adminLayoutSaveStatus" class="source-pill"></span>
+              </div>
+              <div id="adminLayoutSettingsPanel"></div>
+            </section>
+
+            <section class="panel member-management-policy-panel settings-tab-panel" data-settings-panel="security">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">회원 접근</p>
+                  <h2>회원관리 권한</h2>
+                </div>
+                <span class="source-pill">관리자 설정</span>
+              </div>
+              <p class="setting-help">기본값은 관리자만 처리입니다. 필요한 작업만 코치에게 열어도 본인 담당 회원권으로 제한됩니다.</p>
+              <div id="memberManagementPolicySettings"></div>
+            </section>
+
+            <section class="panel service-readiness-panel settings-tab-panel" data-settings-panel="live">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">실사용 상태</p>
+                  <h2>실사용 연결 상태</h2>
+                </div>
+                <span class="source-pill">1단계 기준</span>
+              </div>
+              <p class="setting-help">실제 서비스로 넘어가기 전 DB, 권한, 결제, 알림, 기존자료 이전 준비 상태를 확인합니다.</p>
+              <div id="serviceReadinessCards" class="readiness-grid"></div>
+            </section>
+
+            <section class="panel payment-setup-panel settings-tab-panel" data-settings-panel="live">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">결제</p>
+                  <h2>실결제 연결 설정</h2>
+                </div>
+                <button class="ghost-button" type="button" data-jump="billing">결제/정산</button>
+              </div>
+              <p class="setting-help">PortOne 연결값은 이 브라우저에만 저장해서 데모 결제창 연결을 확인합니다. 실제 회원권 충전은 서버 검증과 웹훅 연결 후 자동화합니다.</p>
+              <div id="paymentSetupPanel"></div>
+            </section>
+
+            <section class="panel supabase-live-panel settings-tab-panel" data-settings-panel="live">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">서버 DB</p>
+                  <h2>실제 DB 읽기 상태</h2>
+                </div>
+                <button id="refreshSupabaseStatus" class="ghost-button" type="button">새로고침</button>
+              </div>
+              <p class="setting-help">로컬 설정값으로 Supabase에 접속해 주요 테이블을 읽을 수 있는지 확인합니다. 권한이 막히면 로그인 연결 단계가 필요하다는 뜻입니다.</p>
+              <div id="supabaseLiveStatus" class="supabase-live-grid"></div>
+            </section>
+
+            <section class="panel auth-provider-panel settings-tab-panel" data-settings-panel="live">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">로그인</p>
+                  <h2>로그인 제공자 상태</h2>
+                </div>
+                <button id="refreshAuthStatus" class="ghost-button" type="button">새로고침</button>
+              </div>
+              <p class="setting-help">통합앱 로그인에 필요한 Kakao, Naver Provider가 Supabase에서 켜져 있는지 읽기 전용으로 확인합니다.</p>
+              <div id="authProviderStatus" class="supabase-live-grid"></div>
+              <div class="auth-setup-guide">
+                <strong>다음 설정 위치</strong>
+                <ul>
+                  <li>Supabase Authentication > Providers에서 Kakao, Naver를 켭니다.</li>
+                  <li>Redirect URL에는 통합앱의 회원 화면 주소를 등록합니다.</li>
+                  <li>첫 로그인 후 Authentication > Users의 UUID를 <code>tn_users.auth_user_id</code>에 연결합니다.</li>
+                </ul>
+                <div class="redirect-url-list">
+                  <code>http://127.0.0.1:8773/90-Dashboard/tennis-note-member-app/index.html</code>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel access-policy-panel settings-tab-panel" data-settings-panel="coach">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">권한</p>
+                  <h2>권한 기준</h2>
+                </div>
+                <span class="source-pill">실사용 전 필수</span>
+              </div>
+              <ul class="plain-list">
+                <li>관리자: 전체 회원, 시간표, 결제/정산, 코치 권한, 정책 설정 관리</li>
+                <li>코치: 같은 지점 시간표와 회원 수업기록 확인, 본인/대타 수업 처리</li>
+                <li>회원: 본인 시간표, 운동일지, 회원권, 결제 요청, 커리큘럼만 확인</li>
+                <li>서비스 키, 원본 매출, 개인정보 원본은 브라우저 앱에 넣지 않음</li>
+              </ul>
+            </section>
+
+            <div class="membership-settings-switcher settings-tab-panel" data-settings-panel="membership">
+              <div class="segmented-control" role="tablist" aria-label="회원권 설정 구역">
+                <button class="segment is-active" type="button" role="tab" aria-selected="true" data-membership-section="products">회원권·정책</button>
+                <button class="segment" type="button" role="tab" aria-selected="false" data-membership-section="discounts">할인권</button>
+              </div>
+            </div>
+
+            <section id="branchSalesSetupPanel" class="panel branch-sales-setup-panel settings-tab-panel" data-settings-panel="membership" data-membership-panel="products" aria-label="회원 판매 빠른 설정"></section>
+
+            <section class="panel product-settings-panel settings-tab-panel" data-settings-panel="membership" data-membership-panel="products">
+              <div class="panel-heading compact-heading">
+                <h2>회원권 상품</h2>
+                <div class="data-action-row compact">
+                  <span id="membershipProductBranchStatus" class="source-pill"></span>
+                  <button id="saveVisibleProductRows" class="secondary-button product-page-save" type="button" hidden>현재 페이지 전체 저장</button>
+                  <button id="addOneDayProductButton" class="secondary-button" type="button">원데이 1회권</button>
+                  <button id="addMembershipProductButton" class="primary-button" type="button">새 회원권</button>
+                </div>
+              </div>
+              <div id="productBulkToolbar" class="bulk-action-toolbar" hidden>
+                <strong><span id="productBulkCount">0</span>개 선택</strong>
+                <button id="selectAllProducts" class="ghost-button" type="button">전체 선택</button>
+                <button id="saveSelectedProducts" class="small-button" type="button">선택 저장</button>
+                <select id="productBulkAction" aria-label="회원권 상품 일괄 작업">
+                  <option value="">판매 상태 선택</option>
+                  <option value="sale">판매중</option>
+                  <option value="hidden">숨김</option>
+                  <option value="consult">상담</option>
+                </select>
+                <button id="runProductBulkAction" class="small-button" type="button">상태 적용</button>
+                <button id="deleteSelectedProducts" class="small-button danger-button" type="button">선택 삭제</button>
+                <button id="clearProductBulkSelection" class="ghost-button" type="button">선택 해제</button>
+              </div>
+              <div class="product-list-toolbar">
+                <input id="membershipProductSearch" type="search" placeholder="상품명·종류·횟수 검색" autocomplete="off" />
+                <select id="membershipProductStatusFilter" aria-label="회원권 상품 상태">
+                  <option value="all">전체 상태</option>
+                  <option value="sale">판매중</option>
+                  <option value="consult">상담</option>
+                  <option value="hidden">숨김</option>
+                </select>
+              </div>
+              <div class="product-setting-sheet" role="region" aria-label="회원권 상품 편집표">
+                <div class="product-setting-sheet-head" aria-hidden="true">
+                  <span>순서</span>
+                  <span>선택</span>
+                  <span>상품명</span>
+                  <span>권종 · 방식</span>
+                  <span>시간 · 횟수 · 기간</span>
+                  <span>현금 / 카드</span>
+                  <span>상태</span>
+                  <span>저장 · 상세</span>
+                </div>
+                <div id="productSettingCards" class="product-setting-list"></div>
+              </div>
+              <nav id="membershipProductPager" class="dashboard-pager" aria-label="회원권 상품 페이지"></nav>
+            </section>
+
+            <section class="panel discount-policy-panel settings-tab-panel" data-settings-panel="membership" data-membership-panel="discounts">
+              <div class="panel-heading compact-heading">
+                <h2>할인권</h2>
+                <div class="segmented-control discount-view-tabs" role="group" aria-label="할인권 보기">
+                  <button class="segment is-active" type="button" data-discount-view="policies">정책</button>
+                  <button class="segment" type="button" data-discount-view="history">발급·사용 내역</button>
+                </div>
+              </div>
+              <p class="setting-help">할인권은 관리자가 만들고, 코치는 관리자가 지급한 수량 안에서만 사용하게 두는 방식이 가장 안전합니다.</p>
+              <section class="discount-issue-panel" aria-label="회원에게 할인 쿠폰 발급">
+                <div>
+                  <strong>회원에게 발급</strong>
+                  <span>추천 할인은 회원과 추천인을 함께 선택하면 두 사람에게 한 번에 발급됩니다.</span>
+                </div>
+                <div class="discount-issue-grid">
+                  <label><small>할인 정책</small><select id="discountIssuePolicy"></select></label>
+                  <label><small>회원 검색</small><input id="discountIssueMemberSearch" type="search" autocomplete="off" placeholder="이름·전화번호" /></label>
+                  <label><small>발급 회원</small><select id="discountIssueMember"></select></label>
+                  <label><small>추천인(선택)</small><select id="discountIssueReferralMember"><option value="">선택 안 함</option></select></label>
+                  <label class="discount-issue-note"><small>메모</small><input id="discountIssueNote" type="text" maxlength="500" placeholder="예: 친구추천 5% · 신규회원" /></label>
+                  <button class="primary-button" type="button" id="issueDiscountCouponButton">쿠폰 발급</button>
+                </div>
+                <p id="discountIssueStatus" class="form-message" role="status"></p>
+              </section>
+              <div class="discount-filter-toolbar">
+                <input id="discountPolicySearch" type="search" placeholder="할인권 이름·대상 검색" />
+                <select id="discountPolicyStatusFilter" aria-label="할인권 상태">
+                  <option value="all">전체 상태</option>
+                  <option value="사용">사용</option>
+                  <option value="검토">검토</option>
+                  <option value="중지">중지</option>
+                  <option value="보관">보관</option>
+                </select>
+              </div>
+              <div id="discountPolicyCards" class="discount-policy-grid"></div>
+            </section>
+
+            <section class="panel coach-role-flow-panel settings-tab-panel" data-settings-panel="coach">
+              <div class="panel-heading compact-heading">
+                <h2>코치 사전 등록</h2>
+                <button class="ghost-button" type="button" data-jump="members">회원 확인</button>
+              </div>
+              <p class="setting-help">관리자가 코치 이름과 휴대전화를 먼저 등록합니다. 코치가 같은 번호가 확인된 소셜 계정으로 로그인하면 코치 모드가 자동으로 연결됩니다.</p>
+              <div id="coachRoleFlow" class="role-flow-list"></div>
+            </section>
+
+            <section class="panel schedule-settings-panel settings-tab-panel" data-settings-panel="operation">
+              <div class="panel-heading compact-heading">
+                <h2>운영시간·브레이크</h2>
+                <div class="data-action-row compact">
+                  <button id="applyBreakRuleButton" class="ghost-button" type="button">브레이크 추가</button>
+                  <button id="saveLiveSchedulePolicyButton" class="primary-button" type="button">근무·브레이크 저장</button>
+                </div>
+              </div>
+              <div class="operation-profile-toolbar" aria-label="운영 프로필 관리">
+                <label class="field-row operation-profile-select">
+                  <span>운영 프로필</span>
+                  <select id="operationProfileSelect" aria-label="운영 프로필 선택"></select>
+                </label>
+                <label class="field-row operation-profile-select">
+                  <span>적용 지점</span>
+                  <select id="operationProfileBranchSelect" aria-label="운영 프로필 적용 지점"></select>
+                </label>
+                <div class="data-action-row compact operation-profile-actions">
+                  <button id="addOperationProfileButton" class="ghost-button" type="button">새 프로필</button>
+                  <button id="duplicateOperationProfileButton" class="ghost-button" type="button">복제</button>
+                  <button id="renameOperationProfileButton" class="ghost-button" type="button">이름 변경</button>
+                  <button id="deleteOperationProfileButton" class="ghost-button danger" type="button">삭제</button>
+                </div>
+              </div>
+              <p id="operationProfileStatus" class="setting-help compact-setting-help"></p>
+              <p class="setting-help">관리자에서 정한 운영시간, 브레이크타임, 코치별 근무 블록이 통합앱의 회원 화면과 코치 모드에 같은 기준으로 반영됩니다.</p>
+              <details class="schedule-preview-disclosure">
+                <summary>현재 적용 시간 보기</summary>
+                <div class="schedule-policy-summary" id="schedulePolicyPreview"></div>
+              </details>
+              <div class="break-favorite-panel" aria-label="즐겨찾는 브레이크">
+                <div class="break-favorite-heading">
+                  <strong>즐겨찾는 브레이크</strong>
+                  <button class="ghost-button" type="button" data-schedule-preset="clear-breaks">전체 브레이크 해제</button>
+                </div>
+                <div id="breakFavoritePresets" class="schedule-preset-row"></div>
+              </div>
+              <div class="time-setting-grid">
+                <label class="field-row">
+                  <span>오픈</span>
+                  <input id="openStartInput" type="time" step="600" />
+                </label>
+                <label class="field-row">
+                  <span>마감</span>
+                  <input id="openEndInput" type="time" step="600" />
+                </label>
+              </div>
+              <label class="toggle-row">
+                <input id="memberScheduleRequestOnly" type="checkbox" />
+                <span>회원앱은 보강·수업변경 신청 가능 시간만 표시</span>
+              </label>
+              <label class="toggle-row">
+                <input id="adminScheduleTuningMode" type="checkbox" />
+                <span>관리자 튜닝 모드</span>
+              </label>
+              <p class="setting-help compact-setting-help">
+                초기 이관·과거 보정 시 운영 규칙 충돌을 경고로 바꿉니다. 중복 수업과 음수 차감은 계속 차단됩니다.
+              </p>
+              <div id="lessonColorSettings" class="lesson-color-settings" aria-label="수업 종류별 시간표 색상">
+                <label><span>정규 20분</span><input type="color" value="#2f6fc4" data-lesson-color="regular" /></label>
+                <label><span>정규 30분</span><input type="color" value="#6b5fc7" data-lesson-color="regular30" /></label>
+                <label><span>보강</span><input type="color" value="#17805d" data-lesson-color="makeup" /></label>
+                <label><span>쿠폰</span><input type="color" value="#b7791f" data-lesson-color="coupon" /></label>
+                <label><span>노쇼·당일취소</span><input type="color" value="#c2413b" data-lesson-color="noShow" /></label>
+              </div>
+              <div id="customLessonColorRules" class="lesson-color-settings" aria-label="추가 시간표 표시 종류"></div>
+              <button id="addLessonColorRuleButton" class="ghost-button" type="button">표시 종류 추가</button>
+              <div class="break-coach-setting">
+                <strong>브레이크 적용 코치</strong>
+                <div id="breakCoachOptions" class="break-coach-options" aria-label="브레이크 적용 코치"></div>
+              </div>
+              <div class="break-day-grid" aria-label="브레이크 적용 요일">
+                <label><input type="checkbox" value="월" data-break-day />월</label>
+                <label><input type="checkbox" value="화" data-break-day />화</label>
+                <label><input type="checkbox" value="수" data-break-day />수</label>
+                <label><input type="checkbox" value="목" data-break-day />목</label>
+                <label><input type="checkbox" value="금" data-break-day />금</label>
+                <label><input type="checkbox" value="토" data-break-day />토</label>
+                <label><input type="checkbox" value="일" data-break-day />일</label>
+              </div>
+              <div class="time-setting-grid">
+                <label class="field-row">
+                  <span>브레이크 시작</span>
+                  <input id="breakStartInput" type="time" step="600" value="13:00" />
+                </label>
+                <label class="field-row">
+                  <span>브레이크 종료</span>
+                  <input id="breakEndInput" type="time" step="600" value="17:00" />
+                </label>
+                <label class="field-row wide-field">
+                  <span>브레이크 이름</span>
+                  <input id="breakLabelInput" type="text" value="브레이크" />
+                </label>
+              </div>
+              <div id="breakRuleList" class="break-rule-list"></div>
+            </section>
+
+            <section class="panel notice-popup-settings-panel settings-tab-panel" data-settings-panel="notifications">
+              <div class="panel-heading compact-heading">
+                <h2>공지 팝업</h2>
+                <span class="source-pill">회원/코치 앱 공통</span>
+              </div>
+              <p class="setting-help">운영자가 제목, 내용, 노출 대상을 저장하면 통합앱의 회원 화면과 코치 모드에 팝업으로 표시됩니다. 급한 휴무, 우천, 테스트 안내처럼 앱을 열자마자 봐야 하는 내용에 사용합니다.</p>
+              <div id="noticePopupSettings" class="notice-popup-settings"></div>
+            </section>
+
+            <section class="panel notification-settings-panel settings-tab-panel" data-settings-panel="notifications">
+              <div class="panel-heading compact-heading">
+                <h2>자동 알림</h2>
+                <span class="source-pill">수업·회원권</span>
+              </div>
+              <div id="notificationPolicySettings" class="notification-policy-settings"></div>
+            </section>
+
+            <section class="panel policy-version-panel settings-tab-panel" data-settings-panel="operation" data-membership-panel="products">
+              <div class="panel-heading compact-heading">
+                <h2>적용 정책</h2>
+                <span class="source-pill">현재 적용</span>
+              </div>
+              <div id="policyVersionCards" class="policy-version-list"></div>
+            </section>
+
+            <section class="panel policy-guide-panel settings-tab-panel" data-settings-panel="operation">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">운영 안내</p>
+                  <h2>정책 작성 기준</h2>
+                </div>
+                <span class="source-pill">복사해서 수정</span>
+              </div>
+              <div id="policyGuideCards" class="policy-guide-grid"></div>
+            </section>
+
+            <section class="panel holding-policy-panel settings-tab-panel" data-settings-panel="operation" data-membership-panel="products">
+              <div class="panel-heading compact-heading">
+                <h2>홀딩 정책</h2>
+                <span class="source-pill">관리자 수정</span>
+              </div>
+              <div id="holdingPolicySettings" class="holding-policy-settings"></div>
+            </section>
+
+            <section class="panel refund-policy-panel settings-tab-panel" data-settings-panel="operation" data-membership-panel="products">
+              <div class="panel-heading compact-heading">
+                <h2>환불 정책</h2>
+                <span class="source-pill">관리자 수정</span>
+              </div>
+              <div id="refundPolicySettings" class="refund-policy-settings"></div>
+            </section>
+
+            <section class="panel lesson-rule-panel settings-tab-panel" data-settings-panel="operation">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">수업 운영</p>
+                  <h2>수업 정책</h2>
+                </div>
+                <button id="addLessonPolicyButton" class="primary-button" type="button">새 정책</button>
+              </div>
+              <div class="lesson-policy-toolbar">
+                <label>
+                  <span class="sr-only">수업 정책 검색</span>
+                  <input id="lessonPolicySearch" type="search" placeholder="정책명·내용 검색" autocomplete="off" />
+                </label>
+                <span id="lessonPolicyCount" class="source-pill">0개</span>
+              </div>
+              <div id="lessonPolicyList" class="lesson-policy-list"></div>
+            </section>
+
+            <section class="panel coach-settings-panel settings-tab-panel" data-settings-panel="coach">
+              <div class="panel-heading compact-heading">
+                <h2>코치·직원</h2>
+                <button id="addCoachStaffButton" class="primary-button" type="button">코치 추가</button>
+              </div>
+              <section id="coachLaneOrderPanel" class="coach-lane-order-panel" aria-labelledby="coachLaneOrderTitle"></section>
+              <div class="coach-list-filters" role="group" aria-label="코치 목록 상태">
+                <button class="is-active" type="button" data-coach-staff-filter="active">근무 중 <span id="activeCoachCount">0</span></button>
+                <button type="button" data-coach-staff-filter="inactive">종료·보관 <span id="inactiveCoachCount">0</span></button>
+              </div>
+              <div id="coachRows" class="coach-list"></div>
+            </section>
+
+            <section class="panel settings-tab-panel" data-settings-panel="live">
+              <h2>자료 연결</h2>
+              <ul class="plain-list">
+                <li>고객 관리 DB: 회원 원천</li>
+                <li>레슨 관리 시트: 시간표 원천</li>
+                <li>결제/정산 양식: 결제 원천</li>
+                <li>Business Report: 운영 리포트 원천</li>
+              </ul>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="policyVersionEditorModal" class="modal-backdrop" hidden>
+      <section class="modal-panel policy-version-editor-modal" role="dialog" aria-modal="true" aria-labelledby="policyVersionEditorTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">회원권 정책</p>
+            <h2 id="policyVersionEditorTitle">정책 수정</h2>
+          </div>
+          <button id="closePolicyVersionEditor" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <div id="policyVersionEditorContent" class="policy-version-editor-content"></div>
+        <div class="modal-actions">
+          <button id="cancelPolicyVersionEditor" class="ghost-button" type="button">취소</button>
+          <button id="savePolicyVersionEditor" class="primary-button" type="button">정책 저장</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="adminToolsModal" class="modal-backdrop" hidden>
+      <section class="modal-panel admin-tools-modal-panel" role="dialog" aria-modal="true" aria-labelledby="adminToolsModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">관리 도구</p>
+            <h2 id="adminToolsModalTitle">관리 설정</h2>
+          </div>
+          <button id="closeAdminToolsModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <div class="admin-tool-modal-content">
+          <div id="dataToolsModalContent" data-admin-tool-panel="data"></div>
+          <div id="coachManagementModalContent" data-admin-tool-panel="coach"></div>
+          <div id="scheduleSettingsModalContent" data-admin-tool-panel="schedule"></div>
+          <div id="noticeSettingsModalContent" data-admin-tool-panel="notice"></div>
+          <div id="productSettingsModalContent" data-admin-tool-panel="products"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="lessonModal" class="modal-backdrop" data-tn-input-guard="admin-lesson" data-tn-restore-draft="true" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">수업</p>
+            <h2 id="lessonModalTitle">수업 추가</h2>
+          </div>
+          <button id="closeLessonModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+
+        <form id="lessonForm" class="lesson-form">
+          <div id="lessonInternalFields" hidden>
+            <select id="lessonCourt"></select>
+            <select id="lessonType">
+              <option value="개인">개인</option>
+              <option value="2대1">2대1</option>
+              <option value="그룹">그룹</option>
+            </select>
+            <select id="lessonDuration"></select>
+          </div>
+          <section id="lessonQuickSummary" class="lesson-quick-summary" hidden>
+            <div>
+              <span id="lessonQuickLabel">선택 시간</span>
+              <strong id="lessonQuickSchedule">요일과 시간을 선택해 주세요.</strong>
+              <small id="lessonQuickGuide">회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.</small>
+            </div>
+            <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">추가 설정</button>
+          </section>
+          <nav id="lessonQuickSourcePanel" class="lesson-quick-source-panel" aria-label="추가할 수업 종류" hidden>
+            <button type="button" data-lesson-quick-source="regular">정규</button>
+            <button type="button" data-lesson-quick-source="makeup">보강</button>
+            <button type="button" data-lesson-quick-source="coupon">쿠폰</button>
+            <button type="button" data-lesson-quick-source="one_day">원데이</button>
+          </nav>
+          <nav id="lessonQuickActions" class="lesson-quick-actions" aria-label="수업 처리 방법" hidden>
+            <button type="button" data-lesson-quick-action="schedule">시간·코치</button>
+            <button type="button" data-lesson-quick-action="absence">불참</button>
+            <button type="button" data-lesson-quick-action="record">완료·노쇼</button>
+            <button type="button" data-lesson-quick-action="details">대타·복원·취소</button>
+          </nav>
+          <details id="lessonStatusGuide" class="lesson-status-guide" hidden>
+            <summary>수업 상태 처리 기준</summary>
+            <div>
+              <span><strong>정상 완료</strong> 코멘트 저장 후 선택한 경우 횟수 차감</span>
+              <span><strong>불참</strong> 차감 없이 보강 신청 가능</span>
+              <span><strong>노쇼</strong> 차감 또는 미차감을 선택해 기록</span>
+              <span><strong>대타</strong> 원 담당은 유지하고 실제 코치만 변경</span>
+              <span><strong>원래 수업 복원</strong> 불참과 보강 대기를 취소</span>
+              <span><strong>수업 취소</strong> 관리자 기록을 남기고 시간표에서 제외</span>
+            </div>
+          </details>
+          <section id="lessonDurationQuickPanel" class="lesson-duration-quick-panel" hidden>
+            <span>수업 시간</span>
+            <div id="lessonDurationQuickButtons" class="lesson-duration-quick-buttons"></div>
+            <small id="lessonDurationQuickSummary" class="lesson-duration-quick-summary">회원권 기준 시간을 확인합니다.</small>
+          </section>
+          <label class="form-field lesson-source-field">
+            <span>등록 구분</span>
+            <select id="lessonSource" required>
+              <option value="regular">정규수업</option>
+              <option value="makeup">보강</option>
+              <option value="coupon">쿠폰수업</option>
+              <option value="one_day">원데이</option>
+              <option value="coach_change" hidden>코치변경</option>
+              <option value="admin" hidden>과거수업 보정</option>
+            </select>
+          </label>
+          <section class="lesson-member-ticket-panel">
+            <label class="form-field">
+              <span>회원 검색</span>
+              <small id="lessonCurrentMembers" class="lesson-current-members" hidden></small>
+              <input id="lessonMemberSearch" type="search" placeholder="회원 이름 입력" autocomplete="off" />
+              <select id="lessonMember" required></select>
+            </label>
+            <label id="lessonTicketField" class="form-field">
+              <span>사용 회원권</span>
+              <select id="lessonTicket" required></select>
+              <small id="lessonTicketHint" class="lesson-ticket-hint">회원을 검색하면 사용 가능한 회원권이 자동으로 표시됩니다.</small>
+            </label>
+          </section>
+          <section id="lessonSameDayAdjustmentPanel" class="lesson-same-day-adjustment" hidden>
+            <div>
+              <strong>당일 수업 이동</strong>
+              <span id="lessonSameDayAdjustmentGuide">같은 날짜의 기존 정규수업을 이 빈자리로 옮깁니다.</span>
+            </div>
+            <select id="lessonSameDayAdjustmentSource" aria-label="옮길 기존 정규수업"></select>
+            <button id="moveSameDayRegularLessonButton" class="primary-button" type="button">이 시간으로 옮기기</button>
+          </section>
+          <div id="lessonExpiredTickets" class="lesson-expired-tickets lesson-detail-field" aria-live="polite"></div>
+          <label class="form-field lesson-detail-field">
+            <span>코치</span>
+            <select id="lessonCoach" required></select>
+          </label>
+          <label id="lessonMakeupEntitlementField" class="form-field" hidden>
+            <span>보강 대기 연결</span>
+            <select id="lessonMakeupEntitlement"></select>
+            <small>불참 처리된 회원의 보강 대기를 선택하면 예약과 동시에 처리 완료됩니다.</small>
+          </label>
+          <section id="lessonAdminOverridePanel" class="lesson-admin-override-panel" hidden>
+            <label class="lesson-admin-override-toggle">
+              <input id="lessonAdminOverride" type="checkbox" />
+              <span>
+                <strong>관리자 강제 수동 처리</strong>
+                <small>초기 데이터 정리 중 정책 충돌이 있어도 이 수업만 예외로 저장합니다.</small>
+              </span>
+            </label>
+            <div id="lessonAdminOverrideDetails" class="lesson-admin-override-details" hidden>
+              <p><strong>주의:</strong> 회원·코치 앱의 제한은 그대로 유지되며, 우회 항목과 처리 시각은 자동으로 감사 기록에 남습니다.</p>
+              <ul id="lessonAdminOverrideWarnings"></ul>
+            </div>
+          </section>
+          <label class="form-field lesson-primary-time-field lesson-detail-field">
+            <span>요일/시간 1</span>
+            <div class="lesson-inline-selects">
+              <select id="lessonDay" required></select>
+              <select id="lessonTime" required></select>
+            </div>
+          </label>
+          <div id="lessonRepeatSlots" class="lesson-repeat-slots lesson-detail-field"></div>
+          <div id="lessonRepeatPreviewPanel" class="lesson-repeat-preview-panel lesson-detail-field" aria-live="polite" hidden></div>
+
+          <section id="lessonEditScopePanel" class="lesson-edit-scope" hidden>
+            <strong>변경 범위</strong>
+            <div class="lesson-edit-scope-options" role="radiogroup" aria-label="정규수업 변경 범위">
+              <label><input type="radio" name="lessonEditScope" value="single" checked /><span>이번 수업만</span></label>
+              <label><input type="radio" name="lessonEditScope" value="series" /><span>이후 정규일정</span></label>
+              <label><input type="radio" name="lessonEditScope" value="reset" /><span>시작일부터 다시</span></label>
+            </div>
+            <label id="lessonResetStartField" class="form-field lesson-reset-start-field" hidden>
+              <span>새 시작일</span>
+              <input id="lessonResetStartOn" type="date" />
+            </label>
+            <small id="lessonEditScopeImpact">선택한 수업 1건만 변경합니다.</small>
+          </section>
+
+          <section id="lessonPastCorrectionPanel" class="lesson-past-correction-panel" hidden>
+            <div class="lesson-past-correction-heading">
+              <strong>처리 방법</strong>
+              <span>실제 결과를 선택하세요.</span>
+            </div>
+            <div class="lesson-past-correction-mode" role="radiogroup" aria-label="과거 수업 보정 방식">
+              <label>
+                <input type="radio" name="lessonPastCorrectionMode" value="complete" checked />
+                <span><strong>수업 완료</strong><small>회원권 1회 차감</small></span>
+              </label>
+              <label>
+                <input type="radio" name="lessonPastCorrectionMode" value="absence" />
+                <span><strong>불참 처리</strong><small>차감 없음 · 보강 가능</small></span>
+              </label>
+            </div>
+            <label id="lessonPastCommentField" class="form-field lesson-past-comment-field">
+              <span>수업 코멘트</span>
+              <textarea id="lessonPastCoachComment" rows="2" minlength="5" maxlength="1000" placeholder="수업 내용이나 다음 연습 포인트를 입력하세요."></textarea>
+            </label>
+            <details class="lesson-past-draft-details">
+              <summary>코멘트 초안 도구</summary>
+              <div class="tn-comment-draft-tools">
+                <input id="lessonPastCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" />
+                <button id="generateLessonPastComment" type="button">초안 만들기</button>
+              </div>
+            </details>
+            <small>저장 후 변경 이력에 기록됩니다.</small>
+          </section>
+
+          <section id="lessonAbsencePanel" class="lesson-absence-panel" hidden>
+            <div>
+              <strong>불참으로 변경</strong>
+              <span>횟수 차감 없음 · 회원은 보강 신청 가능</span>
+            </div>
+            <label class="form-field">
+              <span>사유</span>
+              <input id="lessonAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
+            </label>
+            <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리</button>
+          </section>
+
+          <section id="lessonAbsenceRestorePanel" class="lesson-absence-panel is-restore" hidden>
+            <div>
+              <strong>정규수업 참석으로 복원</strong>
+              <span id="lessonAbsenceRestoreSummary">불참 처리를 취소하고 원래 정규시간을 다시 확정합니다.</span>
+            </div>
+            <button id="restoreAbsentLessonButton" class="primary-button" type="button">원래 정규수업 복원</button>
+          </section>
+
+          <div id="lessonPreview" class="lesson-preview" aria-live="polite"></div>
+          <div id="lessonSaveResultPanel" class="lesson-save-result-panel" aria-live="polite" hidden></div>
+          <div id="lessonFormMessage" class="form-message" role="status"></div>
+
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" id="openLessonSubstituteButton" hidden>대타 지정</button>
+            <button class="danger-button" type="button" id="deleteLessonButton" hidden>삭제</button>
+            <button class="ghost-button" type="button" id="cancelLessonModal">취소</button>
+            <button class="primary-button" type="submit" id="saveLessonButton">시간표에 추가</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="onsitePaymentModal" class="modal-backdrop" hidden>
+      <section class="modal-panel onsite-payment-modal" role="dialog" aria-modal="true" aria-labelledby="onsitePaymentTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">결제/정산</p>
+            <h2 id="onsitePaymentTitle">현장결제 기록</h2>
+          </div>
+          <button class="ghost-button icon-close-button" type="button" data-close-onsite-payment aria-label="닫기">×</button>
+        </div>
+        <form id="onsitePaymentForm" class="onsite-payment-form">
+          <label><span>회원</span><select id="onsitePaymentMember" required></select></label>
+          <label><span>등록 방식</span><select id="onsitePaymentSourceTicket"></select></label>
+          <label><span>회원권 상품</span><select id="onsitePaymentProduct" required></select></label>
+          <label><span>담당 코치</span><select id="onsitePaymentCoach" required></select></label>
+          <label><span>결제수단</span>
+            <select id="onsitePaymentMethod" required>
+              <option value="bank_transfer">계좌이체</option>
+              <option value="card">현장 카드결제</option>
+            </select>
+          </label>
+          <label><span>결제일</span><input id="onsitePaymentDate" type="date" required /></label>
+          <label><span>시작일</span><input id="onsitePaymentStartDate" type="date" /></label>
+          <label class="onsite-payment-amount"><span>실제 결제금액</span><input id="onsitePaymentAmount" type="number" min="1" step="1" inputmode="numeric" required /></label>
+          <label class="onsite-payment-schedule"><input id="onsitePaymentKeepSchedule" type="checkbox" checked /><span>기존 코치·고정시간 그대로 연장</span></label>
+          <p id="onsitePaymentMessage" class="form-message" role="status"></p>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" data-close-onsite-payment>취소</button>
+            <button class="primary-button" type="submit">현장결제 기록 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="substituteModal" class="modal-backdrop" data-tn-input-guard="admin-substitute" data-tn-restore-draft="true" hidden>
+      <section class="modal-panel substitute-modal-panel" role="dialog" aria-modal="true" aria-labelledby="substituteModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">수업 운영</p>
+            <h2 id="substituteModalTitle">대타 코치 지정</h2>
+          </div>
+          <button id="closeSubstituteModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="substituteForm" class="lesson-form">
+          <label class="form-field">
+            <span>수업 날짜</span>
+            <input id="substituteDate" type="date" required />
+          </label>
+          <div id="substituteLessonList" class="substitute-lesson-list" aria-live="polite"></div>
+          <details class="substitute-history-panel">
+            <summary>최근 지정·변경·취소 이력</summary>
+            <div id="substituteHistory"></div>
+          </details>
+          <label class="form-field">
+            <span>실제 수업 코치</span>
+            <select id="substituteCoach" required></select>
+          </label>
+          <label class="form-field">
+            <span>정산 방식</span>
+            <select id="substituteSettlementMode" required>
+              <option value="actual_coach">실제 수업 코치 기준</option>
+              <option value="hourly">대타 시급</option>
+              <option value="none">정산 없음</option>
+            </select>
+          </label>
+          <label id="substituteHourlyField" class="form-field" hidden>
+            <span>대타 시급</span>
+            <input id="substituteHourlyAmount" type="number" min="1" step="1000" inputmode="numeric" />
+          </label>
+          <label class="form-field">
+            <span>메모</span>
+            <input id="substituteReason" type="text" maxlength="200" placeholder="예: 병가로 당일 대타" />
+          </label>
+          <div id="substituteFormMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="cancelSubstituteAssignments" class="danger-button" type="button">대타 취소</button>
+            <button id="cancelSubstituteModal" class="ghost-button" type="button">닫기</button>
+            <button id="saveSubstituteAssignments" class="primary-button" type="submit">선택 수업 지정</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="coachStaffModal" class="modal-backdrop coach-staff-modal" data-tn-input-guard="admin-coach-staff" data-tn-restore-draft="true" hidden>
+      <section class="modal-panel coach-staff-modal-panel" role="dialog" aria-modal="true" aria-labelledby="coachStaffModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">코치·직원</p>
+            <h2 id="coachStaffModalTitle">코치·직원 편집</h2>
+          </div>
+          <details id="coachStaffMoreMenu" class="coach-staff-more-menu">
+            <summary aria-label="추가 작업">···</summary>
+            <div id="coachStaffMoreActions" class="coach-staff-more-actions"></div>
+          </details>
+          <button id="closeCoachStaffModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <div class="coach-staff-tabs" role="tablist" aria-label="코치 편집 항목">
+          <button class="is-active" type="button" role="tab" data-coach-staff-tab="basic">기본·권한</button>
+          <button type="button" role="tab" data-coach-staff-tab="work">근무시간</button>
+          <button type="button" role="tab" data-coach-staff-tab="settlement">정산</button>
+        </div>
+        <form id="coachStaffForm" class="coach-staff-form">
+          <div id="coachStaffModalContent" class="coach-staff-modal-content"></div>
+          <div id="coachStaffMessage" class="form-message" role="status"></div>
+          <div class="modal-actions coach-staff-modal-actions">
+            <button class="ghost-button" type="button" id="cancelCoachStaffModal">취소</button>
+            <button class="primary-button" type="submit" id="saveCoachStaffButton">저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="oneDayBookingModal" class="modal-backdrop" data-tn-input-guard="admin-one-day" data-tn-restore-draft="true" hidden>
+      <section class="modal-panel one-day-booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="oneDayBookingModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">원데이</p>
+            <h2 id="oneDayBookingModalTitle">원데이 예약</h2>
+          </div>
+          <button id="closeOneDayBookingModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="oneDayBookingForm" class="lesson-form">
+          <section class="lesson-member-ticket-panel">
+            <label class="form-field">
+              <span>이름</span>
+              <input id="oneDayGuestName" type="text" minlength="2" maxlength="80" autocomplete="name" required />
+            </label>
+            <label class="form-field">
+              <span>휴대전화</span>
+              <input id="oneDayGuestPhone" type="tel" maxlength="30" autocomplete="tel" placeholder="가입 전이면 연결용으로 입력" />
+            </label>
+          </section>
+          <p class="one-day-link-note">가입 또는 DB 등록 시 실명과 휴대전화가 같으면 기존 회원 정보에 자동 연결됩니다.</p>
+          <label class="form-field">
+            <span>코치</span>
+            <select id="oneDayCoach" required></select>
+          </label>
+          <section class="lesson-member-ticket-panel">
+            <label class="form-field">
+              <span>날짜</span>
+              <input id="oneDayDate" type="date" required />
+            </label>
+            <label class="form-field">
+              <span>시작 시간</span>
+              <select id="oneDayTime" required></select>
+            </label>
+          </section>
+          <section class="lesson-member-ticket-panel">
+            <label class="form-field">
+              <span>수업 시간</span>
+              <select id="oneDayDuration" required>
+                <option value="20">20분</option>
+                <option value="30">30분</option>
+                <option value="40">40분</option>
+                <option value="60">60분</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>상태</span>
+              <select id="oneDayStatus" required>
+                <option value="reserved">예약</option>
+                <option value="checked_in">방문</option>
+                <option value="completed">완료</option>
+                <option value="cancelled">취소</option>
+              </select>
+            </label>
+          </section>
+          <label class="form-field">
+            <span>메모</span>
+            <textarea id="oneDayNote" rows="3" maxlength="500" placeholder="상담 내용이나 현장 전달 사항"></textarea>
+          </label>
+          <div id="oneDayBookingPreview" class="lesson-preview" aria-live="polite"></div>
+          <div id="oneDayBookingMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="deleteOneDayBookingButton" class="danger-button" type="button" hidden>예약 삭제</button>
+            <button id="cancelOneDayBookingModal" class="ghost-button" type="button">취소</button>
+            <button id="saveOneDayBookingButton" class="primary-button" type="submit">원데이 예약 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="paymentCancelModal" class="modal-backdrop" hidden>
+      <section class="modal-panel refund-modal-panel" role="dialog" aria-modal="true" aria-labelledby="paymentCancelModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">결제취소</p>
+            <h2 id="paymentCancelModalTitle">PG 전액 결제취소</h2>
+          </div>
+          <button id="closePaymentCancelModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="paymentCancelForm" class="refund-form">
+          <div id="paymentCancelModalContent" class="refund-modal-content" aria-live="polite"></div>
+          <label class="form-field refund-wide-field">
+            <span>결제취소 사유</span>
+            <textarea id="paymentCancelReason" rows="3" minlength="2" maxlength="200" required placeholder="테스트 결제, 중복 결제, 오결제 등 사유를 입력하세요."></textarea>
+          </label>
+          <label class="form-field">
+            <span>최종 확인 문구</span>
+            <input id="paymentCancelConfirmationText" type="text" autocomplete="off" required placeholder="전액취소" />
+            <small id="paymentCancelConfirmationHelp">실제 PG 승인 전체를 취소하려면 전액취소를 입력하세요.</small>
+          </label>
+          <div id="paymentCancelFormMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="dismissPaymentCancelModal" class="ghost-button" type="button">닫기</button>
+            <button id="confirmPaymentCancelButton" class="danger-button" type="submit">전액취소 실행</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="refundModal" class="modal-backdrop" hidden>
+      <section class="modal-panel refund-modal-panel" role="dialog" aria-modal="true" aria-labelledby="refundModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">환불</p>
+            <h2 id="refundModalTitle">환불 계산 및 확정</h2>
+          </div>
+          <button id="closeRefundModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="refundForm" class="refund-form">
+          <div id="refundModalContent" class="refund-modal-content" aria-live="polite"></div>
+          <label id="refundReasonField" class="form-field refund-wide-field">
+            <span>환불 사유</span>
+            <textarea id="refundReason" rows="3" maxlength="200" placeholder="회원 요청, 운영 취소 등 사유를 입력하세요."></textarea>
+          </label>
+          <label id="refundTransferReferenceField" class="form-field refund-wide-field" hidden>
+            <span>송금 확인 메모</span>
+            <input id="refundTransferReference" type="text" maxlength="80" autocomplete="off" placeholder="은행명·끝 4자리 또는 이체확인번호 (전체 계좌번호 금지)" />
+          </label>
+          <div id="refundFallbackConfirmation" class="refund-fallback-confirmation" hidden>
+            <label>
+              <input id="acceptRefundPolicyFallback" type="checkbox" />
+              <span>구매 당시 정책 스냅샷이 없어 현재 환불정책 기준으로 계산한 것을 확인했습니다.</span>
+            </label>
+          </div>
+          <label class="form-field">
+            <span>관리자 PIN</span>
+            <input id="refundAdminPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" />
+            <small>대상과 금액을 확인한 뒤 아래 버튼을 누르면 됩니다.</small>
+          </label>
+          <div id="refundFormMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="cancelRefundModal" class="ghost-button" type="button">취소</button>
+            <button id="rejectMemberRefundRequest" class="ghost-button" type="button" hidden>요청 반려</button>
+            <button id="cancelManualRefundRequest" class="ghost-button" type="button" hidden>환불 접수 취소</button>
+            <button id="retryRefundReconcile" class="ghost-button" type="button" hidden>상태 다시 맞추기</button>
+            <button id="confirmRefundButton" class="danger-button" type="submit">환불 확정</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="adminLockModal" class="modal-backdrop" hidden>
+      <section class="modal-panel admin-lock-modal-panel" role="dialog" aria-modal="true" aria-labelledby="adminLockModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">관리자 보안</p>
+            <h2 id="adminLockModalTitle">관리자 PIN 확인</h2>
+          </div>
+          <button id="closeAdminLockModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="adminLockForm" class="admin-lock-form">
+          <p id="adminLockMessage" class="setting-help"></p>
+          <label class="form-field">
+            <span>관리자 PIN</span>
+            <input id="adminPinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" />
+          </label>
+          <div id="adminPinError" class="form-message danger" role="status"></div>
+          <div class="modal-actions">
+            <button id="cancelAdminLockModal" class="ghost-button" type="button">취소</button>
+            <button class="primary-button" type="submit">잠금 해제</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="memberManagementModal" class="modal-backdrop" data-tn-input-guard="admin-member" hidden>
+      <section class="modal-panel member-management-modal-panel" role="dialog" aria-modal="true" aria-labelledby="memberManagementModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">회원 관리</p>
+            <h2 id="memberManagementModalTitle">회원·회원권 관리</h2>
+          </div>
+          <button class="ghost-button icon-close-button" type="button" data-close-member-management aria-label="닫기">×</button>
+        </div>
+        <div id="memberManagementModalContent"></div>
+      </section>
+    </div>
+
+    <div id="lessonRecordModal" class="modal-backdrop" data-tn-input-guard="admin-lesson-record" hidden>
+      <section class="modal-panel lesson-record-modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonRecordModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">수업 완료</p>
+            <h2 id="lessonRecordModalTitle">기록·차감 처리</h2>
+          </div>
+          <button class="ghost-button icon-close-button" type="button" data-close-lesson-record aria-label="닫기">×</button>
+        </div>
+        <form id="lessonRecordForm" class="lesson-record-form">
+          <div id="lessonRecordContext" class="lesson-record-context"></div>
+          <fieldset class="lesson-outcome-options">
+            <legend>처리 결과</legend>
+            <label><input type="radio" name="lessonRecordOutcome" value="completed_deduct" checked /> 완료 · 차감</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="completed_no_deduct" /> 완료 · 차감 없음</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="no_show_deduct" /> 노쇼 · 차감</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="no_show_no_deduct" /> 노쇼 · 차감 없음</label>
+          </fieldset>
+          <label>
+            <span id="lessonRecordCommentLabel">코치 코멘트</span>
+            <textarea id="lessonRecordComment" rows="4" minlength="5" required placeholder="이번 수업에서 확인한 내용과 다음 연습 포인트를 5자 이상 작성해 주세요."></textarea>
+          </label>
+          <div class="tn-comment-draft-tools">
+            <input id="lessonRecordCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" />
+            <button id="generateLessonRecordComment" type="button">초안 만들기</button>
+          </div>
+          <label>
+            <span id="lessonRecordCurriculumLabel">다음 커리큘럼</span>
+            <input id="lessonRecordCurriculumSearch" type="search" placeholder="증상·동작·목표·코드 검색" autocomplete="off" />
+            <div id="lessonRecordCurriculumSuggestions" class="tn-curriculum-suggestions" role="listbox" hidden></div>
+            <select id="lessonRecordCurriculum" required></select>
+          </label>
+          <a id="lessonRecordCurriculumLink" class="lesson-record-curriculum-link" href="#" target="_blank" rel="noopener" hidden>커리큘럼 원본 보기</a>
+          <div id="lessonRecordMessage" class="form-message" role="status"></div>
+          <div class="modal-actions lesson-record-modal-actions">
+            <button class="ghost-button" type="button" data-close-lesson-record>취소</button>
+            <button id="saveLessonRecordButton" class="primary-button" type="submit">저장하고 횟수 차감</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <script src="../shared/config.local.js?v=local"></script>
+    <script src="../shared/tennisnote-runtime-environment.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script src="../shared/tennisnote-escape-html.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
+    <script src="../shared/tennisnote-release.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-settlement-adjustment.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
+    <script src="../shared/tennisnote-single-sheet-snapshot.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-single-sheet-batch.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-single-sheet-transport.js?v=1.0.578"></script>
+    <script src="../shared/tennisnote-single-sheet-preview-ui.js?v=1.0.578"></script>
+    <script src="./catalog.js?v=1.0.578"></script>
+    <script src="./settings.js?v=1.0.578"></script>
+    <script src="./domain/values.js?v=1.0.578"></script>
+    <script src="./domain/lessons.js?v=1.0.578"></script>
+    <script src="./domain/billing.js?v=1.0.578"></script>
+    <script src="./domain/tickets.js?v=1.0.578"></script>
+    <script src="./domain/coaches.js?v=1.0.578"></script>
+    <script src="./domain/schedule.js?v=1.0.578"></script>
+    <script src="./domain/payment.js?v=1.0.578"></script>
+    <script src="./domain/policy.js?v=1.0.578"></script>
+    <script src="./domain/record.js?v=1.0.578"></script>
+    <script src="./domain/members.js?v=1.0.578"></script>
+    <script src="./domain/common.js?v=1.0.578"></script>
+    <script src="./events/billing.js?v=1.0.578"></script>
+    <script src="./events/common.js?v=1.0.578"></script>
+    <script src="./events/data.js?v=1.0.578"></script>
+    <script src="./events/delegated.js?v=1.0.578"></script>
+    <script src="./events/members.js?v=1.0.578"></script>
+    <script src="./events/notes.js?v=1.0.578"></script>
+    <script src="./events/reports.js?v=1.0.578"></script>
+    <script src="./events/schedule.js?v=1.0.578"></script>
+    <script src="./events/settings.js?v=1.0.578"></script>
+    <script src="./views/billing.js?v=1.0.578"></script>
+    <script src="./views/common.js?v=1.0.578"></script>
+    <script src="./views/dashboard.js?v=1.0.578"></script>
+    <script src="./views/data.js?v=1.0.578"></script>
+    <script src="./views/makeup.js?v=1.0.578"></script>
+    <script src="./views/members.js?v=1.0.578"></script>
+    <script src="./views/notes.js?v=1.0.578"></script>
+    <script src="./views/reports.js?v=1.0.578"></script>
+    <script src="./views/schedule.js?v=1.0.578"></script>
+    <script src="./r4-branch-hours.js?v=r4-admin-onboarding1"></script>
+    <script src="./r4-branch-admin-writes.js?v=r4-operations1"></script>
+    <script src="./r4-selfserve-client.js?v=r4-selfserve-3edbd5148cec"></script>
+    <script src="./r4-phone-verification.js?v=r4-phone-51bfdbd44c9d"></script>
+    <script src="./r4-onboarding.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./r4-branch-operations.js?v=r4-operations1"></script>
+    <script src="../shared/tennisnote-r4-marketplace.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script src="./views/settings.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script src="./data/billing.js?v=1.0.578"></script>
+    <script src="./data/common.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./data/member.js?v=1.0.578"></script>
+    <script src="./data/schedule.js?v=1.0.578"></script>
+    <script src="./data/settings.js?v=1.0.578"></script>
+    <script src="./forms/coach.js?v=1.0.578"></script>
+    <script src="./forms/common.js?v=1.0.578"></script>
+    <script src="./forms/member.js?v=1.0.578"></script>
+    <script src="./forms/schedule.js?v=1.0.578"></script>
+    <script src="./actions/billing.js?v=1.0.578"></script>
+    <script src="./actions/coach.js?v=1.0.578"></script>
+    <script src="./actions/common.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./actions/member.js?v=1.0.578"></script>
+    <script src="./actions/notice.js?v=1.0.578"></script>
+    <script src="./actions/report.js?v=1.0.578"></script>
+    <script src="./actions/schedule.js?v=1.0.578"></script>
+    <script src="./actions/settings.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./ui/billing.js?v=1.0.578"></script>
+    <script src="./ui/common.js?v=1.0.578"></script>
+    <script src="./ui/member.js?v=1.0.578"></script>
+    <script src="./ui/schedule.js?v=1.0.578"></script>
+    <script src="./ui/settings.js?v=1.0.578"></script>
+    <script src="./storage.js?v=1.0.578"></script>
+    <script src="./views/tickets.js?v=1.0.578"></script>
+    <script src="./forms/policy.js?v=1.0.578"></script>
+    <script src="./forms/tickets.js?v=1.0.578"></script>
+    <script src="./app.js?v=1.0.578"></script>
+    <script src="./schedule-v2-admin.js?v=schedule-v2-21"></script>
+  </body>
+</html>

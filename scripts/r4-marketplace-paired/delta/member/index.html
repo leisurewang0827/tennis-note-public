@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="ko" data-tennisnote-surface="member">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tennis Note" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="description" content="수업 일정, 회원권, 코치 피드백과 운동 기록을 한곳에서 관리하는 Tennis Note" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tennis Note" />
+    <meta property="og:title" content="Tennis Note | 수업 일정부터 운동 기록까지" />
+    <meta property="og:description" content="테니스 수업 일정, 회원권, 코치 피드백과 나의 운동 기록을 간편하게 확인하세요." />
+    <meta property="og:url" content="https://tennisnote-app.pages.dev/" />
+    <meta property="og:image" content="https://tennisnote-app.pages.dev/assets/brand/tennis-note-share-1.0.152.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <link rel="canonical" href="https://tennisnote-app.pages.dev/" />
+    <title>Tennis Note | 테니스 수업과 운동 기록</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.578" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.578" />
+    <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-2" />
+    <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="../shared/tennisnote-r4-marketplace.css?v=r4-marketplace-010b4a3834ac" />
+</head>
+  <body>
+    <aside role="status" aria-label="개발계 안내" style="position:sticky;top:0;z-index:2147483647;padding:8px 12px;background:#7c2d12;color:#fff;text-align:center;font:700 13px/1.4 system-ui,sans-serif">개발계 · 실제 결제·푸시 차단</aside>
+    <section id="brandSplash" class="brand-splash" role="status" aria-label="Tennis Note 불러오는 중">
+      <img src="./assets/brand/launch-splash.png" alt="" />
+      <span>Tennis Note 불러오는 중</span>
+      <div id="brandSplashFallback" class="brand-splash-fallback" hidden>
+        <strong>앱을 열지 못했습니다</strong>
+        <p>잠시 후 다시 시도하거나 인터넷 연결을 확인해 주세요.</p>
+        <button type="button" onclick="window.location.reload()">다시 시도</button>
+      </div>
+    </section>
+    <script>
+      (() => {
+        let completed = false;
+        const finish = () => {
+          completed = true;
+          window.clearTimeout(window.__tennisNoteBootTimeout);
+        };
+        window.__tennisNoteBootReady = finish;
+        window.__tennisNoteBootTimeout = window.setTimeout(() => {
+          if (completed) return;
+          const splash = document.querySelector("#brandSplash");
+          const fallback = document.querySelector("#brandSplashFallback");
+          splash?.classList.add("is-failed");
+          if (fallback) fallback.hidden = false;
+        }, 3000);
+      })();
+    </script>
+    <main class="app-shell" aria-label="Tennis Note 회원 앱">
+      <section id="loginScreen" class="login-screen">
+        <div class="brand">
+          <p>Tennis Note</p>
+          <h1>나의 테니스 기록</h1>
+          <span class="login-brand-guidance">수업 일정과 운동 기록을 한곳에서 확인하세요.</span>
+        </div>
+
+        <div class="login-card">
+          <div id="memberSessionRestoring" class="session-restoring" hidden role="status" aria-live="polite">
+            <span class="session-restoring-spinner" aria-hidden="true"></span>
+            <strong>회원 화면을 여는 중</strong>
+            <small>로그인 상태를 확인하고 있습니다.</small>
+          </div>
+          <div id="onboardingEntryIntro" class="onboarding-entry-intro" hidden>
+            <span id="onboardingEntryEyebrow">테니스노트 시작</span>
+            <strong id="onboardingEntryTitle">원하는 수업을 먼저 고른 뒤 가입합니다.</strong>
+            <small id="onboardingEntryDetail">로그인 후 선택 내용을 그대로 불러와 최종 결제합니다.</small>
+          </div>
+          <section id="publicProductPreview" class="public-product-preview" aria-labelledby="publicProductPreviewTitle" hidden>
+            <div class="public-product-preview-heading">
+              <div>
+                <span id="publicProductPreviewStep">신규 수업 신청</span>
+                <strong id="publicProductPreviewTitle">원데이 또는 정규 레슨을 선택하세요</strong>
+              </div>
+              <small id="publicProductPreviewStatus" role="status" aria-live="polite">판매 중인 상품을 확인하고 있습니다.</small>
+            </div>
+            <div id="publicProductPreviewList" class="public-product-preview-list"></div>
+            <small class="public-product-preview-note">선택한 시간은 로그인 후 다시 확인합니다. 결제 전에는 회원권이나 수업이 만들어지지 않습니다.</small>
+            <button id="publicOnboardingExistingLogin" class="public-onboarding-existing-login" type="button">
+              이미 수업 중인 회원인가요? <strong>로그인</strong>
+            </button>
+          </section>
+          <div id="publicOnboardingLoginActions" class="public-onboarding-login-actions" hidden>
+            <h2>로그인 수단을 선택하세요</h2>
+            <span id="memberRecentLoginBadge" class="recent-login-badge" hidden aria-live="polite"></span>
+            <p id="publicOnboardingExistingMemberNote" class="public-onboarding-existing-note" hidden>
+              로그인하면 등록된 전화번호로 기존 회원권과 시간표를 연결합니다.
+            </p>
+            <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
+            <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
+            <button
+              class="provider apple"
+              type="button"
+              data-login-provider="Apple"
+              data-ready-label="Apple로 계속"
+              aria-label="Apple로 계속"
+            >
+              <span data-apple-login-label>Apple로 계속</span>
+            </button>
+            <p id="appleLoginAvailabilityNote" class="provider-availability-note" hidden aria-live="polite"></p>
+            <details id="memberEmailAuthPanel" class="email-login-panel" data-feature-gate="emailPasswordAuthUi" hidden inert aria-hidden="true">
+              <summary id="memberEmailAuthSummary">이메일 로그인·가입</summary>
+              <div id="memberEmailAuthTabs" class="email-auth-tabs" role="tablist" aria-label="이메일 계정 선택">
+                <button id="memberEmailLoginTab" class="email-auth-tab is-active" type="button" role="tab" aria-selected="true" data-email-auth-mode="login">로그인</button>
+                <button id="memberEmailSignupTab" class="email-auth-tab" type="button" role="tab" aria-selected="false" data-email-auth-mode="signup">회원가입</button>
+              </div>
+              <form id="memberEmailLoginForm" class="email-login-form">
+                <label>
+                  이메일
+                  <input id="memberLoginEmail" type="email" autocomplete="username" required />
+                </label>
+                <label>
+                  비밀번호
+                  <input id="memberLoginPassword" type="password" autocomplete="current-password" required />
+                </label>
+                <div class="email-auth-actions">
+                  <button class="small-button" type="submit">로그인</button>
+                  <button id="memberPasswordResetButton" class="email-auth-link" type="button">비밀번호 찾기</button>
+                </div>
+              </form>
+              <form id="memberEmailSignupForm" class="email-login-form" hidden>
+                <label>
+                  이메일
+                  <input id="memberSignupEmail" type="email" autocomplete="email" required />
+                </label>
+                <label>
+                  비밀번호
+                  <input id="memberSignupPassword" type="password" autocomplete="new-password" minlength="8" required />
+                  <small>8자 이상 입력해주세요.</small>
+                </label>
+                <label>
+                  비밀번호 확인
+                  <input id="memberSignupPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <label class="email-auth-consent">
+                  <input id="memberSignupConsent" type="checkbox" required />
+                  <span><a href="../tennis-note-legal/terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a>에 동의합니다.</span>
+                </label>
+                <p class="email-auth-note">기존 회원권이 있다면 가입 후 이름과 휴대전화 확인으로 자동 연결됩니다. 이미 다른 로그인 수단을 연결했다면 그 수단으로 로그인해주세요.</p>
+                <button class="small-button" type="submit">회원가입</button>
+              </form>
+              <form id="memberPasswordRecoveryForm" class="email-login-form" hidden>
+                <strong>새 비밀번호 설정</strong>
+                <p class="email-auth-note">이메일 인증이 완료됐습니다. 새 비밀번호를 입력해주세요.</p>
+                <label>
+                  새 비밀번호
+                  <input id="memberRecoveryPassword" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <label>
+                  새 비밀번호 확인
+                  <input id="memberRecoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <button class="small-button" type="submit">비밀번호 변경</button>
+              </form>
+            </details>
+            <p id="memberEmailLoginStatus" class="login-form-status" role="status" aria-live="polite"></p>
+          </div>
+          <button class="small-button install-button" type="button" data-install-pwa hidden>앱 설치</button>
+          <div class="legal-links" aria-label="정책 안내">
+            <a href="../tennis-note-legal/terms.html">이용약관</a>
+            <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
+            <a href="../tennis-note-legal/support.html">고객지원</a>
+          </div>
+        </div>
+      </section>
+
+            <section id="noticeDialog" class="notice-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="noticeTitle" aria-describedby="noticeBody">
+        <div class="notice-backdrop" aria-hidden="true"></div>
+        <article class="notice-card">
+          <div class="notice-scroll-region">
+            <p id="noticeEyebrow" class="eyebrow">공지사항</p>
+            <h2 id="noticeTitle">7월 운영 안내</h2>
+            <img id="noticeImage" class="notice-image" alt="" hidden />
+            <p id="noticeBody">우천 또는 코치 일정 변경 시 앱 공지와 카카오채널로 안내드립니다.</p>
+            <small id="noticeMeta" class="notice-meta">회원/코치 공통 · 일반</small>
+          </div>
+          <div class="notice-actions">
+            <a id="noticeAction" class="small-button notice-action" href="#" target="_blank" rel="noreferrer" hidden>자세히 보기</a>
+            <button class="small-button" type="button" id="noticeHideToday">오늘 하루 보지 않기</button>
+            <button class="primary-button" type="button" id="noticeClose">확인</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="appScreen" class="app-screen" hidden>
+        <section id="pendingApprovalGate" class="pending-approval-gate" hidden aria-label="승인 대기 안내">
+          <article class="pending-approval-card">
+            <p class="eyebrow">계정 이용 확인</p>
+            <h2>고객지원 확인이 필요합니다.</h2>
+            <p id="pendingApprovalMessage">
+              이용이 중지되었거나 탈퇴 처리를 확인 중인 계정입니다. 고객지원으로 문의해 주세요.
+            </p>
+            <div class="pending-approval-steps" aria-label="다음 순서">
+              <span>1. 문의 접수</span>
+              <span>2. 계정 확인</span>
+              <span>3. 이용 재개 안내</span>
+            </div>
+            <div class="pending-approval-actions">
+              <a class="channel-button" href="https://pf.kakao.com/_UQPpb/chat" target="_blank" rel="noreferrer">문의하기</a>
+              <button class="small-button" type="button" id="pendingLogoutButton">다른 계정으로 로그인</button>
+            </div>
+          </article>
+        </section>
+
+        <header class="topbar member-topbar">
+          <div class="compact-app-heading">
+            <span class="compact-app-mark" aria-hidden="true">TN</span>
+            <div>
+              <p>Tennis Note</p>
+              <h1 id="memberScreenTitle">오늘</h1>
+            </div>
+          </div>
+          <div class="topbar-session-data" hidden aria-hidden="true">
+            <span id="topProfileAvatar" class="profile-avatar small is-empty"></span>
+            <span id="memberLoginLabel">Tennis Note</span>
+            <span id="memberName">회원</span>
+          </div>
+        </header>
+
+        <div id="memberConnectivityStatus" class="connectivity-status" role="status" aria-live="polite" hidden>
+          <span id="memberConnectivityMessage"></span>
+        </div>
+
+        <nav class="tabbar" aria-label="하단 주요 기능">
+          <button class="tab is-active" type="button" data-view="homeView">홈</button>
+          <button class="tab" type="button" data-view="scheduleView">시간표</button>
+          <button class="tab" type="button" data-view="lessonLogView">운동일지</button>
+          <button class="tab" type="button" data-view="shopView">회원권</button>
+          <button class="tab" type="button" data-view="profileView">내 정보</button>
+        </nav>
+
+        <section id="homeView" class="view home-view is-active" aria-label="오늘의 테니스">
+          <div class="section-title home-title">
+            <h2>오늘</h2>
+          </div>
+          <section id="homeSummaryGrid" class="summary-grid" aria-label="오늘의 수업 요약">
+            <article id="homeNextLessonCard" class="summary-card primary" data-home-summary="lesson">
+              <span>다음 수업</span>
+              <strong id="nextLessonDate">가까운 수업</strong>
+              <small id="followingLessonDate">다음 수업</small>
+              <div id="homeUpcomingLessons" class="home-upcoming-lessons" aria-label="회원권별 다가오는 수업"></div>
+              <button id="homeScheduleAction" class="small-button" type="button" data-summary-action="schedule">시간표</button>
+            </article>
+            <article id="homeTicketCard" class="summary-card" data-home-summary="ticket">
+              <span>이용권</span>
+              <strong id="remainingCount">8회</strong>
+              <small id="ticketStatus">10회권</small>
+              <button id="homeTicketAction" class="small-button" type="button" data-summary-action="shop">회원권</button>
+            </article>
+            <article id="homeFeedbackCard" class="summary-card" data-home-summary="feedback">
+              <span id="homeFeedbackEyebrow">새 코치 피드백</span>
+              <strong id="pendingNoteCount">없음</strong>
+              <small id="lessonRecordNote"></small>
+              <button id="homeFeedbackAction" class="small-button" type="button" data-summary-action="comments">코멘트 보기</button>
+            </article>
+          </section>
+          <section id="homeOnboarding" class="home-onboarding" hidden aria-label="테니스 노트 시작">
+            <div>
+              <span>테니스 노트 시작</span>
+              <strong>원하는 시작 방법을 선택해 주세요</strong>
+              <small>정규 회원권·쿠폰·원데이를 한 화면에서 비교하고 선택할 수 있습니다.</small>
+            </div>
+            <div class="home-onboarding-actions">
+              <button class="primary-button" type="button" data-open-purchase-flow="new_purchase" data-purchase-explicit data-open-purchase-product-on-entry>회원권 선택</button>
+            </div>
+          </section>
+          <button class="home-change-button" type="button" data-summary-action="change">
+            <strong id="homeChangeLabel">수업 변경</strong>
+            <span aria-hidden="true">›</span>
+          </button>
+        </section>
+
+        <section id="scheduleView" class="view" aria-label="레슨 일정">
+          <div class="section-title">
+            <h2>레슨 일정</h2>
+            <button class="small-button title-action" type="button" id="openChangeHistory">요청 내역</button>
+          </div>
+          <div class="member-schedule-mode" aria-label="시간표 보기 방식">
+            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 일정</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경·보강·예약</button>
+          </div>
+            <p class="member-schedule-guide">내 일정 또는 실제 신청 가능한 시간만 확인하세요.</p>
+          <section id="makeupDueBanner" class="makeup-due-banner" hidden>
+            <div>
+              <strong id="makeupDueTitle">보강 시간을 선택해 주세요</strong>
+              <span id="makeupDueDetail"></span>
+            </div>
+            <button class="primary-button" type="button" data-summary-action="makeup">보강 시간 선택</button>
+          </section>
+          <div id="memberWeekSwitcher" class="week-switcher" aria-label="회원 시간표 주차 선택"></div>
+          <div id="scheduleGrid" class="schedule-grid"></div>
+        </section>
+
+        <section id="lessonLogView" class="view" aria-label="운동일지">
+          <div class="section-title section-title-with-action">
+            <div>
+              <h2>운동일지</h2>
+            </div>
+            <div class="journal-title-actions">
+              <button class="small-button section-shortcut" type="button" data-view="curriculumView">커리큘럼</button>
+              <button class="primary-button journal-write-primary" type="button" id="openJournalComposer">오늘 기록</button>
+            </div>
+          </div>
+
+          <div id="journalActivitySummary" class="journal-activity-summary" aria-label="이번 달 수업 상태"></div>
+
+          <details id="journalCalendarDisclosure" class="journal-calendar-card journal-calendar-disclosure" aria-label="운동일지 달력">
+            <summary><strong>운동 달력</strong><span id="journalMonthLabel">2026년 7월</span></summary>
+            <div class="journal-calendar-body">
+            <div class="journal-calendar-toolbar">
+              <div class="journal-calendar-controls" aria-label="운동일지 기간 이동">
+                <button class="small-button journal-month-arrow" type="button" id="journalPrevMonth" aria-label="이전 달" title="이전 달">&lt;</button>
+                <button class="small-button journal-month-picker-trigger" type="button" id="journalMonthPickerButton" aria-haspopup="dialog" aria-controls="journalMonthPickerSheet" aria-expanded="false">
+                  <strong id="journalCalendarControlLabel">2026년 7월</strong>
+                </button>
+                <button class="small-button journal-month-arrow" type="button" id="journalNextMonth" aria-label="다음 달" title="다음 달">&gt;</button>
+                <button class="small-button journal-today-button" type="button" id="journalTodayButton">오늘</button>
+              </div>
+              <div class="journal-calendar-view-switch" role="group" aria-label="운동일지 달력 보기">
+                <button class="small-button is-active" type="button" data-journal-calendar-view="month" aria-pressed="true">월</button>
+                <button class="small-button" type="button" data-journal-calendar-view="week" aria-pressed="false">주</button>
+              </div>
+            </div>
+            <details class="journal-tools-disclosure">
+              <summary>기록 검색·날짜 이동</summary>
+              <div class="journal-calendar-tools">
+                <label>
+                  <span>기록 검색</span>
+                  <input id="journalSearch" type="search" placeholder="예: 포핸드, 코멘트, 백핸드" />
+                </label>
+                <label>
+                  <span>날짜 바로가기</span>
+                  <input id="journalJumpDate" type="date" />
+                </label>
+              </div>
+            </details>
+            <div id="journalCalendar" class="journal-calendar"></div>
+            <div id="journalSelectedDayPanel" class="journal-selected-panel"></div>
+            </div>
+          </details>
+
+          <section id="journalMonthPickerSheet" class="app-bottom-sheet journal-month-picker-sheet" aria-labelledby="journalMonthPickerTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="연·월 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-journal-month-picker></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalMonthPickerTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
+                <div>
+                  <p class="eyebrow">운동일지 이동</p>
+                  <h3 id="journalMonthPickerTitle">연·월 선택</h3>
+                  <span>보고 싶은 달을 선택하세요.</span>
+                </div>
+              </div>
+              <div class="sheet-scroll" data-tn-sheet-scroll>
+                <div class="form-card journal-month-picker-form">
+                  <div class="journal-month-picker-grid">
+                    <label>
+                      <span>연도</span>
+                      <select id="journalMonthPickerYear" aria-label="운동일지 연도"></select>
+                    </label>
+                    <label>
+                      <span>월</span>
+                      <select id="journalMonthPickerMonth" aria-label="운동일지 월"></select>
+                    </label>
+                  </div>
+                  <p id="journalMonthPickerStatus" class="journal-month-picker-status" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+              <div class="sheet-actions journal-month-picker-actions" data-tn-sheet-footer>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-journal-month-picker>취소</button>
+                <button class="primary-button" type="button" id="journalMonthPickerApply">적용</button>
+              </div>
+            </article>
+          </section>
+
+          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-journal-composer></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
+                <div>
+                  <p class="eyebrow">운동일지 작성</p>
+                  <h3 id="journalComposerTitle">기록하기</h3>
+                  <span id="journalComposerDateLabel"></span>
+                </div>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-journal-composer>닫기</button>
+              </div>
+              <div class="sheet-scroll" data-tn-sheet-scroll>
+          <div class="form-card journal-composer-form">
+            <label>
+              <span>기록 구분</span>
+              <select id="journalMode">
+                <option value="lesson">레슨</option>
+                <option value="practice">개인운동</option>
+              </select>
+            </label>
+            <label>
+              <span>운동 날짜</span>
+              <input id="journalDate" type="date" />
+            </label>
+            <div id="lessonJournalFields" class="journal-fields">
+            <label>
+              <span>기록할 수업</span>
+              <select id="logLesson"></select>
+            </label>
+            <label>
+              <span>오늘 수업 내용</span>
+              <textarea id="todayLessonContent" rows="4" placeholder="오늘 배운 내용을 간단히 적어주세요."></textarea>
+            </label>
+            <label>
+              <span>자기 운동 일지</span>
+              <textarea id="selfWorkoutMemo" rows="4" placeholder="느낀 점이나 다음에 보완할 점을 적어주세요."></textarea>
+            </label>
+            <label>
+              <span>사진/동영상 첨부</span>
+              <input id="lessonMedia" type="file" accept="image/*,video/*" multiple />
+            </label>
+            </div>
+            <div id="practiceJournalFields" class="journal-fields" hidden>
+            <label>
+              <span>운동 구분</span>
+              <select id="practiceType">
+                <option value="개인연습">개인연습(볼머신등 스윙연습)</option>
+                <option value="랠리 및 게임">랠리 및 게임</option>
+                <option value="기타">기타</option>
+              </select>
+            </label>
+            <label>
+              <span>오늘 운동 기록</span>
+              <textarea id="practiceMemo" rows="4" placeholder="오늘 한 운동을 적어주세요."></textarea>
+            </label>
+            <label>
+              <span>다음에 연습할 것</span>
+              <textarea id="practiceNext" rows="3" placeholder="다음 운동 목표를 적어주세요."></textarea>
+            </label>
+            <label>
+              <span>사진/동영상 첨부</span>
+              <input id="practiceMedia" type="file" accept="image/*,video/*" multiple />
+              <small>사진은 파일당 100MB, 영상 MP4·MOV·WebM은 파일당 1GB 이하입니다. 큰 영상은 이어서 업로드되며 기존 첨부는 수정해도 유지됩니다.</small>
+            </label>
+            <label class="check-row">
+              <input id="requestCoachFeedback" type="checkbox" />
+              <span>코치에게 영상/사진 코멘트 요청</span>
+            </label>
+            <label>
+              <span>코치에게 묻고 싶은 점</span>
+              <textarea id="feedbackQuestion" rows="3" placeholder="코치에게 확인받고 싶은 점을 적어주세요."></textarea>
+            </label>
+            </div>
+          </div>
+              </div>
+              <div class="sheet-actions journal-composer-actions" data-tn-sheet-footer>
+                <p id="personalJournalStatus" role="status" aria-live="polite" hidden></p>
+                <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
+              </div>
+            </article>
+          </section>
+
+          <div id="curriculumMiniGuide" class="journal-curriculum-preview"></div>
+
+          <div class="split-panel">
+            <section>
+            <h3>최근 수업 피드백</h3>
+              <div id="lessonLogs" class="history-list"></div>
+              <div id="lessonLogsPager" class="list-pager"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="curriculumView" class="view" aria-label="전체 커리큘럼">
+          <div class="section-title">
+            <h2>커리큘럼</h2>
+          </div>
+
+          <div id="curriculumGuide" class="curriculum-card curriculum-main-card"></div>
+          <div id="curriculumFullList" class="curriculum-full-list"></div>
+        </section>
+
+        <section id="shopView" class="view" aria-label="회원권 구매 및 결제">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">회원권</p>
+              <h2>회원권 구매</h2>
+            </div>
+            <button class="small-button title-action" type="button" data-view="homeView">홈으로</button>
+          </div>
+
+          <section id="memberOneDayReservationPanel" class="membership-overview" aria-label="내 원데이 예약" hidden></section>
+
+          <section id="membershipPurchaseFlow" class="membership-purchase-flow" aria-labelledby="membershipPurchaseFlowTitle" hidden>
+            <div class="membership-purchase-head">
+              <div>
+                <p class="eyebrow" id="membershipPurchaseFlowEyebrow">회원권 구매</p>
+                <h3 id="membershipPurchaseFlowTitle">원하는 수업을 골라주세요</h3>
+              </div>
+              <button class="small-button" type="button" data-close-purchase-flow>닫기</button>
+            </div>
+            <ol id="membershipPurchaseProgress" class="membership-purchase-progress" aria-label="회원권 구매 단계"></ol>
+            <div id="membershipPurchaseStep" class="membership-purchase-step"></div>
+          </section>
+
+          <section id="r4MarketBuyer" class="tn-market-panel" aria-labelledby="r4MarketBuyerTitle" hidden>
+            <header class="tn-market-heading">
+              <h2 id="r4MarketBuyerTitle">다른 레슨 찾기</h2>
+              <button id="r4MarketBuyerRefresh" class="small-button" type="button">다시 확인</button>
+            </header>
+            <label class="tn-market-search">레슨·판매자 검색<input id="r4MarketSearch" type="search" maxlength="100" placeholder="레슨 또는 판매자 이름" /></label>
+            <p id="r4MarketBuyerStatus" role="status" aria-live="polite"></p>
+            <ul id="r4MarketCatalog" class="tn-market-list"></ul>
+          </section>
+          <section id="r4MarketDetail" class="app-bottom-sheet tn-market-detail" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" aria-labelledby="r4MarketDetailTitle" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="상품 상세 닫기" data-tn-sheet-backdrop data-tn-sheet-close></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="r4MarketDetailTitle" data-tn-sheet-panel>
+            <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+            <header class="sheet-head tn-market-heading" data-tn-sheet-header><h3 id="r4MarketDetailTitle">상품 상세</h3><button id="r4MarketDetailClose" class="small-button" type="button">닫기</button></header>
+            <div class="sheet-scroll" data-tn-sheet-scroll>
+              <dl id="r4MarketDetailSummary" class="tn-market-summary"></dl>
+              <p class="tn-market-note">판매 준비 중입니다. 예약·결제는 진행되지 않습니다.</p>
+            </div>
+            <footer class="sheet-actions tn-market-footer" data-tn-sheet-actions><button type="button" class="primary-button" disabled>판매 준비 중</button></footer>
+            </article>
+          </section>
+
+          <section id="membershipProductBrowser" class="membership-product-browser" aria-label="회원권 상품 둘러보기">
+            <div class="membership-browser-heading">
+              <div>
+                <strong>회원권 찾기</strong>
+                <span>상품 전체를 나열하지 않고 수업 형태별로 추천합니다.</span>
+              </div>
+              <button class="primary-button" type="button" data-open-purchase-flow>새 회원권 구매</button>
+            </div>
+            <section class="membership-product-discovery" aria-label="회원권 빠른 선택">
+              <div id="membershipProductPresets" class="membership-product-presets"></div>
+              <details id="membershipProductFilterDetails" class="membership-filter-disclosure">
+                <summary><span>상세 조건</span><small id="membershipProductFilterSummary">조건 열기</small></summary>
+                <section id="membershipProductFilters" class="membership-product-filters" aria-label="회원권 상품 조건"></section>
+              </details>
+            </section>
+            <div class="product-grid" id="productGrid"></div>
+          </section>
+
+          <details id="currentMembershipDetails" class="membership-details membership-secondary-details membership-current-disclosure">
+            <summary><span>현재 회원권·연장</span><small>잔여 횟수와 기간은 홈에서 바로 확인</small></summary>
+            <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
+            <details id="membershipHistoryDetails" class="membership-details membership-secondary-details">
+              <summary>지난 이용 내역</summary>
+              <div id="ticketHistory" class="history-list"></div>
+              <div id="ticketHistoryPager" class="list-pager"></div>
+            </details>
+          </details>
+
+          <details id="membershipSupportDetails" class="membership-details membership-help-disclosure" hidden>
+            <summary>결제·가입·대기 내역</summary>
+            <div class="membership-details-body membership-help-body">
+              <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
+              <div id="groupAccountPanel" class="group-account-panel"></div>
+              <div id="memberPaymentAlerts"></div>
+              <div id="registrationFlow" class="flow-guide"></div>
+              <section class="form-card membership-pending-records">
+                <h3>결제 확인 중인 회원권</h3>
+                <p class="form-help">결제 이전 또는 관리자 검증이 끝나지 않은 이용권만 표시됩니다.</p>
+                <div id="paymentRequests" class="history-list"></div>
+                <div id="paymentRequestsPager" class="list-pager"></div>
+              </section>
+            </div>
+          </details>
+        </section>
+
+        <section id="profileView" class="view" aria-label="내 정보">
+          <div class="section-title">
+            <h2>내 정보</h2>
+          </div>
+
+          <section class="profile-card" aria-label="프로필 사진">
+            <div id="profileAvatar" class="profile-avatar large">김</div>
+            <div class="profile-info">
+              <strong id="profileName">김서준 회원</strong>
+              <small id="profileRealName">실명 김서준</small>
+              <span id="profileProvider">간편 로그인 유지중</span>
+              <div class="profile-actions">
+                <button class="small-button" type="button" id="openProfileEditorButton">프로필 수정</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="profile-settings-card profile-summary-menu" aria-label="내 계정 요약">
+            <div class="settings-heading">
+              <span>내 계정</span>
+            </div>
+            <button class="settings-row" type="button" id="openProfileEditorMenuButton">
+              <span class="settings-row-icon" aria-hidden="true">P</span>
+              <span class="settings-row-copy">
+                <strong>프로필 정보</strong>
+                <small>사진, 닉네임, 테니스 스타일 수정</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" id="openNtrpEditorButton">
+              <span class="settings-row-icon" aria-hidden="true">N</span>
+              <span class="settings-row-copy">
+                <strong>내 테니스 수준</strong>
+                <small id="profileNtrpSummary">내가 고른 수준과 코치가 본 수준을 확인하세요</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" id="openDiscountCouponWalletButton">
+              <span class="settings-row-icon" aria-hidden="true">%</span>
+              <span class="settings-row-copy">
+                <strong>할인 쿠폰함</strong>
+                <small id="profileCouponWalletSummary">사용 가능한 쿠폰을 확인하세요</small>
+              </span>
+              <span id="profileCouponWalletCount" class="settings-row-status">0장</span>
+            </button>
+          </section>
+
+          <section class="profile-settings-card" aria-label="앱 및 계정 설정">
+            <div class="settings-heading">
+              <span>앱 및 계정</span>
+            </div>
+            <button class="settings-row coach-settings-row" type="button" id="coachModeButton" hidden>
+              <span class="settings-row-icon" aria-hidden="true">C</span>
+              <span class="settings-row-copy">
+                <strong>코치 모드로 전환</strong>
+                <small>승인된 코치 계정에서만 사용할 수 있습니다</small>
+              </span>
+              <span class="settings-row-status">승인됨</span>
+            </button>
+            <button class="settings-row" type="button" id="openMemberHelpButton">
+              <span class="settings-row-icon" aria-hidden="true">?</span>
+              <span class="settings-row-copy">
+                <strong>도움말</strong>
+                <small>예약·변경·회원권·결제 빠르게 찾기</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" id="openKakaoInquiryButton">
+              <span class="settings-row-icon kakao-icon" aria-hidden="true">K</span>
+              <span class="settings-row-copy">
+                <strong>카카오 문의</strong>
+                <small>운영시간과 문의 방법 확인</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" data-open-product-report>
+              <span class="settings-row-icon" aria-hidden="true">!</span>
+              <span class="settings-row-copy">
+                <strong>불편·오류 접수</strong>
+                <small>사용 중 불편하거나 이상한 점을 알려주세요</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row install-settings-row" type="button" data-install-pwa hidden>
+              <span class="settings-row-icon" aria-hidden="true">↓</span>
+              <span class="settings-row-copy">
+                <strong>앱 설치</strong>
+                <small>홈 화면에서 테니스노트를 바로 실행</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" id="memberRefreshButton">
+              <span class="settings-row-icon" aria-hidden="true">R</span>
+              <span class="settings-row-copy">
+                <strong>앱 새로고침</strong>
+                <small>최신 화면과 데이터를 다시 불러옵니다.</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row danger-settings-row" type="button" id="profileLogoutButton">
+              <span class="settings-row-icon" aria-hidden="true">↪</span>
+              <span class="settings-row-copy">
+                <strong>로그아웃</strong>
+                <small>현재 계정에서 안전하게 로그아웃</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+          </section>
+
+          <div class="profile-version-footer" aria-label="앱 버전 정보">
+            <span>Tennis Note</span>
+            <small class="release-version" data-tennisnote-release="app"></small>
+            <small id="memberRuntimeDiagnostics" class="runtime-diagnostics">V2 연결 확인 중</small>
+          </div>
+
+          <div class="profile-contact-footer">
+            <span>문의</span>
+            <a href="mailto:tennisclubhouse2022@gmail.com">tennisclubhouse2022@gmail.com</a>
+          </div>
+
+          <section class="push-settings-card" aria-label="앱 알림 설정">
+            <div>
+              <span>앱 알림</span>
+              <strong id="pushNotificationStatus">앱 알림 확인 중</strong>
+              <small id="pushNotificationDetail">수업 일정과 회원권 만료를 알려드립니다.</small>
+            </div>
+            <button class="small-button" type="button" id="pushNotificationButton">알림 켜기</button>
+          </section>
+
+          <section id="bankNotificationBridgeCard" class="push-settings-card bank-notification-bridge-card" aria-label="관리자 입금 알림 연결" hidden>
+            <div>
+              <span>관리자 전용 · 입금 알림</span>
+              <strong id="bankNotificationBridgeStatus">연결 확인 중</strong>
+              <small id="bankNotificationBridgeDetail">우리은행·카카오뱅크 입금 알림에서 금액과 입금자만 읽어 안전하게 대조합니다.</small>
+            </div>
+            <button class="small-button" type="button" id="bankNotificationBridgeButton">이 기기 연결</button>
+          </section>
+
+          <section class="account-settings-card" aria-label="계정 및 데이터 관리">
+            <div>
+              <span>계정 및 데이터</span>
+              <strong id="accountDeletionStatus">회원 탈퇴 요청 없음</strong>
+              <small id="accountDeletionDetail">탈퇴하면 정산·환불·법정 보관 자료를 제외한 계정과 이용 데이터를 삭제합니다.</small>
+            </div>
+            <button class="small-button danger-button" type="button" id="openAccountDeletionButton">계정 삭제</button>
+          </section>
+
+          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-bottom-sheet data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-profile-editor></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
+                <div>
+                  <p class="eyebrow">내 계정</p>
+                  <h3 id="profileEditorTitle">프로필과 테니스 정보</h3>
+                  <span>필요한 항목만 수정하고 저장하세요.</span>
+                </div>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-profile-editor>닫기</button>
+              </div>
+              <div class="sheet-scroll" data-tn-sheet-scroll>
+          <section class="form-card profile-editor-form">
+            <div class="profile-editor-photo-actions">
+              <label class="upload-button" for="profilePhotoInput">사진 등록</label>
+              <input id="profilePhotoInput" type="file" accept="image/*" hidden />
+              <button class="small-button" type="button" id="removeProfilePhoto">사진 삭제</button>
+            </div>
+            <h3>계정 기본 정보</h3>
+            <div class="profile-form-grid identity-profile-grid">
+              <label>
+                <span>실명</span>
+                <input id="profileRealNameInput" type="text" maxlength="40" autocomplete="name" />
+              </label>
+              <label>
+                <span>닉네임</span>
+                <input id="profileNicknameInput" type="text" minlength="2" maxlength="20" autocomplete="nickname" />
+              </label>
+              <label>
+                <span>휴대전화</span>
+                <input id="profilePhoneInput" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" aria-describedby="profilePhoneStatus" />
+              </label>
+              <div class="identity-phone-verification" id="profilePhoneVerification">
+                <div class="identity-phone-actions">
+                  <button class="small-button" type="button" id="profilePhoneSendButton">인증번호 받기</button>
+                  <small id="profilePhoneStatus" role="status" aria-live="polite">기존 번호를 유지하거나 새 번호를 인증한 후 저장하세요.</small>
+                </div>
+                <div class="identity-phone-code-row" id="profilePhoneCodeRow" hidden>
+                  <label>
+                    <span>인증번호</span>
+                    <input id="profilePhoneCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6자리" />
+                  </label>
+                  <button class="small-button" type="button" id="profilePhoneVerifyButton">확인</button>
+                </div>
+              </div>
+              <div class="nickname-check-panel">
+                <button class="small-button" type="button" id="profileNicknameCheckButton">닉네임 중복 확인</button>
+                <small id="profileNicknameStatus">2~20자로 입력하세요.</small>
+              </div>
+            </div>
+            <p class="policy-note">실명은 수업·결제·회원 관리에, 닉네임은 내 화면에 사용됩니다.</p>
+            <h3>내 테니스 스타일</h3>
+            <div class="profile-form-grid">
+              <label>
+                <span>주 사용 손</span>
+                <select id="profileHand">
+                  <option value="오른손">오른손</option>
+                  <option value="왼손">왼손</option>
+                </select>
+              </label>
+              <label>
+                <span>백핸드</span>
+                <select id="profileBackhand">
+                  <option value="투핸드 백핸드">투핸드 백핸드</option>
+                  <option value="원핸드 백핸드">원핸드 백핸드</option>
+                  <option value="아직 미정">아직 미정</option>
+                </select>
+              </label>
+              <label>
+                <span>테니스 시작일</span>
+                <input id="profileStartedAt" type="date" />
+              </label>
+              <label>
+                <span>현재 목표</span>
+                <input id="profileGoal" type="text" placeholder="예: 랠리 10개 연결, 게임 입문" />
+              </label>
+              <label>
+                <span>내가 고른 수준</span>
+                <select id="profileSelfNtrp">
+                  <option value="1.5">1.5 · 시작/입문</option>
+                  <option value="2.0">2.0 · 기본기 연습 필요</option>
+                  <option value="2.5">2.5 · 느린 랠리 가능</option>
+                  <option value="3.0">3.0 · 중간 속도 랠리 가능</option>
+                  <option value="3.5">3.5 · 방향 조절 시작</option>
+                  <option value="4.0">4.0 · 안정적 경기 가능</option>
+                </select>
+              </label>
+              <label>
+                <span>코치가 본 수준</span>
+                <input id="profileCoachNtrp" type="text" readonly />
+              </label>
+            </div>
+            <label>
+              <span>내 스타일 메모</span>
+              <textarea id="profileStyleMemo" rows="3" placeholder="예: 포핸드는 자신 있는데 백핸드가 불안해요."></textarea>
+            </label>
+            <details class="ntrp-survey" aria-label="내 테니스 수준 참고자료">
+              <summary>수준 기준 자세히 보기</summary>
+              <div class="section-title compact-title">
+                <h3>내 테니스 수준 참고자료</h3>
+                <span>NTRP 공식 기준과 질문은 필요할 때만 확인하세요.</span>
+              </div>
+              <div id="ntrpReferenceCards" class="ntrp-reference-grid"></div>
+              <div id="ntrpSurveyQuestions" class="ntrp-survey-list"></div>
+              <button class="small-button" type="button" id="calculateNtrp">답변으로 내 수준 확인</button>
+            </details>
+            <div id="ntrpPanel" class="ntrp-panel"></div>
+            <button class="primary-button" type="button" id="saveProfileInfo">내 정보 저장</button>
+            <button class="small-button" type="button" id="requestNtrpCheck">코치에게 수준 확인 요청</button>
+          </section>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <footer class="app-legal-links" aria-label="앱 정책 안내">
+          <a href="../tennis-note-legal/terms.html">이용약관</a>
+          <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
+          <a href="../tennis-note-legal/support.html">고객지원</a>
+          <a href="../tennis-note-legal/delete-account.html">계정 삭제 안내</a>
+          <section class="business-operator-info" aria-label="사업자 정보 및 이용약관">
+            <strong class="business-operator-heading">사업자 정보</strong>
+            <div class="business-operator-details">
+              <span>상호: 다이너스티 주식회사</span>
+              <span>대표자: 박창준</span>
+              <span>사업자등록번호: 586-87-02880</span>
+              <span>주소: 서울특별시 광진구 능동로 237, B1</span>
+              <span>유선번호: <a href="tel:050713259052">0507-1325-9052</a></span>
+              <span>이메일: <a href="mailto:tennisclubhouse2022@gmail.com">tennisclubhouse2022@gmail.com</a></span>
+            </div>
+            <a class="terms-notice-link" href="../tennis-note-legal/commerce.html">결제·환불 정책 보기</a>
+          </section>
+        </footer>
+      </section>
+    </main>
+
+    <section id="memberHelpModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-member-help></div>
+      <article class="change-modal-card member-help-card" role="dialog" aria-modal="true" aria-labelledby="memberHelpTitle">
+        <header class="member-help-heading">
+          <div>
+            <p class="eyebrow">도움말</p>
+            <h2 id="memberHelpTitle">무엇을 찾으세요?</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-member-help title="도움말 닫기" aria-label="도움말 닫기">×</button>
+        </header>
+        <label class="member-help-search">
+          <span>검색</span>
+          <input id="memberHelpSearch" type="search" autocomplete="off" placeholder="예: 보강, 결제, 알림" />
+        </label>
+        <div class="member-help-filters" role="tablist" aria-label="도움말 분류">
+          <button class="is-active" type="button" data-member-help-category="all" role="tab" aria-selected="true">전체</button>
+          <button type="button" data-member-help-category="schedule" role="tab" aria-selected="false">예약·변경</button>
+          <button type="button" data-member-help-category="ticket" role="tab" aria-selected="false">회원권·결제</button>
+          <button type="button" data-member-help-category="app" role="tab" aria-selected="false">앱 이용</button>
+        </div>
+        <div id="memberHelpList" class="member-help-list" aria-live="polite"></div>
+        <div class="modal-actions">
+          <button class="small-button" type="button" data-member-help-action="support">카카오 문의</button>
+          <button class="primary-button" type="button" data-close-member-help>닫기</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="kakaoInquiryModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-kakao-inquiry-modal></div>
+      <article class="change-modal-card support-modal-card" role="dialog" aria-modal="true" aria-labelledby="kakaoInquiryTitle">
+        <p class="eyebrow">고객 지원</p>
+        <h2 id="kakaoInquiryTitle">카카오로 문의하기</h2>
+        <p>수업 변경, 회원권, 결제 관련 내용을 남겨주시면 운영시간에 순서대로 답변드립니다.</p>
+        <div class="support-hours">
+          <strong>문의 전 확인</strong>
+          <span>회원 이름과 문의 내용을 함께 적어주세요.</span>
+        </div>
+        <div class="modal-actions">
+          <a class="channel-button" id="kakaoChannelLink" href="https://pf.kakao.com/_UQPpb/chat" target="_blank" rel="noreferrer">카카오 채널 열기</a>
+          <button class="small-button" type="button" data-close-kakao-inquiry-modal>닫기</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="identitySetupModal" class="change-request-modal identity-setup-modal" data-tn-input-guard="member-identity" data-tn-restore-draft="true" hidden>
+      <div class="modal-backdrop"></div>
+      <article class="change-modal-card identity-setup-card" role="dialog" aria-modal="true" aria-labelledby="identitySetupTitle">
+        <p class="eyebrow">가입 정보 확인</p>
+        <h2 id="identitySetupTitle">내 프로필을 완성해 주세요</h2>
+        <p>간편 로그인 이름과 별도로 실제 수업에 사용할 정보를 확인합니다.</p>
+        <form id="identitySetupForm" class="identity-setup-form">
+          <label>
+            <span>실명</span>
+            <input id="identityRealName" type="text" maxlength="40" autocomplete="name" required />
+          </label>
+          <label>
+            <span>닉네임</span>
+            <input id="identityNickname" type="text" minlength="2" maxlength="20" autocomplete="nickname" required />
+          </label>
+          <div class="nickname-check-row">
+            <button class="small-button" type="button" id="identityNicknameCheckButton">중복 확인</button>
+            <small id="identityNicknameStatus">닉네임은 모든 회원 사이에서 중복될 수 없습니다.</small>
+          </div>
+          <label>
+            <span>휴대전화</span>
+            <input id="identityPhone" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" placeholder="010-0000-0000" required />
+          </label>
+          <div class="identity-phone-verification" id="identityPhoneVerification">
+            <div class="identity-phone-actions">
+              <button class="small-button" type="button" id="identityNaverPhoneButton" hidden>네이버 번호 다시 받기</button>
+              <button class="small-button" type="button" id="identityPhoneSendButton">인증번호 받기</button>
+              <small id="identityPhoneStatus" role="status" aria-live="polite">기존 회원권 자동 연결을 위해 휴대전화 확인이 필요합니다.</small>
+            </div>
+            <div class="identity-phone-code-row" id="identityPhoneCodeRow" hidden>
+              <label>
+                <span>인증번호</span>
+                <input id="identityPhoneCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6자리" />
+              </label>
+              <button class="small-button" type="button" id="identityPhoneVerifyButton">확인</button>
+            </div>
+          </div>
+          <div class="identity-demographics-grid">
+            <label>
+              <span>출생연도</span>
+              <input id="identityBirthYear" type="number" min="1900" max="2100" inputmode="numeric" autocomplete="bday-year" placeholder="예: 1990" required />
+            </label>
+            <label>
+              <span>성별</span>
+              <select id="identityGender" required>
+                <option value="">선택</option>
+                <option value="female">여성</option>
+                <option value="male">남성</option>
+                <option value="other">기타</option>
+                <option value="prefer_not">응답하지 않음</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            <span>거주 동네 <small>선택</small></span>
+            <input id="identityNeighborhood" type="text" maxlength="50" autocomplete="address-level3" placeholder="예: 화양동" />
+          </label>
+          <div class="identity-consent-list">
+            <label class="consent-row">
+              <input id="identityTermsConsent" type="checkbox" required />
+              <span><b>필수</b> <a href="../tennis-note-legal/terms.html" target="_blank" rel="noreferrer">서비스 이용약관</a> 동의</span>
+            </label>
+            <label class="consent-row">
+              <input id="identityPrivacyConsent" type="checkbox" required />
+              <span><b>필수</b> <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 수집·이용</a> 동의</span>
+            </label>
+            <fieldset class="identity-marketing-consents">
+              <legend><b>선택</b> 이벤트·할인 소식 받기</legend>
+              <label><input id="identityMarketingPush" type="checkbox" /><span>앱 알림</span></label>
+              <label><input id="identityMarketingSms" type="checkbox" /><span>문자</span></label>
+              <label><input id="identityMarketingEmail" type="checkbox" /><span>이메일</span></label>
+            </fieldset>
+            <small>수업·변경·회원권 같은 운영 안내는 마케팅 동의와 별도로 앱 알림함에서 확인할 수 있습니다.</small>
+          </div>
+          <p id="identitySetupMessage" class="policy-note" aria-live="polite"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">가입 완료</button>
+            <button class="small-button" type="button" id="identitySetupLogoutButton">다른 계정으로 로그인</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="memberEnrollmentModal" class="change-request-modal" data-tn-input-guard="member-enrollment" data-tn-restore-draft="true" hidden>
+      <div class="modal-backdrop" data-close-member-enrollment></div>
+      <article class="change-modal-card member-enrollment-modal-card" role="dialog" aria-modal="true" aria-labelledby="memberEnrollmentTitle">
+        <div class="section-title compact-title">
+          <div>
+            <p class="eyebrow">첫 회원권 구매</p>
+            <h2 id="memberEnrollmentTitle">수강 가입서</h2>
+          </div>
+          <span>운동노트만 이용할 때는 작성하지 않아도 됩니다.</span>
+        </div>
+        <div id="memberEnrollmentProduct" class="member-enrollment-product"></div>
+        <form id="memberEnrollmentForm" class="member-enrollment-form">
+          <div class="member-enrollment-grid member-enrollment-required-grid">
+            <label>
+              <span>이름 <b>필수</b></span>
+              <input id="enrollmentName" type="text" maxlength="50" autocomplete="name" required />
+            </label>
+            <label>
+              <span>연락처 <b>필수</b></span>
+              <input id="enrollmentPhone" type="tel" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-1234-5678" required />
+            </label>
+            <label>
+              <span>출생연도 <b>필수</b></span>
+              <input id="enrollmentBirthYear" type="number" min="1900" max="2100" inputmode="numeric" placeholder="1990" required />
+            </label>
+          </div>
+          <details id="memberEnrollmentOptionalDetails" class="member-enrollment-optional">
+            <summary><span>추가 정보</span><small>선택 · 나중에 입력 가능</small></summary>
+            <div class="member-enrollment-grid">
+              <label>
+                <span>거주 동네 <small>선택</small></span>
+                <input id="enrollmentNeighborhood" type="text" maxlength="50" placeholder="예: 화양동" />
+              </label>
+              <label>
+                <span>성별 <small>선택</small></span>
+                <select id="enrollmentGender">
+                  <option value="">선택 안 함</option>
+                  <option value="female">여성</option>
+                  <option value="male">남성</option>
+                  <option value="other">기타</option>
+                  <option value="prefer_not">응답하지 않음</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <fieldset id="enrollmentPartnerFields" class="member-enrollment-partner" hidden>
+            <legend>2대1 동반 회원</legend>
+            <p>파트너가 앱을 설치하지 않아도 대표 회원이 결제와 시간표를 함께 관리할 수 있습니다.</p>
+            <div class="member-enrollment-grid">
+              <label><span>파트너 이름 <b>필수</b></span><input id="enrollmentPartnerName" type="text" maxlength="50" /></label>
+              <label><span>파트너 연락처 <b>필수</b></span><input id="enrollmentPartnerPhone" type="tel" maxlength="20" inputmode="tel" /></label>
+              <label><span>파트너 출생연도 <small>선택</small></span><input id="enrollmentPartnerBirthYear" type="number" min="1900" max="2100" inputmode="numeric" /></label>
+              <label><span>파트너 거주 동네 <small>선택</small></span><input id="enrollmentPartnerNeighborhood" type="text" maxlength="50" /></label>
+              <label>
+                <span>파트너 성별 <small>선택</small></span>
+                <select id="enrollmentPartnerGender">
+                  <option value="">선택 안 함</option>
+                  <option value="female">여성</option>
+                  <option value="male">남성</option>
+                  <option value="other">기타</option>
+                  <option value="prefer_not">응답하지 않음</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+          <div class="member-enrollment-consents">
+            <label><input id="enrollmentPrivacyConsent" type="checkbox" required /><span><a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>과 수강 운영을 위한 정보 수집에 동의합니다. <b>필수</b></span></label>
+            <label><input id="enrollmentTermsConsent" type="checkbox" required /><span><a href="../tennis-note-legal/commerce.html">회원권·결제·환불 안내</a>를 확인했습니다. <b>필수</b></span></label>
+          </div>
+          <p id="memberEnrollmentMessage" class="policy-note" role="status"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">가입서 제출 후 결제</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="paymentConfirmationModal" class="app-bottom-sheet payment-confirmation-sheet" aria-labelledby="paymentConfirmationTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="결제 확인 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-payment-confirmation></button>
+      <article class="sheet-card payment-confirmation-card" role="dialog" aria-modal="true" aria-labelledby="paymentConfirmationTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권 결제</p>
+            <h2 id="paymentConfirmationTitle">결제 내용을 확인해 주세요</h2>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-payment-confirmation>닫기</button>
+        </div>
+        <div class="sheet-scroll payment-confirmation-scroll" data-tn-sheet-scroll>
+          <div class="payment-confirmation-summary">
+            <span id="paymentConfirmationProduct">회원권</span>
+            <strong id="paymentConfirmationAmount">0원</strong>
+            <small id="paymentConfirmationMethod">카드 결제</small>
+          </div>
+          <p class="policy-note" id="paymentConfirmationMessage">결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.</p>
+        </div>
+        <div class="sheet-actions" data-tn-sheet-actions>
+          <button class="small-button" id="switchPaymentToBankTransferButton" type="button" hidden>계좌이체로 변경</button>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-payment-confirmation>취소</button>
+          <button class="primary-button" id="openPreparedPaymentButton" type="button">결제창 열기</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-lesson-detail></button>
+      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">내 수업</p>
+            <h3 id="lessonDetailTitle">수업 상세</h3>
+            <span id="lessonDetailStatus">예정</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-lesson-detail>닫기</button>
+        </div>
+        <div class="sheet-scroll lesson-detail-sheet-scroll" data-tn-sheet-scroll>
+          <dl class="lesson-detail-facts">
+            <div>
+              <dt>일정</dt>
+              <dd id="lessonDetailDateTime">-</dd>
+            </div>
+            <div>
+              <dt>담당 코치</dt>
+              <dd id="lessonDetailCoach">-</dd>
+            </div>
+            <div>
+              <dt>수업</dt>
+              <dd id="lessonDetailType">-</dd>
+            </div>
+            <div>
+              <dt>회차</dt>
+              <dd id="lessonDetailRound">-</dd>
+            </div>
+          </dl>
+          <p id="lessonDetailMessage" class="lesson-detail-message"></p>
+          <div class="lesson-detail-actions">
+            <button id="lessonDetailPrimaryAction" class="primary-button" type="button" hidden></button>
+            <button id="lessonDetailAbsenceAction" class="small-button lesson-detail-absence-action" type="button" hidden></button>
+            <button id="lessonDetailJournalAction" class="small-button" type="button" hidden>운동기록 작성</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="sameDayAbsenceSheet" class="app-bottom-sheet same-day-absence-sheet" aria-labelledby="sameDayAbsenceTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="당일 불참 신청 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-same-day-absence></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sameDayAbsenceTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">오늘 수업</p>
+            <h3 id="sameDayAbsenceTitle">오늘 수업에 못 가시나요?</h3>
+            <span id="sameDayAbsenceLessonLabel">수업 시간을 확인하고 있습니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-same-day-absence>닫기</button>
+        </div>
+        <div class="sheet-scroll same-day-absence-sheet-scroll" data-tn-sheet-scroll>
+          <p id="sameDayAbsencePolicySummary" class="same-day-absence-policy-summary">회원권 1회가 차감되며 보강은 발생하지 않습니다.</p>
+          <label id="sameDayAbsenceReasonField" class="same-day-absence-reason-field">
+            <span>불참 사유 <small id="sameDayAbsenceReasonModeLabel">선택</small></span>
+            <textarea id="sameDayAbsenceReason" rows="3" maxlength="200" placeholder="담당 코치에게 전달할 사유를 적어 주세요."></textarea>
+          </label>
+          <p id="sameDayAbsenceMessage" class="lesson-detail-message" role="status" aria-live="polite"></p>
+        </div>
+        <div class="sheet-actions" data-tn-sheet-footer>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-same-day-absence>돌아가기</button>
+          <button id="submitSameDayAbsenceButton" class="primary-button" type="button">불참 신청</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="memberRefundRequestSheet" class="app-bottom-sheet member-refund-request-sheet" aria-labelledby="memberRefundRequestTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" data-tn-input-guard="member-refund-request" data-tn-restore-draft="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="환불 요청 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-member-refund-request></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="memberRefundRequestTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <header class="sheet-head" data-tn-sheet-header>
+          <div><p class="eyebrow">회원권·결제</p><h2 id="memberRefundRequestTitle">환불 요청</h2></div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-member-refund-request>닫기</button>
+        </header>
+        <form id="memberRefundRequestForm" class="member-refund-request-form sheet-scroll" data-tn-sheet-scroll>
+          <div id="memberRefundRequestContent" aria-live="polite"></div>
+          <label><span>요청 사유</span><textarea id="memberRefundRequestReason" rows="3" maxlength="500" placeholder="관리자가 확인할 환불 요청 사유를 입력해 주세요." required></textarea></label>
+          <label class="member-refund-fallback" hidden><input id="memberRefundPolicyFallback" type="checkbox" /><span>구매 당시 정책 자료가 없어 현재 환불 정책으로 계산한 예상액임을 확인했습니다.</span></label>
+          <a class="member-refund-policy-link" href="../tennis-note-legal/commerce.html">결제·환불 정책 보기</a>
+          <div id="memberRefundRequestMessage" class="form-message" role="status"></div>
+          <div class="sheet-actions" data-tn-sheet-footer>
+            <button class="small-button" type="button" data-close-member-refund-request>닫기</button>
+            <button id="submitMemberRefundRequest" class="primary-button" type="submit">환불 요청 접수</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="purchaseProductSheet" class="app-bottom-sheet purchase-product-sheet" aria-labelledby="purchaseProductSheetTitle" data-tn-bottom-sheet hidden>
+      <button class="sheet-backdrop" type="button" aria-label="상품 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-product></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseProductSheetTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권</p>
+            <h3 id="purchaseProductSheetTitle">상품 선택</h3>
+            <span>수업 횟수와 이용기간을 확인해 주세요.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-product>닫기</button>
+        </div>
+        <div id="purchaseProductSheetOptions" class="sheet-scroll purchase-product-sheet-options" data-tn-sheet-scroll></div>
+      </article>
+    </section>
+
+    <section id="purchaseScheduleSheet" class="app-bottom-sheet purchase-schedule-sheet" aria-labelledby="purchaseScheduleSheetTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="선생님과 시간 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-schedule></button>
+      <article class="sheet-card purchase-schedule-sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseScheduleSheetTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head purchase-schedule-sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권 일정</p>
+            <h3 id="purchaseScheduleSheetTitle">선생님·시간 선택</h3>
+            <span id="purchaseScheduleSheetProgress">0/1 선택</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-schedule>닫기</button>
+        </div>
+        <div class="sheet-scroll purchase-schedule-sheet-scroll" data-tn-sheet-scroll>
+          <div id="purchaseScheduleSheetCoachOptions" class="purchase-schedule-sheet-coaches"></div>
+          <div class="purchase-schedule-weekbar">
+            <button id="purchaseSchedulePreviousWeek" type="button" data-purchase-schedule-week="-1" aria-label="이전 주">‹</button>
+            <strong id="purchaseScheduleSheetWeek">이번 주</strong>
+            <button id="purchaseScheduleNextWeek" type="button" data-purchase-schedule-week="1" aria-label="다음 주">›</button>
+            <button id="purchaseScheduleAvailableOnly" type="button" aria-pressed="false">가능만</button>
+          </div>
+          <div id="purchaseScheduleSheetGrid" class="purchase-schedule-grid"></div>
+        </div>
+        <div class="sheet-actions purchase-schedule-sheet-actions" data-tn-sheet-footer>
+          <span id="purchaseScheduleSheetSummary">시간을 선택해 주세요</span>
+          <button id="completePurchaseScheduleSelection" class="primary-button" type="button" disabled>선택 완료</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="purchasePaymentMethodSheet" class="app-bottom-sheet purchase-payment-method-sheet" aria-labelledby="purchasePaymentMethodTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="결제 방법 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-payment-method></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchasePaymentMethodTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권 결제</p>
+            <h3 id="purchasePaymentMethodTitle">결제 방법 선택</h3>
+            <span>선택한 방법의 금액만 결제됩니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-payment-method>닫기</button>
+        </div>
+        <div id="purchasePaymentMethodSheetOptions" class="sheet-scroll payment-method-sheet-options" data-tn-sheet-scroll></div>
+      </article>
+    </section>
+
+    <section id="bankTransferInstructionsSheet" class="app-bottom-sheet bank-transfer-instructions-sheet" aria-labelledby="bankTransferInstructionsTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="입금 안내 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-bank-transfer-instructions></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="bankTransferInstructionsTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">계좌이체 신청 완료</p>
+            <h3 id="bankTransferInstructionsTitle">아래 계좌로 입금해 주세요</h3>
+            <span>입금 확인 전에는 회원권이 생성되지 않습니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-bank-transfer-instructions>닫기</button>
+        </div>
+        <div class="sheet-scroll bank-transfer-instructions" data-tn-sheet-scroll>
+          <div class="bank-transfer-order-summary"><span id="bankTransferProductName">회원권</span><strong id="bankTransferAmount">0원</strong></div>
+          <dl>
+            <div><dt>은행</dt><dd id="bankTransferBankName">-</dd></div>
+            <div><dt>계좌번호</dt><dd id="bankTransferAccountNumber">-</dd></div>
+            <div><dt>예금주</dt><dd id="bankTransferAccountHolder">-</dd></div>
+            <div><dt>입금자명</dt><dd id="bankTransferDepositorName">-</dd></div>
+            <div><dt>입금기한</dt><dd id="bankTransferDepositDueAt">-</dd></div>
+          </dl>
+          <p id="bankTransferCustomInstructions">신청자 이름으로 입금해 주세요.</p>
+          <button class="primary-button" type="button" id="copyBankTransferAccountButton">계좌번호 복사</button>
+          <button class="small-button" type="button" id="cancelBankTransferRequestButton">입금 신청 취소</button>
+          <small>은행 알림 또는 관리자 확인이 완료되면 회원·코치·관리자 화면에 같은 회원권이 한 번만 반영됩니다.</small>
+        </div>
+      </article>
+    </section>
+
+    <section id="discountCouponWalletSheet" class="app-bottom-sheet discount-coupon-wallet-sheet" aria-labelledby="discountCouponWalletTitle" data-tn-bottom-sheet hidden>
+      <button class="sheet-backdrop" type="button" aria-label="할인 쿠폰함 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-discount-coupon-wallet></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="discountCouponWalletTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">내 정보</p>
+            <h3 id="discountCouponWalletTitle">할인 쿠폰함</h3>
+            <span>관리자가 발급한 쿠폰과 사용 상태를 확인합니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-discount-coupon-wallet>닫기</button>
+        </div>
+        <div id="discountCouponWalletList" class="sheet-scroll discount-coupon-wallet-list" data-tn-sheet-scroll></div>
+      </article>
+    </section>
+
+    <section id="changeRequestModal" class="change-request-modal" data-tn-input-guard="member-change-request" data-tn-restore-draft="true" hidden>
+      <div class="modal-backdrop" data-close-change-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청">
+        <div class="section-title compact-title">
+          <h2 id="changeModalTitle">수업 변경 요청</h2>
+          <span id="changeModalSummary">기존 수업과 희망 시간을 확인합니다.</span>
+        </div>
+        <div id="changeRequestEmptyState" class="change-request-empty-state" hidden role="status"></div>
+        <div class="form-card schedule-request-card">
+          <label class="change-source-field">
+            <span id="changeSourceStepLabel">1. 변경할 수업</span>
+            <select id="absenceLesson"></select>
+          </label>
+          <div class="change-step-heading change-slot-heading">2. 새 시간 선택</div>
+          <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
+          <div id="availableSlotList" class="slot-list" aria-label="예약 또는 변경 가능한 시간"></div>
+          <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
+          <label id="changeReasonField">
+            <span>3. 이유</span>
+            <textarea id="changeReason" rows="2" minlength="2" maxlength="100" required placeholder="간단히 입력해 주세요"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button class="primary-button" type="button" id="requestMakeup">새 시간 선택</button>
+            <button class="small-button" type="button" data-close-change-modal>닫기</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="changeHistoryModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-history-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청 내역">
+        <div class="change-modal-header">
+          <div class="section-title compact-title">
+            <h2>수업 변경 요청 내역</h2>
+            <span>신청한 변경 요청과 처리 상태를 확인합니다.</span>
+          </div>
+          <button class="small-button" type="button" data-history-top-close data-close-history-modal aria-label="수업 변경 요청 내역 닫기">닫기</button>
+        </div>
+        <div id="makeupRequests" class="request-list"></div>
+        <button class="small-button" type="button" data-close-history-modal>닫기</button>
+      </article>
+    </section>
+
+    <section id="holdingRequestModal" class="change-request-modal" data-tn-input-guard="member-holding" data-tn-restore-draft="true" hidden>
+      <div class="modal-backdrop" data-close-holding-modal></div>
+      <article class="change-modal-card holding-modal-card" role="dialog" aria-modal="true" aria-label="회원권 홀딩 신청">
+        <div class="section-title compact-title">
+          <h2>회원권 홀딩 신청</h2>
+          <span id="holdingPolicySummary">개인 사유와 부상 기준을 확인합니다.</span>
+        </div>
+        <form id="holdingRequestForm" class="form-card holding-request-form">
+          <label>
+            <span>홀딩 사유</span>
+            <select id="holdingRequestType">
+              <option value="personal">개인 사유</option>
+              <option value="injury">부상·입원</option>
+            </select>
+          </label>
+          <div class="holding-date-grid">
+            <label><span>시작일</span><input id="holdingStartDate" type="date" required /></label>
+            <label><span>종료일</span><input id="holdingEndDate" type="date" required /></label>
+          </div>
+          <label>
+            <span>간단한 사유</span>
+            <textarea id="holdingReason" rows="3" maxlength="200" placeholder="진단명 등 상세한 건강정보는 적지 않아도 됩니다."></textarea>
+          </label>
+          <div id="holdingEvidenceFields" class="holding-evidence-fields" hidden>
+            <label class="holding-file-field">
+              <span>진단서 또는 진료확인서</span>
+              <input id="holdingEvidenceFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+              <small>PDF·JPG·PNG·WEBP, 최대 5MB. 주민번호와 주소는 가리고 올려주세요.</small>
+            </label>
+            <label class="holding-consent-row">
+              <input id="holdingSensitiveConsent" type="checkbox" />
+              <span>부상 확인과 홀딩 심사를 위한 건강정보 처리 및 심사 후 원본 삭제에 동의합니다.</span>
+            </label>
+          </div>
+          <p id="holdingRequestMessage" class="policy-note"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">홀딩 신청</button>
+            <button class="small-button" type="button" data-close-holding-modal>닫기</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="accountDeletionModal" class="change-request-modal" data-tn-input-guard="member-account-deletion" hidden>
+      <div class="modal-backdrop" data-close-account-deletion-modal></div>
+      <article class="change-modal-card account-deletion-modal-card" role="dialog" aria-modal="true" aria-label="회원 탈퇴 및 데이터 삭제 요청">
+        <div class="section-title compact-title">
+          <h2>회원 탈퇴·데이터 삭제</h2>
+          <span>관리자가 결제, 환불, 잔여 수업을 확인한 뒤 처리합니다.</span>
+        </div>
+        <form id="accountDeletionForm" class="form-card account-deletion-form">
+          <p class="policy-note">처리 완료 후 계정 연결 정보와 개인 레슨·운동 기록은 삭제됩니다. 공동 레슨 결과는 회원 식별 표현을 제거한 뒤 다른 참여자의 이력으로 남을 수 있고, 법령상 보관해야 하는 결제·환불 기록은 정해진 기간 동안 분리 보관될 수 있습니다.</p>
+          <label>
+            <span>요청 사유 <small>(선택)</small></span>
+            <textarea id="accountDeletionReason" rows="3" maxlength="200" placeholder="서비스 개선을 위해 간단한 사유를 남길 수 있습니다."></textarea>
+          </label>
+          <label class="account-deletion-confirm-row">
+            <input id="accountDeletionConfirm" type="checkbox" />
+            <span>탈퇴 처리 시 앱 이용과 로그인한 기기의 알림이 중단되는 것을 확인했습니다.</span>
+          </label>
+          <p id="accountDeletionMessage" class="policy-note"></p>
+          <div class="modal-actions">
+            <button class="primary-button danger-button" type="submit">삭제 요청 접수</button>
+            <button class="small-button" type="button" data-close-account-deletion-modal>닫기</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="pushPrimerModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-defer-push-primer></div>
+      <article class="change-modal-card push-primer-card" role="dialog" aria-modal="true" aria-labelledby="pushPrimerTitle">
+        <div class="section-title compact-title">
+          <h2 id="pushPrimerTitle">수업 알림을 받을까요?</h2>
+          <span>필요한 운영 소식만 앱 알림으로 알려드립니다.</span>
+        </div>
+        <ul class="push-primer-list">
+          <li>수업 변경·보강 신청 결과</li>
+          <li>코치 피드백 도착</li>
+          <li>수업 전·회원권 만료 안내</li>
+        </ul>
+        <p class="policy-note">알림은 내 정보에서 언제든 끌 수 있습니다.</p>
+        <div class="modal-actions">
+          <button id="enablePushFromPrimer" class="primary-button" type="button">알림 켜기</button>
+          <button class="small-button" type="button" data-defer-push-primer>나중에</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="journalDetailModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-journal-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="운동일지 상세">
+        <div id="journalDetailContent"></div>
+        <button class="small-button" type="button" data-close-journal-modal>닫기</button>
+      </article>
+    </section>
+
+    <section id="ntrpReferenceModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-ntrp-modal></div>
+      <article class="change-modal-card ntrp-modal-card" role="dialog" aria-modal="true" aria-label="NTRP 참고 자료">
+        <div id="ntrpReferenceContent"></div>
+        <button class="small-button" type="button" data-close-ntrp-modal>닫기</button>
+      </article>
+    </section>
+
+    <script defer src="../shared/config.local.js?v=local"></script>
+    <script defer src="../shared/tennisnote-runtime-environment.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-mp4-faststart.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-personal-journal.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
+    <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
+    <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
+    <script defer src="../shared/tennisnote-release.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-ticket-policy-history.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-2"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
+    <script defer src="../shared/tennisnote-app-common.js?v=1.0.578"></script>
+    <script defer src="./settings.js?v=1.0.578"></script>
+    <script defer src="./catalog.js?v=1.0.578"></script>
+    <script defer src="./domain/products.js?v=1.0.578"></script>
+    <script defer src="./domain/identity.js?v=1.0.578"></script>
+    <script defer src="./domain/journal.js?v=1.0.578"></script>
+    <script defer src="./domain/curriculum.js?v=1.0.578"></script>
+    <script defer src="./domain/payment.js?v=1.0.578"></script>
+    <script defer src="./domain/purchase.js?v=1.0.578"></script>
+    <script defer src="./domain/tickets.js?v=1.0.578"></script>
+    <script defer src="./domain/policy.js?v=1.0.578"></script>
+    <script defer src="./domain/lessons.js?v=1.0.578"></script>
+    <script defer src="./domain/changes.js?v=1.0.578"></script>
+    <script defer src="./domain/schedule.js?v=1.0.578"></script>
+    <script defer src="./domain/coaches.js?v=1.0.578"></script>
+    <script defer src="./domain/shared-data.js?v=1.0.578"></script>
+    <script defer src="./domain/notices.js?v=1.0.578"></script>
+    <script defer src="./domain/values.js?v=1.0.578"></script>
+    <script defer src="./domain/onboarding.js?v=1.0.578"></script>
+    <script defer src="../shared/tennisnote-r4-marketplace.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="./views/home.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="./views/schedule.js?v=1.0.578"></script>
+    <script defer src="./views/profile.js?v=1.0.578"></script>
+    <script defer src="./views/tickets.js?v=1.0.578"></script>
+    <script defer src="./views/products.js?v=1.0.578"></script>
+    <script defer src="./views/journal.js?v=1.0.578"></script>
+    <script defer src="./views/curriculum.js?v=1.0.578"></script>
+    <script defer src="./views/requests.js?v=1.0.578"></script>
+    <script defer src="./views/onboarding.js?v=1.0.578"></script>
+    <script defer src="./events/delegated.js?v=1.0.578"></script>
+    <script defer src="./domain/common.js?v=1.0.578"></script>
+    <script defer src="./domain/members.js?v=1.0.578"></script>
+    <script defer src="./views/common.js?v=1.0.578"></script>
+    <script defer src="./forms/common.js?v=1.0.578"></script>
+    <script defer src="./forms/members.js?v=1.0.578"></script>
+    <script defer src="./forms/notices.js?v=1.0.578"></script>
+    <script defer src="./forms/payment.js?v=1.0.578"></script>
+    <script defer src="./forms/schedule.js?v=1.0.578"></script>
+    <script defer src="./forms/tickets.js?v=1.0.578"></script>
+    <script defer src="./ui/common.js?v=1.0.578"></script>
+    <script defer src="./events/account.js?v=1.0.578"></script>
+    <script defer src="./events/makeup.js?v=1.0.578"></script>
+    <script defer src="./events/journal.js?v=1.0.578"></script>
+    <script defer src="./events/profile.js?v=1.0.578"></script>
+    <script defer src="./events/schedule.js?v=1.0.578"></script>
+    <script defer src="./events/home.js?v=1.0.578"></script>
+    <script defer src="./data/auth.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="./data/sync.js?v=1.0.578"></script>
+    <script defer src="./data/push.js?v=1.0.578"></script>
+    <script defer src="./data/payment.js?v=1.0.578"></script>
+    <script defer src="./data/journal.js?v=1.0.578"></script>
+    <script defer src="./data/tickets.js?v=1.0.578"></script>
+    <script defer src="./data/onboarding.js?v=1.0.578"></script>
+    <script defer src="./ui/sheet.js?v=1.0.578"></script>
+    <script defer src="./ui/screens.js?v=1.0.578"></script>
+    <script defer src="./ui/login-entry.js?v=1.0.578"></script>
+    <script defer src="./storage.js?v=1.0.578"></script>
+    <script defer src="./actions/requests.js?v=1.0.578"></script>
+    <script defer src="./actions/enrollment.js?v=1.0.578"></script>
+    <script defer src="./actions/profile.js?v=1.0.578"></script>
+    <script defer src="./actions/journal.js?v=1.0.578"></script>
+    <script defer src="./actions/payment.js?v=1.0.578"></script>
+    <script defer src="./actions/refunds.js?v=1.0.578"></script>
+    <script defer src="./actions/session.js?v=r4-marketplace-010b4a3834ac"></script>
+    <script defer src="./actions/onboarding.js?v=1.0.578"></script>
+    <script>
+      (() => {
+        let started = false;
+        const reusingEmbeddedApp = Boolean(
+          window.Capacitor?.isNativePlatform?.()
+          && typeof window.initApp === "function"
+        );
+        const startEmbeddedUpgrade = () => {
+          const legacyInitApp = window.initApp;
+          let fallbackStarted = false;
+          const fallback = () => {
+            if (fallbackStarted || window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__) return;
+            fallbackStarted = true;
+            void legacyInitApp();
+          };
+          const appScript = document.createElement("script");
+          appScript.type = "module";
+          appScript.src = "./app.js?v=r4-marketplace-010b4a3834ac";
+          appScript.addEventListener("error", fallback, { once: true });
+          document.body.appendChild(appScript);
+          window.setTimeout(fallback, 12_000);
+        };
+        const startApp = () => {
+          if (started) return;
+          started = true;
+          if (reusingEmbeddedApp) {
+            startEmbeddedUpgrade();
+            return;
+          }
+          const appScript = document.createElement("script");
+          appScript.src = "./app.js?v=r4-marketplace-010b4a3834ac";
+          document.body.appendChild(appScript);
+        };
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", startApp, { once: true });
+        } else startApp();
+      })();
+    </script>
+  </body>
+</html>

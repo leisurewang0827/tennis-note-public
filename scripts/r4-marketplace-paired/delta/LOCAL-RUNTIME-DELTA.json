@@ -1,0 +1,114 @@
+{
+  "state": "LOCAL_RECONSTRUCTED_RUNTIME_DELTA_NOT_DEPLOYABLE",
+  "candidateSha256": "504459b03b9f61f5b4b6f3bea6f5809adaaa526a7a19cecf693bc8c627a7be0e",
+  "delta": [
+    {
+      "surface": "admin",
+      "path": "index.html",
+      "sha256": "b125ff92b97f51d278ed013af407f4375a0a40043862545899e7a9404e639b09"
+    },
+    {
+      "surface": "admin",
+      "path": "release.json",
+      "sha256": "1f3be9b74f63dd1abb54507989cba001fc4be2b21dd7c60359ab51c085d78581"
+    },
+    {
+      "surface": "admin",
+      "path": "shared/tennisnote-r4-marketplace.css",
+      "sha256": "50efa674179c42107181fd6f7167043f882d8982f923e5751d6a47d0da6d63dd"
+    },
+    {
+      "surface": "admin",
+      "path": "shared/tennisnote-r4-marketplace.js",
+      "sha256": "8733e25012bfb2c1f42ce8caebbeddac33a4a16fe994e204ed70ed306cdaa188"
+    },
+    {
+      "surface": "admin",
+      "path": "shared/tennisnote-release.js",
+      "sha256": "f841fba8ceebfbd0b84a240f3b3faa015c87d8619c95b391f92822cd2bb4006d"
+    },
+    {
+      "surface": "admin",
+      "path": "shared/tennisnote-runtime-environment.js",
+      "sha256": "eebb7c1a6ae4e039f8570bca161cfbf513fad3cb205b6a19a59ef7a47516e89b"
+    },
+    {
+      "surface": "admin",
+      "path": "views/settings.js",
+      "sha256": "af0b0ef25ab364f2ee0f720d05b339c8842d0e6e9a25a22d5c46ca759e5ce1ae"
+    },
+    {
+      "surface": "member",
+      "path": "actions/session.js",
+      "sha256": "dd599dfbf9e68b1aad2164b5a7d0c5d9cd3ae2a22652b08a3a185c785b0de9b2"
+    },
+    {
+      "surface": "member",
+      "path": "app.js",
+      "sha256": "0ada03072dc79a5bd2aae91400fe446976326b3436bf7746604f1a17dbcc6fc2"
+    },
+    {
+      "surface": "member",
+      "path": "data/auth.js",
+      "sha256": "42099a806248f46bc0dd7039f77013cc44b93c5b3a3a87b8ad188cf0c47868e5"
+    },
+    {
+      "surface": "member",
+      "path": "index.html",
+      "sha256": "1b1072ef801d0d3a150b152c96eb5562daf24099945da1e2b3dfbeaeb44250c9"
+    },
+    {
+      "surface": "member",
+      "path": "release.json",
+      "sha256": "1f3be9b74f63dd1abb54507989cba001fc4be2b21dd7c60359ab51c085d78581"
+    },
+    {
+      "surface": "member",
+      "path": "service-worker.js",
+      "sha256": "024d4d1040072adc33606822e106e5c23dd2ecba7bb13b0bf5e7616818970a1c"
+    },
+    {
+      "surface": "member",
+      "path": "shared/tennisnote-r4-marketplace.css",
+      "sha256": "50efa674179c42107181fd6f7167043f882d8982f923e5751d6a47d0da6d63dd"
+    },
+    {
+      "surface": "member",
+      "path": "shared/tennisnote-r4-marketplace.js",
+      "sha256": "8733e25012bfb2c1f42ce8caebbeddac33a4a16fe994e204ed70ed306cdaa188"
+    },
+    {
+      "surface": "member",
+      "path": "shared/tennisnote-release.js",
+      "sha256": "f841fba8ceebfbd0b84a240f3b3faa015c87d8619c95b391f92822cd2bb4006d"
+    },
+    {
+      "surface": "member",
+      "path": "shared/tennisnote-runtime-environment.js",
+      "sha256": "eebb7c1a6ae4e039f8570bca161cfbf513fad3cb205b6a19a59ef7a47516e89b"
+    },
+    {
+      "surface": "member",
+      "path": "views/home.js",
+      "sha256": "0234ea4ac90f49f18b0e1eeb1c5cc0ecb17dcac4fe71234506d1a58cbac4af08"
+    }
+  ],
+  "adminBase": "165fd918140cfeda7a97e2cb5e5b43a3cfaaddbffb8defc753b7a539a21765d4",
+  "memberBase": "838b677fdeef020caf625644ef5b43f9a7a0505392dc3980a1d7de9a7c0505f4",
+  "adminSource": "8d3dfca18ee0cd9511aea50b147df647ef1fea0b",
+  "adminDevBase": "0d2a1e5a489cead9957368ffe66c85c0b7c0a261",
+  "memberSource": "15f046722252a75892886ca7afd67a4fea37ea9f",
+  "originalSource": "46b0b2852504bd20e1d8d328f0083d92fcea3826",
+  "syntheticConfigOnly": true,
+  "cacheTag": "r4-marketplace-010b4a3834ac",
+  "memberCache": "tennis-note-member-pwa-v612",
+  "releaseMetadataBumped": true,
+  "releaseVersion": "1.0.583",
+  "releaseId": "2026.11.05.07",
+  "officialReleaseToolBlob": "1794f11d2ef694903eb52ae7eb91caec338dd2b6",
+  "cloudflareLiveParity": false,
+  "wholeBootstrap": false,
+  "ci": false,
+  "preview": false,
+  "canonical": false
+}

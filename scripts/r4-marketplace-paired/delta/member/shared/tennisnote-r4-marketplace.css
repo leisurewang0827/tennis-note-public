@@ -1,0 +1,32 @@
+.tn-market-panel { margin-block: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); color: var(--ink); min-width: 0; }
+.tn-market-panel[hidden], .tn-market-detail[hidden], .tn-market-panel [hidden] { display: none !important; }
+.tn-market-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tn-market-heading h2, .tn-market-heading h3 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+.tn-market-panel label { display: grid; gap: 6px; font-size: 16px; min-width: 0; }
+.tn-market-panel input, .tn-market-panel select { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--paper); font: inherit; font-size: 16px; box-sizing: border-box; }
+.tn-market-panel button, .tn-market-detail button { min-width: 44px; min-height: 44px; white-space: normal; }
+.tn-market-panel button:focus-visible, .tn-market-panel input:focus-visible, .tn-market-panel select:focus-visible, .tn-market-detail button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.tn-market-note { color: var(--muted); font-size: 14px; margin-block: 8px 14px; overflow-wrap: anywhere; }
+.tn-market-form { display: grid; gap: 14px; margin-block: 14px; }
+.tn-market-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tn-market-list { list-style: none; display: grid; gap: 10px; padding: 0; margin: 14px 0 0; }
+.tn-market-card { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); min-width: 0; }
+.tn-market-card strong, .tn-market-card span { display: block; overflow-wrap: anywhere; }
+.tn-market-card span { color: var(--muted); font-size: 14px; }
+.tn-market-card button { justify-self: end; }
+.tn-market-search { margin-top: 14px; }
+.tn-market-detail { color: var(--ink); }
+.tn-market-detail :is(.sheet-card, .sheet-head, .sheet-actions) { color: var(--ink); background: var(--paper); }
+.tn-market-detail .sheet-scroll { padding: 16px; }
+.tn-market-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; }
+.tn-market-summary dt { color: var(--muted); }
+.tn-market-summary dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.tn-market-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.tn-market-footer button { width: 100%; }
+@media (max-width: 375px) { .tn-market-panel { padding: 12px; } .tn-market-fields { grid-template-columns: minmax(0, 1fr); } }
+/* 기존 전역 테마를 바꾸지 않고 새 영역만 OS의 접근성 색상 토큰을 따른다. */
+html[data-theme="dark"] :is(.tn-market-panel, .tn-market-detail) { color-scheme: dark; --paper: Canvas; --ink: CanvasText; --muted: GrayText; --line: GrayText; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) :is(.tn-market-panel, .tn-market-detail) { color-scheme: dark; --paper: Canvas; --ink: CanvasText; --muted: GrayText; --line: GrayText; }
+}
+.tn-market-panel :is(.small-button, .ghost-button), .tn-market-detail .small-button { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
