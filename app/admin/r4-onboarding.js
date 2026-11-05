@@ -7,6 +7,13 @@
   const message = byId("operationsLoginMessage");
   const button = form.querySelector('button[type="submit"]');
   const auth = Object.freeze({ requireCurrentSession: true, retryAuth: false });
+  const config = root.TennisNoteDataClient?.loadConfig?.() || root.TENNISNOTE_CONFIG || {};
+  const seoulDev = config.environment === "development"
+    && config.supabaseUrl === "https://udjmiezroipctytmztwz.supabase.co"
+    && config.projectFingerprint === "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
+  const selfServeApi = seoulDev
+    ? { state: "tn_r4_my_selfserve_branch", create: "tn_r4_create_selfserve_branch" }
+    : { state: "tn_r4_prod_my_selfserve_branch", create: "tn_r4_prod_create_selfserve_branch" };
   const labels = { pending: "심사 대기", approved: "승인", rejected: "반려" };
   const id = value => typeof value === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
   let session = null;
@@ -30,6 +37,26 @@
     return control;
   }
   async function load(ctx) {
+    if (!root.TennisNoteR4PhoneVerification) throw Error("r4_phone_module_missing");
+    const admission = await call(ctx, selfServeApi.state);
+    if (!current(ctx)) return;
+    if (admission?.identityVerificationEnabled !== true) root.TennisNoteR4PhoneVerification.reset();
+    const verified = admission?.identityVerificationEnabled !== true || await root.TennisNoteR4PhoneVerification.refresh({
+      client: ctx.client,
+      readAdmission: () => call(ctx, selfServeApi.state),
+      onVerified: () => current(ctx) && run(ctx, () => load(ctx), "인증 상태를 확인할 수 없습니다."),
+    });
+    if (!current(ctx)) return;
+    if (!verified) {
+      ctx.canSubmit = false;
+      ctx.approvedBranches = new Set();
+      title.textContent = "내 지점";
+      panel.hidden = false;
+      form.hidden = true;
+      list.replaceChildren();
+      if (message) message.hidden = true;
+      return;
+    }
     let rows;
     try {
       rows = await call(ctx, "tn_r4_pending_branch_applications");
@@ -47,7 +74,7 @@
     ctx.selfServeOff = false;
     if (ctx.mode === "applicant") {
       try {
-        const state = await call(ctx,"tn_r4_prod_my_selfserve_branch");
+        const state = admission;
         ctx.selfServeOff = state?.available === false && !id(state.branchId) && state.paymentEnabled === false && rows.length === 0;
         if (state?.paymentEnabled === false && (state.available === true || id(state.branchId))) ctx.selfServe=state;
       } catch { /* 기존 신청 흐름은 그대로 유지한다. */ }
@@ -119,7 +146,7 @@
   }
   function open(ctx, row) {
     return run(ctx, async () => {
-      const workspace = row.selfServe ? root.TennisNoteR4SelfserveClient.forBranch(ctx.client, row.branch_id) : ctx.client;
+      const workspace = row.selfServe && !seoulDev ? root.TennisNoteR4SelfserveClient.forBranch(ctx.client, row.branch_id) : ctx.client;
       const result = await workspace.rpc("tn_r4_open_my_branch", { target_branch: row.branch_id }, auth);
       if (!current(ctx)) return;
       if (result?.branchId !== row.branch_id || result.paymentEnabled !== false) throw Error("r4_open_receipt");
@@ -144,7 +171,7 @@
       if (ctx.selfServe?.available) {
         const key=ctx.createKey?.org===organization && ctx.createKey?.branch===branch ? ctx.createKey.key : root.crypto.randomUUID();
         ctx.createKey={org:organization,branch,key};
-        const created=await call(ctx,"tn_r4_prod_create_selfserve_branch",{p_organization:organization,p_branch:branch,p_operation:key});
+        const created=await call(ctx,selfServeApi.create,{p_organization:organization,p_branch:branch,p_operation:key});
         if (created?.status!=="created" || !id(created.branchId) || created.paymentEnabled!==false) throw Error("r4_create_receipt");
         if (current(ctx)) form.reset();
         await load(ctx);
@@ -170,6 +197,7 @@
       const actor = allowed && client?.sessionSubject?.();
       if (actor && session?.actor === actor && session.client === client) return;
       if (session && message && byId("r4BranchHoursPanel")?.hidden !== false) message.hidden = false;
+      root.TennisNoteR4PhoneVerification?.reset();
       session = null;
       panel.hidden = true;
       title.textContent = "지점 신청";

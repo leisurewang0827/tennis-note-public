@@ -51,7 +51,16 @@
         <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
         <section id="r4Onboarding" aria-labelledby="r4OnboardingTitle" hidden>
           <h2 id="r4OnboardingTitle">지점 신청</h2>
-          <form id="r4ApplicationForm" class="operations-password-login-form" hidden>
+          <div id="r4PhoneVerification" hidden>
+              <form id="r4PhoneVerificationForm" class="operations-password-login-form" autocomplete="off">
+                <label><span>휴대전화</span><input id="r4VerificationPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="01012345678" required /></label>
+                <button id="r4VerificationSend" class="ghost-button" type="button">인증번호 받기</button>
+                <label><span>인증번호</span><input id="r4VerificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" disabled required /></label>
+                <button id="r4VerificationConfirm" class="primary-button" type="submit" disabled>확인</button>
+                <p id="r4VerificationStatus" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+            <form id="r4ApplicationForm" class="operations-password-login-form" hidden>
             <label>사업장 이름 <input name="organization" minlength="2" maxlength="100" required /></label>
             <label>지점 이름 <input name="branch" minlength="2" maxlength="100" required /></label>
             <button class="primary-button" type="submit" disabled>지점 신청</button>
@@ -2333,7 +2342,8 @@
     <script src="./r4-branch-hours.js?v=r4-pilot-d57c20f26113"></script>
     <script src="./r4-branch-admin-writes.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./r4-selfserve-client.js?v=r4-selfserve-3edbd5148cec"></script>
-    <script src="./r4-onboarding.js?v=r4-selfserve-3edbd5148cec"></script>
+    <script src="./r4-phone-verification.js?v=r4-phone-922c5b1af7cf"></script>
+    <script src="./r4-onboarding.js?v=r4-phone-922c5b1af7cf"></script>
     <script src="./r4-branch-operations.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./views/settings.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./data/billing.js?v=1.0.566"></script>

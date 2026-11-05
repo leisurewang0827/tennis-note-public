@@ -8,7 +8,11 @@ on:
         type: choice
         required: true
         default: verify
-        options: [verify, deploy]
+        options: [verify, deploy-development, deploy]
+      candidate_sha:
+        description: Exact reviewed SHA required for development deployment
+        type: string
+        required: false
 permissions:
   contents: read
   actions: read
@@ -30,6 +34,21 @@ jobs:
           node-version: "22"
       - name: Verify exact self-service administrator delta
         run: node scripts/check_r4_selfserve_candidate.mjs
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify new development-only artifact projection
+        env:
+          TENNISNOTE_ENVIRONMENT: development
+          TENNISNOTE_PAYMENTS_ENABLED: "false"
+          TENNISNOTE_SUPABASE_URL: https://udjmiezroipctytmztwz.supabase.co
+          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_local_artifact_only
+          TENNISNOTE_PAYMENT_MODE: disabled
+          TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+          TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+          TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+        run: node scripts/build_r4_phone_dev.mjs --build
   admin-only:
     if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'deploy'
     runs-on: ubuntu-latest
@@ -49,13 +68,15 @@ jobs:
           test "$APPROVED_SHA" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           base=dfee6f9324d12e914c65acf4ea4582bf807a839b
-          prior=69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da
+          prior=3bdc51d3d0767cfa0c1c7a4bd627bd3f705ec555
           test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $prior"
+          checkpoint_parent=69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da
+          test "$(git rev-parse "$prior^")" = "$checkpoint_parent"
           previous=2be559dba0e1dc1e6e791a892cfef834a8de4501
-          test "$(git rev-parse "$prior^")" = "$previous"
+          test "$(git rev-parse "$checkpoint_parent^")" = "$previous"
           test "$(git rev-parse "$previous^")" = "$base"
           test "$(git rev-parse refs/remotes/origin/main)" = "$base"
-          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/r4-selfserve-client.js app/admin/views/settings.js scripts/check_r4_selfserve_candidate.mjs) <(git diff --name-only "$base" HEAD)
+          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/r4-phone-verification.js app/admin/r4-selfserve-client.js app/admin/views/settings.js scripts/build_r4_phone_dev.mjs scripts/check_r4_selfserve_candidate.mjs) <(git diff --name-only "$base" HEAD)
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -92,6 +113,7 @@ jobs:
           assert "r4Onboarding" in (root / "index.html").read_text(encoding="utf-8")
           assert (root / "r4-onboarding.js").is_file()
           assert (root / "r4-selfserve-client.js").is_file()
+          assert (root / "r4-phone-verification.js").is_file()
           assert "r4BranchOperations" in (root / "index.html").read_text(encoding="utf-8")
           assert (root / "r4-branch-operations.js").is_file()
           cfg = (root / "shared/config.local.js").read_text(encoding="utf-8")
@@ -110,3 +132,47 @@ jobs:
           apiToken: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/admin --project-name=tennisnote-admin --branch=main
+
+  development-only:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'deploy-development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: development
+    concurrency:
+      group: cloudflare-pages-development
+      cancel-in-progress: false
+    env:
+      TENNISNOTE_ENVIRONMENT: development
+      TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
+      TENNISNOTE_PAYMENT_MODE: disabled
+      TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TENNISNOTE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Reuse exact successful verification-only receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check_r4_selfserve_candidate.mjs --require-prior-ci
+      - name: Check exact development target and existing recovery
+        run: node scripts/build_r4_phone_dev.mjs --preflight
+      - name: Build only administrator development assets
+        run: node scripts/build_r4_phone_dev.mjs --build
+      - name: Deploy only the Seoul development administrator
+        run: npx --yes wrangler@3.90.0 pages deploy dist/admin-phone-dev --project-name=tennisnote-admin-dev --branch=dev

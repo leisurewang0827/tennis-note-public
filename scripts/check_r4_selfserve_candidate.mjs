@@ -8,15 +8,16 @@ const ref = value("--ref=") || process.env.GITHUB_SHA || "HEAD";
 const base = "69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da";
 const branch = "refs/heads/codex/tennisnote-r4-admin-prod-candidate";
 const expected = {
-  "app/admin/index.html": "69a6d068b8c83185d0d6dd03d37744e5bd7245743d4a24f76e41793ec97af3df",
+  "app/admin/index.html": "c6811194e8267b6303bd24b0f33e5e64c71d843133b43dcfbdbdfb3bdb381e08",
   "app/admin/r4-selfserve-client.js": "4da7498e721a2cb05cd76b88826633353c59c3ed296f9a7ded526d8726266d66",
-  "app/admin/r4-onboarding.js": "fc1ddf49148417fbee745566b0045ddd21b3f1e4153bed7f6894ac967228dabe",
+  "app/admin/r4-onboarding.js": "17a115ebdc3764fe563ba24ffb8ee9ca7b3a7c95c72fca122b628d29f1a45095",
+  "app/admin/r4-phone-verification.js": "3ed4e4afcaa989b1eada992c564bb1812e5f58b89e590bb4792b1135e88601b2"
 };
 const git = (...args) => execFileSync("git", ["-C", repository, ...args], { encoding: "utf8", maxBuffer: 3e6 }).trimEnd();
 const read = (path) => execFileSync("git", ["-C", repository, "show", ref + ":" + path], { encoding: "utf8", maxBuffer: 3e6 });
 const sha = git("rev-parse", ref);
 assert.match(sha, /^[a-f0-9]{40}$/);
-assert.equal(git("rev-list", "--parents", "-n", "1", sha), sha + " " + base);
+assert.equal(git("rev-list", "--parents", "-n", "1", sha), sha + " " + "3bdc51d3d0767cfa0c1c7a4bd627bd3f705ec555");
 if (process.env.GITHUB_ACTIONS === "true") {
   assert.equal(process.env.GITHUB_REPOSITORY, "leisurewang0827/tennis-note-public");
   assert.equal(process.env.GITHUB_REF, branch);
@@ -43,13 +44,16 @@ if (process.argv.includes("--require-prior-ci")) {
   assert.equal(verified, true, "No prior successful verification-only run for this exact source");
   console.log("PASS existing exact-head verification receipt; no old suite rerun");
 } else {
-  const paths = [...Object.keys(expected), ".github/workflows/deploy-cloudflare-pages.yml", "scripts/check_r4_selfserve_candidate.mjs"].sort();
+  const paths = [...Object.keys(expected), ".github/workflows/deploy-cloudflare-pages.yml", "scripts/check_r4_selfserve_candidate.mjs", "scripts/build_r4_phone_dev.mjs"].sort();
   assert.deepEqual(git("diff", "--name-only", base, sha).split("\n").sort(), paths);
   for (const [path, digest] of Object.entries(expected)) {
     assert.equal(createHash("sha256").update(read(path)).digest("hex"), digest, path + " differs from reviewed source");
   }
   for (const path of Object.keys(expected).filter((x) => x.endsWith(".js"))) new Script(read(path), { filename: path });
+  assert.equal(createHash("sha256").update(read("scripts/build_r4_phone_dev.mjs")).digest("hex"), "52c5c3df9def3fafb095c72e75696f6b0b5ad24e059384fa974e3efbf22725b3");
   const adapter = read("app/admin/r4-selfserve-client.js");
+  assert.match(read("app/admin/r4-phone-verification.js"), /requestPhoneChangeVerification/);
+  assert.match(read("app/admin/r4-phone-verification.js"), /verifyPhoneChange/);
   const onboarding = read("app/admin/r4-onboarding.js");
   const workflow = read(".github/workflows/deploy-cloudflare-pages.yml");
   assert.match(workflow, /default: verify/);
