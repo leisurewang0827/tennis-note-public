@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Verification only or separately approved deployment
+        description: Verify admission delta or explicitly approved administrator deployment
         type: choice
         required: true
         default: verify
         options: [verify, deploy-development, deploy]
       candidate_sha:
-        description: Exact reviewed SHA required for development deployment
+        description: Exact reviewed admission SHA
+        type: string
+        required: false
+      verification_run:
+        description: Successful verify-only run for this exact admission SHA; required to deploy
         type: string
         required: false
 permissions:
@@ -23,7 +27,7 @@ jobs:
   verify-candidate:
     if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'verify'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v7
         with:
@@ -32,114 +36,40 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Verify exact production candidate and real module guard
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/check_r4_selfserve_candidate.mjs
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Build non-deployable administrator review artifact only
+      - name: Check only admission delta and reuse exact c206 verification
         env:
-          R4_REVIEW_ONLY: "true"
-          TENNISNOTE_ENVIRONMENT: production
-          TENNISNOTE_PAYMENTS_ENABLED: "true"
-          TENNISNOTE_SUPABASE_URL: https://cnympiwrwgouuvhaivbc.supabase.co
-          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_static_review_only
-          TENNISNOTE_PAYMENT_MODE: multi
-          TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay,kakaopay
-          TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
-          TENNISNOTE_PORTONE_STORE_ID: "00000000-0000-4000-8000-000000000001"
-          TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: "00000000-0000-4000-8000-000000000002"
-          TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: "00000000-0000-4000-8000-000000000003"
-          TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
-          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "false"
-        run: node scripts/build_r4_prod_selfserve_review.mjs --verify-only
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check_r4_selfserve_candidate.mjs
+      - name: Reproduce frozen administrator artifact with unchanged public operating configuration
+        run: node scripts/build_r4_prod_selfserve_release.mjs
   admin-only:
     if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'deploy'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: tennisnote-r4-admin-production
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact approved administrator-only source
-        env:
-          APPROVED_SHA: ${{ vars.TENNISNOTE_R4_ADMIN_APPROVED_SHA }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$APPROVED_SHA" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
-          base=dfee6f9324d12e914c65acf4ea4582bf807a839b
-          prior=17a34a0de5b97ef0de83b8d595edf22b260407a7
-          test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $prior"
-          normalization_parent=a32801a876e14bda4aae63e890d3cf23ed854745
-          test "$(git rev-parse "$prior^")" = "$normalization_parent"
-          prior=$normalization_parent
-          recovery_parent=1aa2a5a3f026079a2ae9f229543f297f7f99a753
-          test "$(git rev-parse "$prior^")" = "$recovery_parent"
-          prior=$recovery_parent
-          phone_parent=3bdc51d3d0767cfa0c1c7a4bd627bd3f705ec555
-          test "$(git rev-parse "$prior^")" = "$phone_parent"
-          prior=$phone_parent
-          checkpoint_parent=69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da
-          test "$(git rev-parse "$prior^")" = "$checkpoint_parent"
-          previous=2be559dba0e1dc1e6e791a892cfef834a8de4501
-          test "$(git rev-parse "$checkpoint_parent^")" = "$previous"
-          test "$(git rev-parse "$previous^")" = "$base"
-          test "$(git rev-parse refs/remotes/origin/main)" = "$base"
-          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/actions/common.js app/admin/actions/settings.js app/admin/data/common.js app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/r4-phone-verification.js app/admin/r4-selfserve-client.js app/admin/views/settings.js scripts/build_r4_phone_dev.mjs scripts/check_r4_existing_account_ui.mjs scripts/check_r4_selfserve_candidate.mjs) <(git diff --name-only "$base" HEAD)
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Reuse successful verification for this exact source
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Admit exact approved checkpoint and its successful verify-only run
         env:
           GH_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ vars.TENNISNOTE_R4_ADMIN_APPROVED_SHA }}
+          R4_EXECUTION_MODE: ${{ inputs.mode }}
+          R4_VERIFICATION_RUN: ${{ inputs.verification_run }}
         run: node scripts/check_r4_selfserve_candidate.mjs --require-prior-ci
-      - name: Build administrator only
-        env:
-          TENNISNOTE_SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
-          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
-          TENNISNOTE_PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
-          TENNISNOTE_PORTONE_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_CHANNEL_KEY }}
-          TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
-          TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY }}
-          TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
-          TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
-          TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY }}
-          TENNISNOTE_PAYMENT_MODE: multi
-          TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay,kakaopay
-          TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
-          TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
-          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "false"
-        run: python scripts/build_cloudflare_pages.py --target admin --output dist/admin
-      - name: Check administrator artifact and production database target
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib, json, os, pathlib, re
-          root = pathlib.Path("dist/admin")
-          assert root.is_dir() and list(pathlib.Path("dist").iterdir()) == [root]
-          assert not (root / "tennis-note-member-app/index.html").exists()
-          assert not (root / "tennis-note-coach-app/index.html").exists()
-          assert "r4Onboarding" in (root / "index.html").read_text(encoding="utf-8")
-          assert (root / "r4-onboarding.js").is_file()
-          assert (root / "r4-selfserve-client.js").is_file()
-          assert (root / "r4-phone-verification.js").is_file()
-          assert "r4BranchOperations" in (root / "index.html").read_text(encoding="utf-8")
-          assert (root / "r4-branch-operations.js").is_file()
-          cfg = (root / "shared/config.local.js").read_text(encoding="utf-8")
-          match = re.search(r"window\.TENNISNOTE_CONFIG\s*=\s*(\{.*?\});", cfg, re.S)
-          assert match is not None
-          settings = json.loads(match.group(1))
-          assert settings["environment"] == "production"
-          assert settings["supabaseUrl"].rstrip("/") == "https://cnympiwrwgouuvhaivbc.supabase.co"
-          assert settings["projectFingerprint"] == hashlib.sha256(b"cnympiwrwgouuvhaivbc").hexdigest()
-          (root / "r4-admin-release.json").write_text(json.dumps({"sourceSha": os.environ["GITHUB_SHA"], "surface": "administrator"}) + "\n", encoding="utf-8")
-          PY
+      - name: Reproduce exact c206 administrator artifact; reject configuration or recovery drift
+        run: node scripts/build_r4_prod_selfserve_release.mjs
       - name: Deploy only the administrator site
         uses: cloudflare/wrangler-action@v4
         with:

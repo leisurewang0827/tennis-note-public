@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "runtimeSource": "c20639b1521e8bc8b4e520ade96bd2c5a4e2faf3",
+  "privateSqlSource": "edc9459f328a4c33f2aa99d7b0bf84d53178646f",
+  "priorVerificationRun": 42013885792,
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-admin-prod-candidate",
+  "surface": "administrator",
+  "project": "cnympiwrwgouuvhaivbc",
+  "fingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "origin": "https://tennisnote-admin.pages.dev",
+  "cloudflareProject": "tennisnote-admin",
+  "protectedEnvironment": "tennisnote-r4-admin-production",
+  "operatingBase": "69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da",
+  "recoveryDeployment": "7b4c1013-6e17-4886-9f31-9f4d9340d200",
+  "configSha256": "0a89879945c847ecf2244823a1a32ff21dfb6936ecc80706b183c7231671bd64",
+  "artifactSha256": "f67aca0feb04748be8ebe72e588a2bbfb25d7013f1f8d2561d36eaffed0bcc49",
+  "assetCount": 164,
+  "assetOrder": ["actions/billing.js","actions/coach.js","actions/common.js","actions/member.js","actions/notice.js","actions/report.js","actions/schedule.js","actions/settings.js","app.js","assets/brand/app-icon-180.png","assets/brand/app-icon-192.png","assets/brand/launch-splash.png","catalog.js","commerce.html","data/billing.js","data/common.js","data/member.js","data/schedule.js","data/settings.js","delete-account.html","domain/billing.js","domain/coaches.js","domain/common.js","domain/lessons.js","domain/members.js","domain/payment.js","domain/policy.js","domain/record.js","domain/schedule.js","domain/tickets.js","domain/values.js","events/billing.js","events/common.js","events/data.js","events/delegated.js","events/members.js","events/notes.js","events/reports.js","events/schedule.js","events/settings.js","forms/coach.js","forms/common.js","forms/member.js","forms/policy.js","forms/schedule.js","forms/tickets.js","index.html","privacy.html","r4-admin-release.json","r4-branch-admin-writes.js","r4-branch-hours.js","r4-branch-operations.js","r4-onboarding.js","r4-phone-verification.js","r4-selfserve-client.js","release.json","schedule-v2-admin.css","schedule-v2-admin.js","settings.js","shared/config.local.js","shared/tennisnote-app-common.js","shared/tennisnote-bottom-sheet.css","shared/tennisnote-bottom-sheet.js","shared/tennisnote-comment-draft.js","shared/tennisnote-curriculum-catalog.js","shared/tennisnote-curriculum-search.js","shared/tennisnote-data-client.js","shared/tennisnote-escape-html.js","shared/tennisnote-input-guard.js","shared/tennisnote-issue-reporter.css","shared/tennisnote-issue-reporter.js","shared/tennisnote-mode-transition.js","shared/tennisnote-mp4-faststart.js","shared/tennisnote-native-push.js","shared/tennisnote-personal-journal.js","shared/tennisnote-product-catalog.js","shared/tennisnote-release-updater.js","shared/tennisnote-release.js","shared/tennisnote-runtime-environment.js","shared/tennisnote-schedule-lanes.js","shared/tennisnote-schedule-revision.js","shared/tennisnote-settlement-adjustment.js","shared/tennisnote-single-sheet-batch.js","shared/tennisnote-single-sheet-import.js","shared/tennisnote-single-sheet-preview-ui.js","shared/tennisnote-single-sheet-snapshot.js","shared/tennisnote-single-sheet-transport.js","shared/tennisnote-single-sheet-worker.js","shared/tennisnote-ticket-policy-history.js","shared/tennisnote-ticket-state.js","shared/tennisnote-ui-foundation.css","shared/tennisnote-ui-language.js","shared/vendor/xlsx.full.min.js","shared/vendor/xlsx.LICENSE","storage.js","styles.css","support.html","tennis-note-legal/assets/member-app-login.png","tennis-note-legal/commerce.html","tennis-note-legal/delete-account.html","tennis-note-legal/index.html","tennis-note-legal/privacy.html","tennis-note-legal/support.html","tennis-note-legal/terms.html","tennis-note-member-app/assets/app-icon.svg","tennis-note-member-app/assets/brand/app-icon-180.png","tennis-note-member-app/assets/brand/app-icon-192.png","tennis-note-member-app/assets/brand/app-icon-512.png","tennis-note-member-app/assets/brand/launch-splash.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.119.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.120.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.121.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.122.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.123.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.124.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.125.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.126.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.127.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.128.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.129.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.130.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.131.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.132.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.133.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.134.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.135.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.136.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.137.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.138.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.139.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.140.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.141.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.142.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.143.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.144.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.145.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.146.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.147.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.148.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.149.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.150.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.151.png","tennis-note-member-app/assets/brand/tennis-note-share-1.0.152.png","tennis-note-member-app/assets/ntrp-poster.jpg","terms.html","ui/billing.js","ui/common.js","ui/member.js","ui/schedule.js","ui/settings.js","views/billing.js","views/common.js","views/dashboard.js","views/data.js","views/makeup.js","views/members.js","views/notes.js","views/reports.js","views/schedule.js","views/settings.js","views/tickets.js","_headers","_redirects","_worker.js"],
+  "applySqlSha256": "926052c1c53e94051f4562bae37ed94b25be1e486f5e2407db604aa0dd208705",
+  "restoreSqlSha256": "d233435f761a388ad1d26f009656767c2bc882d43a8cdb052515f33025009f59",
+  "authorized": {
+    "administratorDeployment": true,
+    "selfserveCreateAndWorkspace": true,
+    "signupCutoff": "first activation time; never backdate",
+    "newIsolatedAccountBranchAcceptance": true,
+    "paidSales": false,
+    "pilot": false,
+    "existingPaymentsChanged": false,
+    "memberCoachAppsChanged": false,
+    "mainMerge": false
+  },
+  "admissionFiles": [
+    ".github/workflows/deploy-cloudflare-pages.yml",
+    "scripts/check_r4_selfserve_candidate.mjs",
+    "scripts/build_r4_prod_selfserve_release.mjs",
+    "docs/tennisnote-r4-prod-selfserve-release-approval.json"
+  ]
+}
