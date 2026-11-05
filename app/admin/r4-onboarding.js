@@ -1,34 +1,19 @@
-(function installExistingAccountWorkspace(root, document) {
+(function installProductionWorkspace(root) {
   "use strict";
-  const config = root.TENNISNOTE_CONFIG || {};
-  const enabled = config.environment === "development"
-    && config.supabaseUrl === "https://udjmiezroipctytmztwz.supabase.co"
-    && config.projectFingerprint === "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
-  const isWorkspaceMode = () => enabled && new URLSearchParams(root.location.search).get("r4Workspace") === "1";
+  const config = root.TennisNoteDataClient?.loadConfig?.() || root.TENNISNOTE_CONFIG || {};
+  const production = config.environment === "production"
+    && config.supabaseUrl === "https://cnympiwrwgouuvhaivbc.supabase.co"
+    && config.projectFingerprint === "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a"
+    && root.location.origin === "https://tennisnote-admin.pages.dev";
   root.TennisNoteR4ExistingAccount = Object.freeze({
-    isWorkspaceMode,
-    refreshEntry({ signedIn }) {
-      if (!enabled) return;
-      const menu = document.getElementById("adminMoreMenu");
-      if (!menu) return;
-      let entry = document.getElementById("r4SelfserveEntry");
-      if (!entry) {
-        entry = document.createElement("a");
-        entry.id = "r4SelfserveEntry";
-        entry.className = "nav-item";
-        entry.textContent = "내 지점";
-        entry.style.textDecoration = "none";
-        entry.target = "_blank";
-        entry.rel = "noopener";
-        const destination = new URL(root.location.pathname, root.location.origin);
-        destination.searchParams.set("r4Workspace", "1");
-        entry.href = destination.href;
-        menu.append(entry);
-      }
-      entry.hidden = !signedIn || isWorkspaceMode();
+    isProductionTarget: () => production,
+    isWorkspaceMode({ role } = {}) {
+      return production && (role === "member" || new URLSearchParams(root.location.search).get("r4Workspace") === "1");
     },
+    // 신규 일반 계정은 기존 온보딩 영역을 사용한다. 기존 관리자·코치 메뉴를 확장하지 않는다.
+    refreshEntry() {},
   });
-})(window, document);
+})(window);
 
 (function installR4Onboarding(root, document) {
   const byId = id => document.getElementById(id);
@@ -40,17 +25,16 @@
   const button = form.querySelector('button[type="submit"]');
   const auth = Object.freeze({ requireCurrentSession: true, retryAuth: false });
   const config = root.TennisNoteDataClient?.loadConfig?.() || root.TENNISNOTE_CONFIG || {};
-  const seoulDev = config.environment === "development"
-    && config.supabaseUrl === "https://udjmiezroipctytmztwz.supabase.co"
-    && config.projectFingerprint === "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
-  const selfServeApi = seoulDev
-    ? { state: "tn_r4_my_selfserve_branch", create: "tn_r4_create_selfserve_branch" }
-    : { state: "tn_r4_prod_my_selfserve_branch", create: "tn_r4_prod_create_selfserve_branch" };
+  const seoulProduction = root.TennisNoteR4ExistingAccount?.isProductionTarget?.() === true;
+  const selfServeApi = seoulProduction
+    ? { state: "tn_r4_prod_my_selfserve_branch", create: "tn_r4_prod_create_selfserve_branch" }
+    : null;
   const labels = { pending: "심사 대기", approved: "승인", rejected: "반려" };
   const id = value => typeof value === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
   let session = null;
   const current = ctx => session === ctx && ctx.actor === ctx.client.sessionSubject?.();
   const call = (ctx, name, args = {}) => {
+    if (!selfServeApi) throw Error("r4_environment_mismatch");
     if (!current(ctx)) throw Error("r4_session_changed");
     return ctx.client.rpc(name, args, auth);
   };
@@ -69,6 +53,7 @@
     return control;
   }
   async function load(ctx) {
+    if (!selfServeApi) throw Error("r4_environment_mismatch");
     if (!root.TennisNoteR4PhoneVerification) throw Error("r4_phone_module_missing");
     const admission = await call(ctx, selfServeApi.state);
     if (!current(ctx)) return;
@@ -90,11 +75,7 @@
       return;
     }
     let rows;
-    if (seoulDev && root.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) {
-      rows = await call(ctx, "tn_r4_my_branch_applications");
-      if (!Array.isArray(rows)) throw Error("r4_invalid_application_list");
-      ctx.mode = "applicant";
-    } else try {
+    try {
       rows = await call(ctx, "tn_r4_pending_branch_applications");
       if (!Array.isArray(rows)) throw Error("r4_invalid_review_list");
       ctx.mode = "reviewer";
@@ -182,7 +163,7 @@
   }
   function open(ctx, row) {
     return run(ctx, async () => {
-      const workspace = row.selfServe && !seoulDev ? root.TennisNoteR4SelfserveClient.forBranch(ctx.client, row.branch_id) : ctx.client;
+      const workspace = row.selfServe && seoulProduction ? root.TennisNoteR4SelfserveClient.forBranch(ctx.client, row.branch_id) : ctx.client;
       const result = await workspace.rpc("tn_r4_open_my_branch", { target_branch: row.branch_id }, auth);
       if (!current(ctx)) return;
       if (result?.branchId !== row.branch_id || result.paymentEnabled !== false) throw Error("r4_open_receipt");

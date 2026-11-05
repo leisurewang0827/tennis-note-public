@@ -32,25 +32,29 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Verify exact self-service administrator delta
+      - name: Verify exact production candidate and real module guard
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/check_r4_selfserve_candidate.mjs
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Verify changed first workspace artifact
+      - name: Build non-deployable administrator review artifact only
         env:
-          TENNISNOTE_ENVIRONMENT: development
-          TENNISNOTE_PAYMENTS_ENABLED: "false"
-          TENNISNOTE_SUPABASE_URL: https://udjmiezroipctytmztwz.supabase.co
-          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_local_artifact_only
-          TENNISNOTE_PAYMENT_MODE: disabled
-          TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
-          TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+          R4_REVIEW_ONLY: "true"
+          TENNISNOTE_ENVIRONMENT: production
+          TENNISNOTE_PAYMENTS_ENABLED: "true"
+          TENNISNOTE_SUPABASE_URL: https://cnympiwrwgouuvhaivbc.supabase.co
+          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_r4_static_review_only
+          TENNISNOTE_PAYMENT_MODE: multi
+          TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay,kakaopay
+          TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
+          TENNISNOTE_PORTONE_STORE_ID: "00000000-0000-4000-8000-000000000001"
+          TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: "00000000-0000-4000-8000-000000000002"
+          TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: "00000000-0000-4000-8000-000000000003"
           TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
-          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
-        run: node scripts/build_r4_phone_dev.mjs --build
+          TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "false"
+        run: node scripts/build_r4_prod_selfserve_review.mjs --verify-only
   admin-only:
     if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'deploy'
     runs-on: ubuntu-latest

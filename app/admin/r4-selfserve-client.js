@@ -17,6 +17,7 @@
   });
   root.TennisNoteR4SelfserveClient = Object.freeze({
     forBranch(client, branchId) {
+      if (root.TennisNoteR4ExistingAccount?.isProductionTarget?.() !== true) throw Error("r4_environment_mismatch");
       const actor = client?.sessionSubject?.();
       if (!actor || !client?.rpc || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(branchId)) {
         throw Error("r4_selfserve_session_required");

@@ -9,7 +9,7 @@ function renderOperationsLoginGate() {
   const shell = $("#adminAppShell");
   if (!gate || !shell) return;
   const ready = operationsAccessReady();
-  const workspaceMode = window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.() === true;
+  const workspaceMode = window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.({ role: operationsRole() }) === true;
   window.TennisNoteR4ExistingAccount?.refreshEntry?.({ signedIn: Boolean(adminImportAuthState.user) });
   const workspaceSignedIn = workspaceMode && Boolean(
     adminImportAuthState.user?.id && window.TennisNoteDataClient?.getSession?.()?.access_token,
@@ -45,19 +45,19 @@ function renderOperationsLoginGate() {
   }
   applyOperationsRolePermissions();
   window.TennisNoteR4BranchHours?.refresh?.({
-    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
+    allowed: window.TennisNoteR4ExistingAccount?.isProductionTarget?.() === true && !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4BranchAdminWrites?.refresh?.({
-    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
+    allowed: window.TennisNoteR4ExistingAccount?.isProductionTarget?.() === true && !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4BranchOperations?.refresh?.({
-    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
+    allowed: window.TennisNoteR4ExistingAccount?.isProductionTarget?.() === true && !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4Onboarding?.refresh?.({
-    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
+    allowed: window.TennisNoteR4ExistingAccount?.isProductionTarget?.() === true && !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
 }

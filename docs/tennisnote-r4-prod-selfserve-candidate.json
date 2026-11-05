@@ -1,0 +1,168 @@
+{
+  "candidateSha256": "62681dab555edae24cdf5eb77be5d0badd9539de2cd34219846e339bb9cef851",
+  "predecessorCandidateSha256": "dadd93c4fb582d5f8ddea4081d26b7f15995a922394df2b4190988d77a3dbdf7",
+  "target": {
+    "project": "cnympiwrwgouuvhaivbc",
+    "fingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+    "origin": "https://tennisnote-admin.pages.dev",
+    "surface": "administrator"
+  },
+  "currentProduction": {
+    "source": "69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da",
+    "version": "1.0.566",
+    "release": "2026.11.03.02",
+    "markerReadOnlyConfirmed": true
+  },
+  "effectiveChangedRuntime": {
+    "app/admin/actions/common.js": "144c3776c534b7fd5ba3ac5b61713f5e66ae2a6462c7a9f9e94ee75bed1cabeb",
+    "app/admin/actions/settings.js": "52d50b167e8d8b78579537aecd5968d72b23778c25af3bfe9f7b0f679eae2032",
+    "app/admin/data/common.js": "9b1c09cbfa5fbd19601f91253f02c7fedaa6ef9dc150725eb379d9e8419f7435",
+    "app/admin/index.html": "1ed48c639fcc8d16dfe0c05c6b89918925ea6778f1768674c13f275379d58d34",
+    "app/admin/r4-onboarding.js": "950f8942793636e6565c09b79bf1321b3f55f14d734ec24f4ab53040bcd13ee7",
+    "app/admin/r4-phone-verification.js": "896ec2fb0d3edd9c7a0e03e4fa99fc5f1e8481d79738b6973f0441f93fb43fac",
+    "app/admin/r4-selfserve-client.js": "cf3025173e9d0d6af38df6a480297c5ef398a2e9226c5ee6b4f4d554b16ab494",
+    "app/admin/views/settings.js": "d40a0cf0752e4dabae08f04fe11b30816e560ea0e5eff9a0434e76b61d3dacbe"
+  },
+  "sql": {
+    "sql/apply.sql": "926052c1c53e94051f4562bae37ed94b25be1e486f5e2407db604aa0dd208705",
+    "sql/activate.sql": "31c992818092d96331fbec10691ed68286d72a9fa08ac25c379b071d50aff822",
+    "sql/offCreate.sql": "c6c5480f5777b3e80c3831b960456b791e5665dc713b4920de9794f1f0d6db14",
+    "sql/emergency.sql": "26f8e710f60c6b7fdaa1401523a494122bc7bb5437efa5b8008ff4cc0e103078",
+    "sql/restore.sql": "d233435f761a388ad1d26f009656767c2bc882d43a8cdb052515f33025009f59",
+    "sql/verify.sql": "74f60349c9df109785e065698eeeb842c1c0fd376863ce466f2a5c970db83259"
+  },
+  "sqlScope": {
+    "newTables": [
+      "private.tn_r4_prod_selfserve_control",
+      "private.tn_r4_prod_selfserve_owners",
+      "private.tn_r4_prod_selfserve_schedule_preimage"
+    ],
+    "newPrivateFunctions": 6,
+    "newAuthenticatedOnlyFunctions": 15,
+    "existingWriterFunctionsPatched": 2,
+    "existingSchedulePreimageChecks": 4,
+    "existingDirectFencesRequired": 21,
+    "newApplicationTrigger": 1,
+    "installCreate": false,
+    "installWorkspace": false
+  },
+  "permissions": {
+    "globalRoleUnchanged": true,
+    "signupDatesUnchanged": true,
+    "ordinaryNewActiveVerifiedMemberOnly": true,
+    "ownPrivateManagerRoleOnly": true,
+    "anon": false,
+    "newServiceRoleGrants": false,
+    "existingServiceRolePreserved": true
+  },
+  "switches": {
+    "install": {
+      "create": false,
+      "workspace": false
+    },
+    "activateOnlyAfterSeparateApproval": {
+      "create": true,
+      "workspace": true,
+      "signupAfter": "activation time; do not backdate"
+    },
+    "pilot": "OFF",
+    "paidSales": "OFF",
+    "existingPayments": "UNCHANGED"
+  },
+  "rollback": {
+    "webDeploymentRecorded": "7b4c1013-6e17-4886-9f31-9f4d9340d200",
+    "immutable": "https://7b4c1013.tennisnote-admin.pages.dev",
+    "source": "69c2f77161bf57ebc3e2efa3bcf061e1d5e6a1da",
+    "immutableMarkerReadOnlyConfirmed": true,
+    "fullCloudflareIdRequiresFreshPreflight": true,
+    "db": "emergency.sql then committed OFF read; optional restore.sql restores exact two writer definitions; retain owners/branches/audit"
+  },
+  "privateCheckpoint": {
+    "sha": "edc9459f328a4c33f2aa99d7b0bf84d53178646f",
+    "ref": "refs/heads/codex/tennisnote-r4-prod-checkpoint-20261105"
+  },
+  "previousLocalIdentityAcceptance": {
+    "status": "PASS_NEW_PRODUCTION_SEPARATION_DELTA_ONLY",
+    "environmentCases": 9,
+    "identityCases": 9,
+    "baselineSqlExceptDeclaredDeltaUnchanged": true,
+    "restoreAndSwitchSqlByteIdentical": true,
+    "priorBusinessAndConcurrencyTestsReused": true,
+    "remoteWrites": 0
+  },
+  "realModuleAcceptance": {
+    "before": {
+      "status": "P1_REPRODUCED",
+      "cases": [
+        {
+          "case": "DEV",
+          "rpcCount": 1,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong project",
+          "rpcCount": 1,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong fingerprint",
+          "rpcCount": 1,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong origin",
+          "rpcCount": 1,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "unknown environment",
+          "rpcCount": 1,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "valid production",
+          "rpcCount": 3,
+          "realModulesInstalled": 4
+        }
+      ]
+    },
+    "after": {
+      "status": "PASS_REAL_MODULE_ENVIRONMENT_GUARD",
+      "cases": [
+        {
+          "case": "DEV",
+          "rpcCount": 0,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong project",
+          "rpcCount": 0,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong fingerprint",
+          "rpcCount": 0,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "wrong origin",
+          "rpcCount": 0,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "unknown environment",
+          "rpcCount": 0,
+          "realModulesInstalled": 4
+        },
+        {
+          "case": "valid production",
+          "rpcCount": 3,
+          "realModulesInstalled": 4
+        }
+      ]
+    },
+    "remoteRequests": 0,
+    "oldPassingTestsRepeated": false
+  },
+  "notDeploymentApproved": true
+}
