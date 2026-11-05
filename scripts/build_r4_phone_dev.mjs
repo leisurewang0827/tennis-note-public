@@ -9,7 +9,7 @@ const repository=env.R4_PHONE_LOCAL_REPOSITORY||root;
 assert.ok(!env.GITHUB_ACTIONS||!env.R4_PHONE_LOCAL_REPOSITORY,"LOCAL_OVERRIDE_FORBIDDEN_ON_CI");
 const devBase="0d2a1e5a489cead9957368ffe66c85c0b7c0a261";
 const project="tennisnote-admin-dev";
-const priorPrefix="5c75dcf7";
+const priorPrefix="2eac2bf7";
 const fingerprint="63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const git=(...args)=>execFileSync("git",["-C",repository,...args],{maxBuffer:30e6});
