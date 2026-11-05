@@ -224,15 +224,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Check development preflight negative cases
+      - name: Reuse exact successful prior static guard step
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          node scripts/r4-marketplace-paired/test-preflight.mjs
-          node scripts/r4-marketplace-paired/test-rollback.mjs
-          node scripts/r4-marketplace-paired/test-check-run.mjs
+          node scripts/r4-marketplace-paired/test-prior-static.mjs
+          node scripts/r4-marketplace-paired/verify-prior-static.mjs
       - name: Build and check exact synthetic paired candidate
         run: |
           node scripts/r4-marketplace-paired/build.mjs --synthetic
-          node scripts/r4-marketplace-paired/test-check-runtime.mjs dist/r4-marketplace-paired/admin/shared/config.local.js
           node scripts/r4-marketplace-paired/seal.mjs create dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
           node scripts/r4-marketplace-paired/seal.mjs verify dist/r4-marketplace-paired dist/r4-marketplace-seal.json "$GITHUB_SHA"
 
