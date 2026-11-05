@@ -43,8 +43,19 @@
       ctx.mode = "applicant";
     }
     if (!current(ctx)) return;
-    ctx.canSubmit = ctx.mode === "applicant" && !rows.some(row => row.status === "pending");
-    title.textContent = ctx.mode === "reviewer" ? "지점 신청 심사" : "지점 신청";
+    ctx.selfServe = null;
+    ctx.selfServeOff = false;
+    if (ctx.mode === "applicant") {
+      try {
+        const state = await call(ctx,"tn_r4_prod_my_selfserve_branch");
+        ctx.selfServeOff = state?.available === false && !id(state.branchId) && state.paymentEnabled === false && rows.length === 0;
+        if (state?.paymentEnabled === false && (state.available === true || id(state.branchId))) ctx.selfServe=state;
+      } catch { /* 기존 신청 흐름은 그대로 유지한다. */ }
+    }
+    if (!current(ctx)) return;
+    ctx.canSubmit = ctx.mode === "applicant" && !ctx.selfServeOff && !ctx.selfServe?.branchId && !rows.some(row => row.status === "pending");
+    title.textContent = ctx.mode === "reviewer" ? "지점 신청 심사" : ctx.selfServe ? "내 지점" : "지점 신청";
+    button.textContent = ctx.selfServe?.available ? "내 지점 만들기" : "지점 신청";
     form.hidden = !ctx.canSubmit;
     panel.hidden = false;
     if (message) message.hidden = true;
@@ -66,7 +77,15 @@
       }
       list.append(item);
     }
-    if (!items.length) list.textContent = ctx.mode === "reviewer" ? "대기 중인 신청이 없습니다." : "신청 내역이 없습니다.";
+    if (id(ctx.selfServe?.branchId) && typeof ctx.selfServe.name === "string") {
+      const branchId=ctx.selfServe.branchId;
+      ctx.approvedBranches.add(branchId);
+      const item=document.createElement("p");
+      item.textContent=ctx.selfServe.name+" · 운영 관리 · 앱 결제 OFF ";
+      item.append(action("내 지점 열기",()=>open(ctx,{branch_id:branchId,selfServe:true})));
+      list.prepend(item);
+    }
+    if (!list.children.length) list.textContent = ctx.selfServeOff ? "지점 개설을 준비 중입니다." : ctx.mode === "reviewer" ? "대기 중인 신청이 없습니다." : "신청 내역이 없습니다.";
   }
   async function run(ctx, work, fallback) {
     if (!current(ctx) || ctx.busy) return;
@@ -100,14 +119,19 @@
   }
   function open(ctx, row) {
     return run(ctx, async () => {
-      const result = await call(ctx, "tn_r4_open_my_branch", { target_branch: row.branch_id });
+      const workspace = row.selfServe ? root.TennisNoteR4SelfserveClient.forBranch(ctx.client, row.branch_id) : ctx.client;
+      const result = await workspace.rpc("tn_r4_open_my_branch", { target_branch: row.branch_id }, auth);
       if (!current(ctx)) return;
       if (result?.branchId !== row.branch_id || result.paymentEnabled !== false) throw Error("r4_open_receipt");
+      if (row.selfServe) {
+        root.TennisNoteR4BranchAdminWrites?.refresh?.({ allowed: true, client: workspace });
+        root.TennisNoteR4BranchOperations?.refresh?.({ allowed: true, client: workspace });
+      }
       const opened = await root.TennisNoteR4BranchHours?.refresh?.({
-        allowed: true, client: ctx.client, openBranchId: row.branch_id,
+        allowed: true, client: workspace, openBranchId: row.branch_id,
       });
       if (opened !== true) throw Error("r4_workspace_unavailable");
-      return "승인된 지점을 열었습니다.";
+      return row.selfServe ? "내 지점을 열었습니다." : "승인된 지점을 열었습니다.";
     }, "지점을 열 수 없습니다. 상태를 새로 확인해 주세요.");
   }
   form.addEventListener("submit", event => {
@@ -117,6 +141,16 @@
     const organization = form.elements.organization.value.trim(), branch = form.elements.branch.value.trim();
     if ([organization, branch].some(value => value.length < 2 || value.length > 100)) return;
     return run(ctx, async () => {
+      if (ctx.selfServe?.available) {
+        const key=ctx.createKey?.org===organization && ctx.createKey?.branch===branch ? ctx.createKey.key : root.crypto.randomUUID();
+        ctx.createKey={org:organization,branch,key};
+        const created=await call(ctx,"tn_r4_prod_create_selfserve_branch",{p_organization:organization,p_branch:branch,p_operation:key});
+        if (created?.status!=="created" || !id(created.branchId) || created.paymentEnabled!==false) throw Error("r4_create_receipt");
+        if (current(ctx)) form.reset();
+        await load(ctx);
+        if (ctx.selfServe?.branchId!==created.branchId) throw Error("r4_create_readback");
+        return "지점을 만들었습니다. 내 지점 열기를 눌러 운영을 시작하세요.";
+      }
       const result = await call(ctx, "tn_r4_submit_branch_application", { organization_name: organization, branch_name: branch });
       if (result?.status !== "pending" || !id(result.applicationId)) throw Error("r4_application_receipt");
       if (current(ctx)) form.reset();
@@ -145,13 +179,7 @@
       status.textContent = "";
       if (!actor || !client?.rpc) return;
       const ctx = session = { actor, client, busy: false, mode: "", canSubmit: false };
-      return (async () => {
-        try {
-          if (await call(ctx, "tn_r4_prod_pilot_available") === true && current(ctx)) {
-            return run(ctx, () => load(ctx), "신청 상태를 조회할 수 없습니다.");
-          }
-        } catch { /* 서버가 승인하지 않으면 기존 로그인 안내를 유지한다. */ }
-      })();
+      return run(ctx, () => load(ctx), "신청 상태를 조회할 수 없습니다.");
     },
   });
 })(window, document);
