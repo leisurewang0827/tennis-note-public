@@ -1781,7 +1781,7 @@ async function createAdminEmailAccount() {
   try {
     await window.TennisNoteDataClient.signUpWithPassword(email, password);
     if ($("#operationsLoginPassword")) $("#operationsLoginPassword").value = "";
-    blockServerPreview("가입 요청을 완료했습니다. Gmail 인증 후 기존 관리자에게 권한 승인을 받아 주세요.");
+    blockServerPreview("가입 요청을 완료했습니다. 이메일을 인증한 뒤 로그인해 지점을 신청해 주세요.");
   } catch (error) {
     blockServerPreview("계정 생성에 실패했습니다. 이미 가입된 이메일인지와 비밀번호 조건을 확인해 주세요.");
   } finally {

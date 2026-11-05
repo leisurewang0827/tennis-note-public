@@ -10,6 +10,11 @@ on:
         required: true
         type: string
 
+      r4_admin_ci_run_id:
+        description: Reviewed R4 admin candidate successful CI run
+        required: false
+        type: string
+
 permissions:
   contents: read
 
@@ -19,6 +24,7 @@ concurrency:
 
 jobs:
   build-and-deploy-development:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-dev-20261104') }}
     runs-on: ubuntu-latest
     environment: development
     env:
@@ -88,4 +94,48 @@ jobs:
         run: npx --yes wrangler@3.90.0 pages deploy dist/member-dev --project-name=tennisnote-app-dev --branch=dev
 
       - name: Deploy administrator development web
+        run: npx --yes wrangler@3.90.0 pages deploy dist/admin-dev --project-name=tennisnote-admin-dev --branch=dev
+
+  r4-admin-only:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-dev-20261104' }}
+    runs-on: ubuntu-latest
+    environment: development
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    env:
+      TENNISNOTE_ENVIRONMENT: development
+      TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
+      TENNISNOTE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      TENNISNOTE_WORKFLOW_REF: ${{ github.workflow_ref }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      TENNISNOTE_PAYMENT_MODE: disabled
+      TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TENNISNOTE_CI_RUN_ID: ${{ inputs.r4_admin_ci_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Build only the development administrator web
+        run: python scripts/build_cloudflare_pages.py --target admin --output dist/admin-dev
+      - name: Verify exact R4 source, CI, development target and rollback
+        env:
+          STATUS_GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/check_r4_admin_dev_deployment.py
+      - name: Deploy only the R4 development administrator web
         run: npx --yes wrangler@3.90.0 pages deploy dist/admin-dev --project-name=tennisnote-admin-dev --branch=dev

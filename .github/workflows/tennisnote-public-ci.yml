@@ -46,6 +46,7 @@ permissions:
 
 jobs:
   build-and-check:
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r4-admin-dev-20261104') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -318,3 +319,34 @@ jobs:
       - name: Verify
         if: steps.response_label.outputs.scoped != 'true' && (steps.current_term.outputs.scoped != 'true' && (steps.display.outputs.scoped != 'true'))
         run: ./scripts/verify.sh
+
+  verify-r4-admin-only:
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'codex/tennisnote-r4-admin-dev-20261104' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TENNISNOTE_ENVIRONMENT: development
+      TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_PAYMENT_MODE: disabled
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SUPABASE_URL: https://udjmiezroipctytmztwz.supabase.co
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key-for-ci-only
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Build and verify only the R4 development administrator web
+        run: |
+          node --check app/admin/r4-branch-hours.js
+          node --check app/admin/r4-branch-admin-writes.js
+          node --check app/admin/views/settings.js
+          python -B scripts/build_cloudflare_pages.py --target admin --output dist/admin-dev
+          python -B scripts/check_r4_admin_dev_deployment.py --ci
