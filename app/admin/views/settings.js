@@ -11,6 +11,13 @@ function renderOperationsLoginGate() {
   const ready = operationsAccessReady();
   const workspaceMode = window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.() === true;
   window.TennisNoteR4ExistingAccount?.refreshEntry?.({ signedIn: Boolean(adminImportAuthState.user) });
+  const workspaceSignedIn = workspaceMode && Boolean(
+    adminImportAuthState.user?.id && window.TennisNoteDataClient?.getSession?.()?.access_token,
+  );
+  const loginControls = $("#operationsLoginControls");
+  if (loginControls) loginControls.hidden = workspaceSignedIn;
+  const loginTitle = $("#operationsLoginTitle");
+  if (loginTitle) loginTitle.textContent = workspaceSignedIn ? "내 지점" : "운영 화면 로그인";
   const restoringSession = Boolean(
     adminImportAuthState.loading
     && window.TennisNoteDataClient?.getSession?.()?.access_token,
