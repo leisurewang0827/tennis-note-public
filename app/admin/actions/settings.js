@@ -629,7 +629,7 @@ async function bootstrapAdminOperationsSession() {
   renderOperationsLoginGate();
   try {
     const verified = await refreshAdminImportAuthState();
-    if (verified && operationsRole() === "admin") await refreshAdminPendingUsers();
+    if (verified && operationsRole() === "admin" && !window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) await refreshAdminPendingUsers();
   } finally {
     hideAdminBrandSplash();
   }

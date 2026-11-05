@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Verify changed phone normalization artifact
+      - name: Verify changed first workspace artifact
         env:
           TENNISNOTE_ENVIRONMENT: development
           TENNISNOTE_PAYMENTS_ENABLED: "false"
@@ -70,8 +70,11 @@ jobs:
           test "$APPROVED_SHA" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           base=dfee6f9324d12e914c65acf4ea4582bf807a839b
-          prior=a32801a876e14bda4aae63e890d3cf23ed854745
+          prior=17a34a0de5b97ef0de83b8d595edf22b260407a7
           test "$(git rev-list --parents -n 1 HEAD)" = "$APPROVED_SHA $prior"
+          normalization_parent=a32801a876e14bda4aae63e890d3cf23ed854745
+          test "$(git rev-parse "$prior^")" = "$normalization_parent"
+          prior=$normalization_parent
           recovery_parent=1aa2a5a3f026079a2ae9f229543f297f7f99a753
           test "$(git rev-parse "$prior^")" = "$recovery_parent"
           prior=$recovery_parent
@@ -84,7 +87,7 @@ jobs:
           test "$(git rev-parse "$checkpoint_parent^")" = "$previous"
           test "$(git rev-parse "$previous^")" = "$base"
           test "$(git rev-parse refs/remotes/origin/main)" = "$base"
-          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/r4-phone-verification.js app/admin/r4-selfserve-client.js app/admin/views/settings.js scripts/build_r4_phone_dev.mjs scripts/check_r4_selfserve_candidate.mjs) <(git diff --name-only "$base" HEAD)
+          diff -u <(printf '%s\n' .github/workflows/deploy-cloudflare-pages.yml app/admin/actions/common.js app/admin/actions/settings.js app/admin/data/common.js app/admin/index.html app/admin/r4-branch-admin-writes.js app/admin/r4-branch-hours.js app/admin/r4-branch-operations.js app/admin/r4-onboarding.js app/admin/r4-phone-verification.js app/admin/r4-selfserve-client.js app/admin/views/settings.js scripts/build_r4_phone_dev.mjs scripts/check_r4_existing_account_ui.mjs scripts/check_r4_selfserve_candidate.mjs) <(git diff --name-only "$base" HEAD)
       - uses: actions/setup-node@v7
         with:
           node-version: "22"

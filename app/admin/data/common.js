@@ -585,7 +585,7 @@ async function refreshAdminImportAuthState(options = {}) {
     writeCachedOperationsIdentity(result.user, profile);
     renderOperationsLoginGate();
     hideAdminBrandSplash();
-    if (["admin", "coach"].includes(role)) {
+    if (["admin", "coach"].includes(role) && !window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) {
       if (role === "coach" && !operationsViewAllowed(state.view)) state.view = "schedule";
       const restoredFromCache = await restoreAdminOperationalCache();
       setView(state.view, { skipLock: true });

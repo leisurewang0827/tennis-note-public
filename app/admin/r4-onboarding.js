@@ -1,3 +1,35 @@
+(function installExistingAccountWorkspace(root, document) {
+  "use strict";
+  const config = root.TENNISNOTE_CONFIG || {};
+  const enabled = config.environment === "development"
+    && config.supabaseUrl === "https://udjmiezroipctytmztwz.supabase.co"
+    && config.projectFingerprint === "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
+  const isWorkspaceMode = () => enabled && new URLSearchParams(root.location.search).get("r4Workspace") === "1";
+  root.TennisNoteR4ExistingAccount = Object.freeze({
+    isWorkspaceMode,
+    refreshEntry({ signedIn }) {
+      if (!enabled) return;
+      const menu = document.getElementById("adminMoreMenu");
+      if (!menu) return;
+      let entry = document.getElementById("r4SelfserveEntry");
+      if (!entry) {
+        entry = document.createElement("a");
+        entry.id = "r4SelfserveEntry";
+        entry.className = "nav-item";
+        entry.textContent = "내 지점";
+        entry.style.textDecoration = "none";
+        entry.target = "_blank";
+        entry.rel = "noopener";
+        const destination = new URL(root.location.pathname, root.location.origin);
+        destination.searchParams.set("r4Workspace", "1");
+        entry.href = destination.href;
+        menu.append(entry);
+      }
+      entry.hidden = !signedIn || isWorkspaceMode();
+    },
+  });
+})(window, document);
+
 (function installR4Onboarding(root, document) {
   const byId = id => document.getElementById(id);
   const panel = byId("r4Onboarding"), title = byId("r4OnboardingTitle");
@@ -58,7 +90,11 @@
       return;
     }
     let rows;
-    try {
+    if (seoulDev && root.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) {
+      rows = await call(ctx, "tn_r4_my_branch_applications");
+      if (!Array.isArray(rows)) throw Error("r4_invalid_application_list");
+      ctx.mode = "applicant";
+    } else try {
       rows = await call(ctx, "tn_r4_pending_branch_applications");
       if (!Array.isArray(rows)) throw Error("r4_invalid_review_list");
       ctx.mode = "reviewer";

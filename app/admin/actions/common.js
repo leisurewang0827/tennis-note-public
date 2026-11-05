@@ -4,6 +4,7 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function operationsAccessReady() {
+  if (window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) return false;
   if (adminLocalPreviewMode) return true;
   return Boolean(
     window.TennisNoteDataClient?.getSession?.()?.access_token

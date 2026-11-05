@@ -9,17 +9,21 @@ function renderOperationsLoginGate() {
   const shell = $("#adminAppShell");
   if (!gate || !shell) return;
   const ready = operationsAccessReady();
+  const workspaceMode = window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.() === true;
+  window.TennisNoteR4ExistingAccount?.refreshEntry?.({ signedIn: Boolean(adminImportAuthState.user) });
   const restoringSession = Boolean(
     adminImportAuthState.loading
     && window.TennisNoteDataClient?.getSession?.()?.access_token,
   );
-  gate.hidden = ready || restoringSession;
-  shell.hidden = !ready;
+  gate.hidden = (ready && !workspaceMode) || restoringSession;
+  shell.hidden = !ready || workspaceMode;
   const message = $("#operationsLoginMessage");
   const logout = $("#operationsLogoutButton");
   const role = operationsRole();
   if (message) {
-    message.textContent = ready
+    message.textContent = workspaceMode && adminImportAuthState.user
+      ? "내 지점을 만들거나 열 수 있습니다."
+      : ready
       ? `${adminImportAuthState.profile?.name || "사용자"} 계정으로 로그인했습니다.`
       : adminImportAuthState.user && !["admin", "coach"].includes(role)
         ? "이 계정에는 운영 화면 권한이 없습니다."
@@ -34,19 +38,19 @@ function renderOperationsLoginGate() {
   }
   applyOperationsRolePermissions();
   window.TennisNoteR4BranchHours?.refresh?.({
-    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4BranchAdminWrites?.refresh?.({
-    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4BranchOperations?.refresh?.({
-    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
   window.TennisNoteR4Onboarding?.refresh?.({
-    allowed: !adminLocalPreviewMode && !ready && !restoringSession && role === "member",
+    allowed: !adminLocalPreviewMode && (!ready || workspaceMode) && !restoringSession && (role === "member" || workspaceMode),
     client: window.TennisNoteDataClient,
   });
 }
