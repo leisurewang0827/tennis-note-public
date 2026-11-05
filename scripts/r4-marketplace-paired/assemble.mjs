@@ -17,10 +17,10 @@ assert.equal(delta.candidateSha256,'504459b03b9f61f5b4b6f3bea6f5809adaaa526a7a19
 const expectedCount={admin:7,member:11};
 const rows={admin:await load(join(root,'admin-baseline.json')),member:await load(join(root,'member-baseline.json'))};
 const posix=await load(join(root,'posix-baseline.json'));
-assert.equal(posix.digestSha256,'73224eeb3c7be8d27d1601af53b537f69f912345789d98534ce5a62aedb2553f');
+assert.equal(posix.digestSha256,'35ec25ef1e6f2fde9d228c0d26136ba2b30c32a864427e7e37ab77db1eda6df0');
 assert.equal(sha(JSON.stringify(posix.files)),posix.digestSha256,'posix manifest drift');
-assert.equal(posix.files.length,35);
-const posixMap=new Map(posix.files.map(x=>[x.surface+'/'+x.path,x]));assert.equal(posixMap.size,35);
+assert.equal(posix.files.length,42);
+const posixMap=new Map(posix.files.map(x=>[x.surface+'/'+x.path,x]));assert.equal(posixMap.size,42);
 assert.equal(rows.admin.artifactSha256,'165fd918140cfeda7a97e2cb5e5b43a3cfaaddbffb8defc753b7a539a21765d4');
 assert.equal(rows.member.artifactSha256,'838b677fdeef020caf625644ef5b43f9a7a0505392dc3980a1d7de9a7c0505f4');
 for(const side of ['admin','member']) assert.equal(sha(JSON.stringify(rows[side].files)),rows[side].artifactSha256,'baseline receipt drift');

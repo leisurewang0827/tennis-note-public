@@ -1,5 +1,5 @@
 {
-  "state": "SYNTHETIC_BUILDER_POSIX_HASHES",
+  "state": "SYNTHETIC_GIT_AND_PYTHON_POSIX_HASHES",
   "files": [
     {
       "surface": "admin",
@@ -57,6 +57,12 @@
     },
     {
       "surface": "admin",
+      "path": "shared/vendor/xlsx.LICENSE",
+      "windowsSha256": "f9463066a83f512aaa2c4f5bda7514c82110ec46b703f477d112c90d33b7ed83",
+      "posixSha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+    },
+    {
+      "surface": "admin",
       "path": "styles.css",
       "windowsSha256": "3b1ed3f9f2038d83e396a6f7858896653780001877a51aa89ec20d04fc36542b",
       "posixSha256": "9dc577c0811e8441a78a052839ea65a4387d9df9d769fdf32e865f6fa140cecd"
@@ -105,6 +111,12 @@
     },
     {
       "surface": "admin",
+      "path": "tennis-note-member-app/assets/app-icon.svg",
+      "windowsSha256": "39beae01ab0d51ee82ea75e4de544d6725b384827a3ad848bce2c7361d63ba08",
+      "posixSha256": "95a3104a4fc10f5b1b27bc2af817046df5172387fe5e3e2b8b20a48ccdd56428"
+    },
+    {
+      "surface": "admin",
       "path": "terms.html",
       "windowsSha256": "b49608c3bc2e268b64966f7669dce4efed3b5729a4dcb2a3a814a5ba55c48c80",
       "posixSha256": "9b6c86c45cedcce4fddbb8a5426984d2172ad3879f9d0edb912ebca8b7572cf9"
@@ -129,6 +141,12 @@
     },
     {
       "surface": "member",
+      "path": "assets/app-icon.svg",
+      "windowsSha256": "39beae01ab0d51ee82ea75e4de544d6725b384827a3ad848bce2c7361d63ba08",
+      "posixSha256": "95a3104a4fc10f5b1b27bc2af817046df5172387fe5e3e2b8b20a48ccdd56428"
+    },
+    {
+      "surface": "member",
       "path": "commerce.html",
       "windowsSha256": "f7521a117e27ba82de5b667c0b8f1029f893eb940950043e93b1dae20337f87b",
       "posixSha256": "17dfa8f1ff15fe00e0ed5fb6fb272b0c73a96ece5fe804f3867b475ec1fe5e7b"
@@ -147,6 +165,12 @@
     },
     {
       "surface": "member",
+      "path": "manifest.webmanifest",
+      "windowsSha256": "4ada629fb92a6ceb676c2f91b3254cfea4648442a585900eee9884d2eb3b4740",
+      "posixSha256": "6cdfe35247ba08350851b3916f9349aee7e9f009b099a46c8c406cfc7af21172"
+    },
+    {
+      "surface": "member",
       "path": "native-oauth-callback.html",
       "windowsSha256": "609716b343aa2ec61f9ff33598e1e578bfc6ac9343775f2e5be0c30642695a6c",
       "posixSha256": "5887fcba247f67bd770a3531015f52aec9556387890cc36d6c093ce0d5042b35"
@@ -159,9 +183,21 @@
     },
     {
       "surface": "member",
+      "path": "shared/vendor/xlsx.LICENSE",
+      "windowsSha256": "f9463066a83f512aaa2c4f5bda7514c82110ec46b703f477d112c90d33b7ed83",
+      "posixSha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+    },
+    {
+      "surface": "member",
       "path": "support.html",
       "windowsSha256": "9b29a3051f651d5820f6a103cb38f62a0381553239ef706a5539d05c0963b5a0",
       "posixSha256": "b7a8c1c55e4c2ef38bc73dff8ef65f9c33b7495da4b8d6b26355531125fe00e5"
+    },
+    {
+      "surface": "member",
+      "path": "tennis-note-coach-app/assets/app-icon.svg",
+      "windowsSha256": "28284a505ca01de53ce3ea189a7b1a6a4e7f8e8b5b1022ce9fe15716702f6767",
+      "posixSha256": "7e4e7fe8571bdf85436c1252bdd4b5ea3ce17d524bcfee7f4f363d8028b05bdd"
     },
     {
       "surface": "member",
@@ -207,10 +243,16 @@
     },
     {
       "surface": "member",
+      "path": "tennis-note-member-app/assets/app-icon.svg",
+      "windowsSha256": "39beae01ab0d51ee82ea75e4de544d6725b384827a3ad848bce2c7361d63ba08",
+      "posixSha256": "95a3104a4fc10f5b1b27bc2af817046df5172387fe5e3e2b8b20a48ccdd56428"
+    },
+    {
+      "surface": "member",
       "path": "terms.html",
       "windowsSha256": "b49608c3bc2e268b64966f7669dce4efed3b5729a4dcb2a3a814a5ba55c48c80",
       "posixSha256": "9b6c86c45cedcce4fddbb8a5426984d2172ad3879f9d0edb912ebca8b7572cf9"
     }
   ],
-  "digestSha256": "73224eeb3c7be8d27d1601af53b537f69f912345789d98534ce5a62aedb2553f"
+  "digestSha256": "35ec25ef1e6f2fde9d228c0d26136ba2b30c32a864427e7e37ab77db1eda6df0"
 }
