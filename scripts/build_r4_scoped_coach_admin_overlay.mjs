@@ -7,10 +7,15 @@ assert.match(expected||'',/^[a-f0-9]{64}$/,'pin the exact approved admin index')
 const index=readFileSync(indexPath);
 assert.equal(createHash('sha256').update(index).digest('hex'),expected,'base index changed');
 const ui=readFileSync(new URL('../app/admin/r4-scoped-coach.js',import.meta.url));
+const workflows=readFileSync(new URL('../app/admin/r4-scoped-coach-workflows.js',import.meta.url));
 const id=createHash('sha256').update(ui).digest('hex').slice(0,16);
+const workflowId=createHash('sha256').update(workflows).digest('hex').slice(0,16);
 const html=index.toString('utf8');
 for(const key of ['r4Onboarding','r4BranchHoursPanel','r4ManagedBranch']) assert.equal(html.split('id="'+key+'"').length,2);
-assert.ok(!html.includes('r4-scoped-coach.js'));
+assert.equal(html.split('r4-scoped-coach.js?v=eea4df54a6f0755c').length,2);
+assert.ok(!html.includes('r4-scoped-coach-workflows.js'));
 assert.equal(html.split('</body>').length,2);
 assert.ok(html.indexOf('tennisnote-data-client.js')>0 && html.indexOf('tennisnote-data-client.js')<html.indexOf('</body>'));
-process.stdout.write(html.replace('</body>',()=>`  <script defer src="./r4-scoped-coach.js?v=${id}"></script>\n</body>`));
+const previous='<script defer src="./r4-scoped-coach.js?v=eea4df54a6f0755c"></script>';
+assert.equal(html.split(previous).length,2);
+process.stdout.write(html.replace(previous,()=>`<script defer src="./r4-scoped-coach-workflows.js?v=${workflowId}"></script>\n    <script defer src="./r4-scoped-coach.js?v=${id}"></script>`));

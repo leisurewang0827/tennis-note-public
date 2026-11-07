@@ -141,13 +141,14 @@ jobs:
           python-version: "3.12"
       - uses: actions/download-artifact@v4
         with:
-          name: r4-marketplace-paired-42059081638
-          run-id: 42059081638
+          name: r4-scoped-coach-42335014564
+          run-id: 42335014564
           github-token: ${{ github.token }}
           path: coach-base
       - name: Verify exact coach delta and freeze both administrator-only artifacts
         run: |
           node --check app/admin/r4-scoped-coach.js
+          node --check app/admin/r4-scoped-coach-workflows.js
           node scripts/r4_scoped_coach_release.mjs build
       - uses: actions/upload-artifact@v4
         with:

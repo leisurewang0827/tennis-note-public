@@ -124,7 +124,7 @@
     if(!valid(who,stamp,'coach') || !Array.isArray(rows)) return;
     const branches=rows.filter(x=>uuid(x.id)&&typeof x.name==='string');
     if(!pendingBranch && !branches.length) return;
-    const status=statusNode(), schedule=el('ul');
+    const status=statusNode(), schedule=el('ul'), workflow=el('section');
     let scheduleVersion=0;
     coach.append(el('h2','내 코치 일정'));
     if(pendingBranch && !branches.some(x=>x.id===pendingBranch)){
@@ -146,24 +146,33 @@
     for(const row of branches) coach.append(button(row.name,async()=>{
       if(!valid(who,stamp,'coach')) return;
       const request=++scheduleVersion;
+      root.TennisNoteR4CoachWorkflows?.reset?.(); workflow.replaceChildren();
       schedule.replaceChildren(); safeText(status,'일정 확인 중');
       const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
       try {
         const x=await rpc('tn_r4_read_scoped_coach_schedule',{p_branch:row.id,p_from:date,p_to:date});
         if(!valid(who,stamp,'coach') || request!==scheduleVersion) return;
         if(x?.branchId!==row.id || !Array.isArray(x.lessons)) throw Error('unexpected receipt');
-        for(const item of x.lessons) schedule.append(el('li',`${item.lessonDate} · ${item.startTime} · ${item.minutes}분`));
+        for(const item of x.lessons){
+          const line=el('li',`${item.lessonDate} · ${item.startTime} · ${item.minutes}분`);
+          if(uuid(item.id)&&root.TennisNoteR4CoachWorkflows)
+            line.append(button('피드백·완료',()=>root.TennisNoteR4CoachWorkflows.lesson({branchId:row.id,lessonId:item.id,host:workflow})));
+          schedule.append(line);
+        }
+        if(root.TennisNoteR4CoachWorkflows)
+          schedule.append(button('내 정산',()=>root.TennisNoteR4CoachWorkflows.settlement({branchId:row.id,host:workflow})));
         safeText(status,x.lessons.length?row.name+' · 오늘 일정':'오늘 일정이 없습니다.');
       }catch{if(valid(who,stamp,'coach') && request===scheduleVersion)safeText(status,'일정을 열 수 없습니다. 연결 상태를 확인해 주세요.');}
     }));
     if(branches.length) coach.append(button('연결 상태 새로 확인',coachView));
-    coach.append(schedule,status); coach.hidden=false;
+    coach.append(schedule,status,workflow); coach.hidden=false;
   }
   function sync() {
     const who=client.sessionSubject() || '', id=workspace.hidden?'':branch.value;
     if(who!==subject){
       subject=who; selectedBranch=''; addKey=null; ++revision; ++coachRevision;
       own.replaceChildren(); coach.replaceChildren(); own.hidden=coach.hidden=true; clearCode();
+      root.TennisNoteR4CoachWorkflows?.reset?.();
       void coachView();
     }
     if(id!==selectedBranch){ selectedBranch=id; void managerView(); }
