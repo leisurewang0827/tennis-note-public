@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {memberCoachEntry} from './build_r4_member_coach_entry.mjs';
 const repository='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-admin-prod-candidate';
-const parent='ea99e40018a9ef3dc68b3980d454779c858c23b8',oldRun=42344119447,oldArtifact=13562887087;
+const parent='ea99e40018a9ef3dc68b3980d454779c858c23b8',checkpointParent='aa799510ce9de8862ac6176e1817992a232fa3bc',oldRun=42344119447,oldArtifact=13562887087;
 const sha=process.env.GITHUB_SHA,hash=x=>createHash('sha256').update(x).digest('hex');
 const walk=(dir,p='')=>Object.fromEntries(readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0).flatMap(e=>{assert.ok(!e.isSymbolicLink());return e.isDirectory()?Object.entries(walk(join(dir,e.name),p+e.name+'/')):[[p+e.name,hash(readFileSync(join(dir,e.name)))]];}));
 const get=async(url,token)=>{const r=await fetch(url,{cache:'no-store',redirect:'error',headers:token?{Authorization:'Bearer '+token}:{},signal:AbortSignal.timeout(20000)});assert.equal(r.status,200,'REMOTE_READ_BLOCKED');return r;};
@@ -14,9 +14,9 @@ const policy={dev:{site:'tennisnote-app-dev',branch:'dev',recovery:'5816f634'},p
 const changed=['index.html','service-worker.js','actions/session.js','domain/coaches.js','data/auth.js','shared/tennisnote-r4-coach-entry.js','tennis-note-coach-app/index.html','tennis-note-coach-app/service-worker.js','tennis-note-coach-app/data/auth.js','tennis-note-coach-app/data/r4-scoped-workspace.js','tennis-note-coach-app/data/r4-workflows.js'].sort();
 function exact(){
  assert.equal(process.env.GITHUB_REPOSITORY,repository);assert.equal(process.env.GITHUB_REF,'refs/heads/'+branch);assert.equal(process.env.GITHUB_EVENT_NAME,'workflow_dispatch');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');assert.equal(sha,process.env.REVIEWED_SHA);assert.match(sha||'',/^[a-f0-9]{40}$/);
- assert.equal(execFileSync('git',['rev-list','--parents','-n','1',sha],{encoding:'utf8'}).trim(),sha+' '+parent,'CANDIDATE_PARENT_DRIFT');
+ assert.equal(execFileSync('git',['rev-list','--parents','-n','1',sha],{encoding:'utf8'}).trim(),sha+' '+checkpointParent,'CANDIDATE_PARENT_DRIFT');
  const paths=execFileSync('git',['diff','--name-only',parent,sha],{encoding:'utf8'}).trim().split('\n');
- assert.ok(paths.every(p=>/^(app\/(tennis-note-member-app|tennis-note-coach-app|shared)\/|app\/release\.json$|scripts\/(build_r4_member_coach_entry|r4_member_coach_release)\.mjs$|\.github\/workflows\/r4-member-coach-release\.yml$)/.test(p)),'UNREVIEWED_PATH');
+ assert.ok(paths.every(p=>/^(app\/(tennis-note-member-app|tennis-note-coach-app|shared)\/|app\/release\.json$|scripts\/(build_r4_member_coach_entry|r4_member_coach_release)\.mjs$|\.github\/workflows\/deploy-cloudflare-pages\.yml$)/.test(p)),'UNREVIEWED_PATH');
 }
 async function oldSeal(){
  const run=await gh('/actions/runs/'+oldRun),artifact=await gh('/actions/artifacts/'+oldArtifact);assert.equal(run.conclusion,'success');assert.equal(run.head_sha,parent);assert.equal(artifact.expired,false);assert.equal(artifact.digest,'sha256:49e7207574e6ac7f9dbe23dd82bfa0224fd9ab71bbcc663269c074bfba196755');
@@ -55,8 +55,8 @@ try{
   console.log(JSON.stringify({sha,memberCoachAssets:changed.length,sharedConfigUnchanged:true,nativePwaParity:true}));
  }else if(command==='deploy-check'){
   assert.ok(mode==='dev'||mode==='prod');if(mode==='prod')assert.equal(process.env.APPROVED_SHA,sha,'EXACT_APPROVAL_REQUIRED');
-  const id=process.env.VERIFY_RUN;assert.match(id||'',/^\d+$/);const run=await gh('/actions/runs/'+id);assert.equal(run.head_sha,sha);assert.equal(run.head_branch,branch);assert.equal(run.run_attempt,1);assert.equal(run.conclusion,'success');assert.equal(run.event,'workflow_dispatch');assert.ok(run.path.startsWith('.github/workflows/r4-member-coach-release.yml'));
-  const jobs=await gh('/actions/runs/'+id+'/jobs?per_page=100');assert.equal(jobs.jobs.find(j=>j.name==='verify')?.conclusion,'success');assert.ok(jobs.jobs.filter(j=>j.name!=='verify').every(j=>j.conclusion==='skipped'));
+  const id=process.env.VERIFY_RUN;assert.match(id||'',/^\d+$/);const run=await gh('/actions/runs/'+id);assert.equal(run.head_sha,sha);assert.equal(run.head_branch,branch);assert.equal(run.run_attempt,1);assert.equal(run.conclusion,'success');assert.equal(run.event,'workflow_dispatch');assert.ok(run.path.startsWith('.github/workflows/deploy-cloudflare-pages.yml'));
+  const jobs=await gh('/actions/runs/'+id+'/jobs?per_page=100');assert.equal(jobs.jobs.find(j=>j.name==='entry-verify')?.conclusion,'success');assert.ok(jobs.jobs.filter(j=>j.name!=='entry-verify').every(j=>j.conclusion==='skipped'));
   const seal=JSON.parse(readFileSync('member-coach-release/seal.json'));assert.equal(seal.sha,sha);assert.equal(seal.parent,parent);assert.deepEqual(seal.changed,changed);assert.deepEqual(walk('member-coach-release/'+mode),seal[mode].files);
   const p=policy[mode],account=process.env.CLOUDFLARE_ACCOUNT_ID;assert.match(account||'',/^[a-f0-9]{32}$/);
   if(mode==='dev')assert.equal(hash(account),process.env.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
