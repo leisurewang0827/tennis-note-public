@@ -8,7 +8,7 @@ on:
         type: choice
         required: true
         default: verify
-        options: [verify, deploy-development, deploy, coach-verify, coach-dev, coach-prod, app-verify, app-dev, app-prod, entry-verify, entry-dev, entry-prod]
+        options: [verify, deploy-development, deploy, coach-verify, coach-dev, coach-prod, app-verify, app-dev, app-prod, entry-verify, entry-dev, entry-prod, notice-verify, notice-prod]
       candidate_sha:
         description: Exact reviewed admission SHA
         type: string
@@ -394,3 +394,79 @@ jobs:
           else
             npx --yes wrangler@3.90.0 pages deploy member-coach-release/dev --project-name=tennisnote-app-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
           fi
+
+  notice-verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'notice-verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /app/release.json
+            /app/shared/tennisnote-release.js
+            /app/shared/tennisnote-release-updater.js
+            /scripts/r4_store_notice_release.mjs
+            /tests/r4-store-notice-release.test.mjs
+            /.github/workflows/deploy-cloudflare-pages.yml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check only the newly published Android notice and unchanged iPhone/minimum policy
+        run: node --test tests/r4-store-notice-release.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-member-coach-42355060909
+          run-id: 42355060909
+          github-token: ${{ github.token }}
+          path: store-base
+      - run: node scripts/r4_store_notice_release.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-store-notice-${{ github.run_id }}
+          path: store-notice-release/
+          if-no-files-found: error
+          retention-days: 7
+
+  notice-prod:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'notice-prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: tennisnote-r4-admin-production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      VERIFY_RUN: ${{ inputs.verification_run }}
+      APPROVED_SHA: ${{ vars.TENNISNOTE_R4_STORE_NOTICE_APPROVED_SHA }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /app/release.json
+            /app/shared/tennisnote-release.js
+            /scripts/r4_store_notice_release.mjs
+            /.github/workflows/deploy-cloudflare-pages.yml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-store-notice-${{ inputs.verification_run }}
+          run-id: ${{ inputs.verification_run }}
+          github-token: ${{ github.token }}
+          path: store-notice-release
+      - name: Admit exact notice-only artifact and unchanged existing recovery
+        run: node scripts/r4_store_notice_release.mjs deploy-check
+      - name: Publish only the operating member/coach update notice
+        run: npx --yes wrangler@3.90.0 pages deploy store-notice-release/prod --project-name=tennisnote-app --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=false

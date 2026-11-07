@@ -13,8 +13,8 @@
       iosBuild: 101,
     },
     store: {
-      androidVersion: "1.0.474",
-      androidBuild: 103,
+      androidVersion: "1.0.566",
+      androidBuild: 134,
       androidAvailability: "available",
       iosVersion: "1.0.474",
       iosBuild: null,
