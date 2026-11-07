@@ -1,0 +1,10 @@
+#r4ScopedCoachApp{padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));}
+#r4ScopedCoachApp label{display:grid;gap:8px;margin:12px 0;}
+#r4ScopedCoachApp input,#r4ScopedCoachApp select,#r4ScopedCoachApp textarea{font:inherit;font-size:16px;min-height:44px;max-width:100%;width:100%;box-sizing:border-box;}
+#r4ScopedCoachApp textarea{min-height:100px;}
+#r4ScopedCoachApp button,#r4ScopedCoachApp a{min-height:44px;}
+#r4ScopedCoachApp h1,#r4ScopedCoachApp h2{overflow-wrap:anywhere;}
+#r4ScopedCoachApp .tabbar{position:static;display:flex;margin:16px 0;}
+#r4ScopedCoachApp .r4-coach-workflow{margin-top:16px;padding-bottom:env(safe-area-inset-bottom);}
+#r4ScopedCoachApp .r4-coach-workflow>section{padding:12px 0;border-top:1px solid var(--line);}
+@media(prefers-color-scheme:dark){#r4ScopedCoachApp{--paper:#16241e;--wash:#0f1b15;--ink:#eef6f0;--muted:#bdcec2;--line:#455e4e;background:var(--wash);color:var(--ink);}#r4ScopedCoachApp input,#r4ScopedCoachApp select,#r4ScopedCoachApp textarea{background:var(--paper);color:var(--ink);border:1px solid var(--line);}}
