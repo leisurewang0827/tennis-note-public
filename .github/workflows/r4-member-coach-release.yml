@@ -1,0 +1,96 @@
+name: R4 member coach entry candidate
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        required: true
+        options: [verify, dev, prod]
+      candidate_sha:
+        type: string
+        required: true
+      verification_run:
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /app/
+            /scripts/build_r4_member_coach_entry.mjs
+            /scripts/r4_member_coach_release.mjs
+            /.github/workflows/r4-member-coach-release.yml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-coach-app-42344119447
+          run-id: 42344119447
+          github-token: ${{ github.token }}
+          path: entry-base
+      - run: node scripts/r4_member_coach_release.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-member-coach-${{ github.run_id }}
+          path: member-coach-release/
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && (inputs.mode == 'dev' || inputs.mode == 'prod')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: ${{ inputs.mode == 'prod' && 'tennisnote-r4-admin-production' || 'development' }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      VERIFY_RUN: ${{ inputs.verification_run }}
+      APPROVED_SHA: ${{ vars.TENNISNOTE_R4_COACH_APP_APPROVED_SHA }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /app/
+            /scripts/build_r4_member_coach_entry.mjs
+            /scripts/r4_member_coach_release.mjs
+            /.github/workflows/r4-member-coach-release.yml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-member-coach-${{ inputs.verification_run }}
+          run-id: ${{ inputs.verification_run }}
+          github-token: ${{ github.token }}
+          path: member-coach-release
+      - run: node scripts/r4_member_coach_release.mjs deploy-check ${{ inputs.mode }}
+      - name: Deploy only approved member and coach site
+        run: |
+          if [ '${{ inputs.mode }}' = 'prod' ]; then
+            npx --yes wrangler@3.90.0 pages deploy member-coach-release/prod --project-name=tennisnote-app --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=false
+          else
+            npx --yes wrangler@3.90.0 pages deploy member-coach-release/dev --project-name=tennisnote-app-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+          fi

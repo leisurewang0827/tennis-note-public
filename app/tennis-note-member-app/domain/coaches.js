@@ -278,7 +278,7 @@ function purchaseCoachOptions() {
 }
 
 function canUseCoachMode() {
-  return state.member?.coachApproved === true && !isApprovalPending();
+  return (state.member?.coachApproved === true && !isApprovalPending()) || window.TennisNoteR4CoachEntry?.canUse(state.member) === true;
 }
 
 function shouldOpenCoachModeByDefault() {

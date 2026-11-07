@@ -1,6 +1,10 @@
-const CACHE_NAME = "tennis-note-coach-mode-v572";
+const CACHE_NAME = "tennis-note-coach-mode-v572-r4-01f658a88968b11c-entry-4aced5016d566ea1";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
+  "../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1",
+  "./data/r4-workflows.js?v=r4-entry-4aced5016d566ea1",
+  "./data/r4-scoped-workspace.js?v=r4-entry-4aced5016d566ea1",
+  "./r4-scoped-workspace.css?v=01f658a88968b11c",
   "./",
   "./index.html",
   "./styles.css?v=1.0.566",
@@ -30,7 +34,7 @@ const APP_SHELL = [
   "./views/profile.js?v=1.0.566",
   "./events/account.js?v=1.0.566",
   "./events/delegated.js?v=1.0.566",
-  "./data/auth.js?v=1.0.566",
+  "./data/auth.js?v=r4-entry-4aced5016d566ea1",
   "./data/sync.js?v=1.0.566",
   "./data/push.js?v=1.0.566",
   "./data/records.js?v=1.0.566",
@@ -46,7 +50,7 @@ const APP_SHELL = [
   "./forms/coaches.js?v=1.0.566",
   "./forms/common.js?v=1.0.566",
   "./ui/common.js?v=1.0.566",
-  "./app.js?v=1.0.566",
+  "./app.js?v=r4-01f658a88968b11c",
   "./assets/app-icon.svg",
   "../release.json",
   "../shared/tennisnote-runtime-environment.js?v=1.0.566",

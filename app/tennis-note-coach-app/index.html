@@ -11,7 +11,8 @@
     <link rel="stylesheet" href="./styles.css?v=1.0.566" />
     <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.566" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
-  </head>
+    <link rel="stylesheet" href="./r4-scoped-workspace.css?v=01f658a88968b11c" />
+</head>
   <body>
     <section id="coachBrandSplash" class="brand-splash" role="status" aria-label="테니스노트 코치 모드 불러오는 중">
       <img src="../tennis-note-member-app/assets/brand/launch-splash.png" alt="" />
@@ -392,6 +393,7 @@
     <script defer src="../shared/tennisnote-runtime-environment.js?v=1.0.566"></script>
     <script defer src="../shared/tennisnote-escape-html.js?v=1.0.566"></script>
     <script defer src="../shared/tennisnote-data-client.js?v=1.0.566"></script>
+    <script defer src="../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1"></script>
     <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.566"></script>
     <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.566"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
@@ -437,7 +439,9 @@
     <script defer src="./forms/coaches.js?v=1.0.566"></script>
     <script defer src="./forms/common.js?v=1.0.566"></script>
     <script defer src="./ui/common.js?v=1.0.566"></script>
-    <script defer src="./data/auth.js?v=1.0.566"></script>
+    <script defer src="./data/r4-workflows.js?v=r4-entry-4aced5016d566ea1"></script>
+    <script defer src="./data/r4-scoped-workspace.js?v=r4-entry-4aced5016d566ea1"></script>
+    <script defer src="./data/auth.js?v=r4-entry-4aced5016d566ea1"></script>
     <script defer src="./data/sync.js?v=1.0.566"></script>
     <script defer src="./data/push.js?v=1.0.566"></script>
     <script defer src="./data/records.js?v=1.0.566"></script>
@@ -465,7 +469,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.566";
+          appScript.src = "./app.js?v=r4-01f658a88968b11c";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -478,7 +482,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.566";
+          appScript.src = "./app.js?v=r4-01f658a88968b11c";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

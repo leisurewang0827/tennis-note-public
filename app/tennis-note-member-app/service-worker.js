@@ -1,6 +1,7 @@
-const CACHE_NAME = "tennis-note-member-pwa-v599";
+const CACHE_NAME = "tennis-note-member-pwa-v599-entry-4aced5016d566ea1";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
+  "../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1",
   "./",
   "./index.html",
   "./styles.css?v=1.0.566",
@@ -18,7 +19,7 @@ const APP_SHELL = [
   "./domain/lessons.js?v=1.0.566",
   "./domain/changes.js?v=1.0.566",
   "./domain/schedule.js?v=1.0.566",
-  "./domain/coaches.js?v=1.0.566",
+  "./domain/coaches.js?v=r4-entry-4aced5016d566ea1",
   "./domain/shared-data.js?v=1.0.566",
   "./domain/notices.js?v=1.0.566",
   "./domain/values.js?v=1.0.566",
@@ -39,7 +40,7 @@ const APP_SHELL = [
   "./events/profile.js?v=1.0.566",
   "./events/schedule.js?v=1.0.566",
   "./events/home.js?v=1.0.566",
-  "./data/auth.js?v=1.0.566",
+  "./data/auth.js?v=r4-entry-4aced5016d566ea1",
   "./data/sync.js?v=1.0.566",
   "./data/push.js?v=1.0.566",
   "./data/payment.js?v=1.0.566",
@@ -55,7 +56,7 @@ const APP_SHELL = [
   "./actions/profile.js?v=1.0.566",
   "./actions/journal.js?v=1.0.566",
   "./actions/payment.js?v=1.0.566",
-  "./actions/session.js?v=1.0.566",
+  "./actions/session.js?v=r4-entry-4aced5016d566ea1",
   "./actions/onboarding.js?v=1.0.566",
   "./domain/common.js?v=1.0.566",
   "./domain/members.js?v=1.0.566",

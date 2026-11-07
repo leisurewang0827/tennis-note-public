@@ -149,6 +149,10 @@ function updateCoachModeAccess() {
   const button = $("#coachModeButton");
   if (!button) return;
   button.hidden = !canUseCoachMode();
+  const hint = button.querySelector("small");
+  if (hint) hint.textContent = "내 지점 수업·피드백·정산";
+  const status = button.querySelector(".settings-row-status");
+  if (status) status.textContent = "열기";
   renderBankNotificationBridge();
 }
 
@@ -221,10 +225,13 @@ function handleSummaryAction(action) {
 }
 
 async function applySupabaseMemberSession(showNotice = false) {
+  const r4EntryAttempt = window.TennisNoteR4CoachEntry?.reset();
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
   await client.consumeOAuthRedirect?.();
+  if (r4EntryAttempt !== undefined && !window.TennisNoteR4CoachEntry.accepts(r4EntryAttempt)) return false;
   const session = await client.ensureSession?.() || client.getSession?.();
+  if (r4EntryAttempt !== undefined && !window.TennisNoteR4CoachEntry.accepts(r4EntryAttempt)) return false;
   if (!session?.access_token) return false;
   if (emailPasswordRecoveryPending) {
     if (!emailPasswordAuthUiEnabled()) {
@@ -245,6 +252,7 @@ async function applySupabaseMemberSession(showNotice = false) {
   }
   try {
     const current = await client.selectCurrentProfile();
+    if (r4EntryAttempt !== undefined && !window.TennisNoteR4CoachEntry.accepts(r4EntryAttempt)) return false;
     if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
       const status = $("#memberEmailLoginStatus");
       if (status) status.textContent = "로그인 계정이 여러 회원 정보에 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.";
@@ -302,6 +310,13 @@ async function applySupabaseMemberSession(showNotice = false) {
     };
     rememberRecentLoginProvider(state.member.provider);
     state.coachModeAllowed = state.member.coachApproved;
+    await window.TennisNoteR4CoachEntry?.refresh({user,profile,coachRole,attempt:r4EntryAttempt});
+    if (r4EntryAttempt !== undefined && !window.TennisNoteR4CoachEntry.accepts(r4EntryAttempt)) return false;
+    if (window.TennisNoteR4CoachEntry?.requested() && canUseCoachMode()) {
+      window.TennisNoteR4CoachEntry.remember(false);
+      openCoachMode();
+      return true;
+    }
     if (shouldOpenCoachModeByDefault()) {
       openCoachMode();
       return true;
@@ -370,6 +385,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     });
     return true;
   } catch (error) {
+    if (r4EntryAttempt !== undefined && !window.TennisNoteR4CoachEntry.accepts(r4EntryAttempt)) return false;
     const status = $("#memberEmailLoginStatus");
     const code = error?.payload?.code || error?.message || "";
     if (status && code === "verified_phone_member_ambiguous") {

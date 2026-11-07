@@ -515,17 +515,19 @@ async function initCoachApp() {
     || window.location.hash.includes("access_token=")
   );
   if (oauthReturnPending) document.body.classList.add("coach-session-restoring");
-  if (hasStoredSession && state.coach) openCoachApp(false);
+  if (hasStoredSession && state.coach && state.coach.authUserId === client.sessionSubject()) openCoachApp(false);
   hideCoachBrandSplash();
   void (async () => {
     await syncLiveSchedulePolicy(state.coach?.branchId || "");
     renderAll();
   })().catch(() => {});
 
+  const r4InitAttempt = window.TennisNoteScopedCoachApp?.begin();
   const coachAccessResult = await Promise.race([
-    applySupabaseCoachSession(false),
+    applySupabaseCoachSession(false, r4InitAttempt),
     new Promise((resolve) => window.setTimeout(() => resolve("timeout"), 8_000)),
   ]);
+  if (r4InitAttempt !== undefined && !window.TennisNoteScopedCoachApp.accepts(r4InitAttempt)) return;
   const coachAccessTimedOut = coachAccessResult === "timeout";
   const openedFromSupabase = coachAccessResult === true;
   document.body.classList.remove("coach-session-restoring");
@@ -535,6 +537,7 @@ async function initCoachApp() {
     return;
   }
   if (coachAccessTimedOut) {
+    window.TennisNoteScopedCoachApp?.reset(r4InitAttempt);
     state.coach = null;
     $("#coachAppScreen").hidden = true;
     $("#coachLoginScreen").hidden = false;
@@ -543,6 +546,7 @@ async function initCoachApp() {
     return;
   }
   if (!openedFromSupabase) {
+    window.TennisNoteScopedCoachApp?.reset(r4InitAttempt);
     state.coach = null;
     $("#coachAppScreen").hidden = true;
     $("#coachLoginScreen").hidden = false;
@@ -550,6 +554,7 @@ async function initCoachApp() {
     saveSnapshot();
     return;
   }
+  if (window.TennisNoteScopedCoachApp?.isActive()) return;
   if (!state.coach) {
     $("#coachAppScreen").hidden = true;
     $("#coachLoginScreen").hidden = false;

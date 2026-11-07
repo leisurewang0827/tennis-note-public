@@ -7,11 +7,11 @@
   'https://tennisnote-app-dev.pages.dev':['development','udjmiezroipctytmztwz','63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba']
  };
  const target=sites[root.location.origin],config=client?.loadConfig?.();
- if(root.Capacitor?.isNativePlatform?.()||!target||!client?.rpc||config?.environment!==target[0]||config.supabaseUrl!=='https://'+target[1]+'.supabase.co'||config.projectFingerprint!==target[2])return;
+ if(!root.TennisNoteR4CoachEntry?.bound)return;
  const uuid=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(x);
  const el=(tag,text)=>{const n=doc.createElement(tag);if(text)n.textContent=text;return n;};
  const button=(label,fn,primary=false)=>{const n=el('button',label);n.type='button';n.className=primary?'approve-button':'small-button';n.addEventListener('click',fn);return n;};
- const rpc=(name,args)=>client.rpc(name,args,{requireCurrentSession:true,retryAuth:false});
+ const rpc=async(name,args)=>{if(!await root.TennisNoteR4CoachEntry.ready)throw Error('runtime_denied');return client.rpc(name,args,{requireCurrentSession:true,retryAuth:false});};
  const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  let epoch=0,owner='',screen=null,selection='',branches=[],pending=0;
  const valid=(who,stamp)=>who&&owner===who&&client.sessionSubject()===who&&stamp===epoch&&screen?.isConnected;
@@ -37,7 +37,8 @@
   screen=el('section');screen.id='r4ScopedCoachApp';screen.className='app-screen';
   const header=el('header');header.className='topbar';
   const heading=el('h1','오늘');
-  const back=el('a','회원 화면');back.href='/?mode=member';back.className='small-button';
+  const back=el('a','회원 화면');back.href=root.TennisNoteR4CoachEntry.memberUrl();back.className='small-button';
+  back.addEventListener('click',()=>root.TennisNoteR4CoachEntry.remember(false));
   header.append(heading,back);screen.append(header);
   const label=el('label','내 지점 '),branch=el('select');branch.setAttribute('aria-label','내 지점');
   for(const item of branches){const opt=el('option',item.name);opt.value=item.id;branch.append(opt);}label.append(branch);screen.append(label);

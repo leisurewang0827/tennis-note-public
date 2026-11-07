@@ -405,6 +405,8 @@ async function loginWithEmail(event) {
 }
 
 async function logout() {
+  window.TennisNoteR4CoachEntry?.reset();
+  window.TennisNoteR4CoachEntry?.remember(false);
   await disableNativePushForLogout();
   try {
     await window.TennisNoteDataClient?.signOut?.();

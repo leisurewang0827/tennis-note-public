@@ -40,18 +40,24 @@ function activateLiveCoachProfile(profileId) {
   localStorage.removeItem(sharedStorageKey);
 }
 
-async function applySupabaseCoachSession(showFromLogin = false) {
+async function applySupabaseCoachSession(showFromLogin = false, scopedAttempt) {
+  const r4Attempt = scopedAttempt ?? window.TennisNoteScopedCoachApp?.begin();
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
   await client.consumeOAuthRedirect?.();
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) {
+    window.TennisNoteR4CoachEntry?.remember(true);
     resetCoachSettlementHistory();
     renderCoachSettlementHistory();
     return false;
   }
   try {
     const { user, profile, coachRole } = await client.selectCurrentProfile();
+    if (r4Attempt !== undefined && !window.TennisNoteScopedCoachApp.accepts(r4Attempt)) return false;
+    const scopedOpened = await window.TennisNoteScopedCoachApp?.activate({user,profile,coachRole,attempt:r4Attempt});
+    if (r4Attempt !== undefined && !window.TennisNoteScopedCoachApp.accepts(r4Attempt)) return false;
+    if (scopedOpened) return true;
     if (!profile || !canUseCoachAppProfile(profile, coachRole)) {
       resetCoachSettlementHistory();
       renderCoachSettlementHistory();
@@ -100,6 +106,9 @@ async function applySupabaseCoachSession(showFromLogin = false) {
 }
 
 async function logoutCoach() {
+  window.TennisNoteR4CoachEntry?.remember(false);
+  window.TennisNoteR4CoachEntry?.reset();
+  window.TennisNoteScopedCoachApp?.reset();
   resetCoachSettlementHistory();
   renderCoachSettlementHistory();
   coachSettlementSelection = null;
