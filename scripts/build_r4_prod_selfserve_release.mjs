@@ -32,7 +32,7 @@ export function assetManifest(folder) {
     : [[prefix + entry.name, digest(readFileSync(join(dir, entry.name)))]]);
   return Object.fromEntries(walk(folder));
 }
-export async function buildRelease({ repository = process.cwd(), ref = "HEAD", output = "dist/admin" } = {}) {
+export async function buildRelease({ repository = process.cwd(), ref = "HEAD", output = "dist/admin", existingRuntime = false } = {}) {
   const repo = resolve(repository);
   const read = (source, path) => execFileSync("git", ["-C", repo, "show", source + ":" + path], { encoding: "utf8", maxBuffer: 6e6 });
   const plan = JSON.parse(read(ref, "docs/tennisnote-r4-prod-selfserve-release-approval.json"));
@@ -47,7 +47,7 @@ export async function buildRelease({ repository = process.cwd(), ref = "HEAD", o
   };
   const current = JSON.parse(await get(plan.origin + "/r4-admin-release.json"));
   const recovery = JSON.parse(await get("https://7b4c1013.tennisnote-admin.pages.dev/r4-admin-release.json"));
-  assert.equal(current.sourceSha, plan.operatingBase, "OPERATING_SOURCE_DRIFT");
+  assert.equal(current.sourceSha, existingRuntime ? plan.runtimeSource : plan.operatingBase, "OPERATING_SOURCE_DRIFT");
   assert.equal(recovery.sourceSha, plan.operatingBase, "RECOVERY_SOURCE_DRIFT");
   const config = await get(plan.origin + "/shared/config.local.js");
   const runtime = validatePublicConfiguration(config, plan);
@@ -92,7 +92,7 @@ export async function buildRelease({ repository = process.cwd(), ref = "HEAD", o
   const assets = Object.fromEntries(plan.assetOrder.map(path => [path, discovered[path]]));
   assert.equal(digest(JSON.stringify(assets)), plan.artifactSha256, "PREPARED_ARTIFACT_DRIFT");
   assert.equal(digest(await get(plan.origin + "/shared/config.local.js")), plan.configSha256, "CONFIG_CHANGED_DURING_BUILD");
-  assert.equal(JSON.parse(await get(plan.origin + "/r4-admin-release.json")).sourceSha, plan.operatingBase, "SOURCE_CHANGED_DURING_BUILD");
+  assert.equal(JSON.parse(await get(plan.origin + "/r4-admin-release.json")).sourceSha, existingRuntime ? plan.runtimeSource : plan.operatingBase, "SOURCE_CHANGED_DURING_BUILD");
   const destination = resolve(repo, output);
   assert.equal(destination, resolve(repo, "dist/admin"), "ADMIN_ONLY_OUTPUT_REQUIRED");
   assert.equal(existsSync(destination), false, "EXISTING_ARTIFACT_DO_NOT_OVERWRITE");

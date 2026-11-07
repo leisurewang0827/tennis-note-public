@@ -8,7 +8,7 @@ on:
         type: choice
         required: true
         default: verify
-        options: [verify, deploy-development, deploy]
+        options: [verify, deploy-development, deploy, coach-verify, coach-dev, coach-prod]
       candidate_sha:
         description: Exact reviewed admission SHA
         type: string
@@ -121,3 +121,101 @@ jobs:
         run: node scripts/build_r4_phone_dev.mjs --build
       - name: Deploy only the Seoul development administrator
         run: npx --yes wrangler@3.90.0 pages deploy dist/admin-phone-dev --project-name=tennisnote-admin-dev --branch=dev
+  coach-verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'coach-verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-marketplace-paired-42059081638
+          run-id: 42059081638
+          github-token: ${{ github.token }}
+          path: coach-base
+      - name: Verify exact coach delta and freeze both administrator-only artifacts
+        run: |
+          node --check app/admin/r4-scoped-coach.js
+          node scripts/r4_scoped_coach_release.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-scoped-coach-${{ github.run_id }}
+          path: coach-release/
+          if-no-files-found: error
+          retention-days: 3
+
+  coach-dev:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'coach-dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: development
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      VERIFY_RUN: ${{ inputs.verification_run }}
+      APPROVED_SHA: ${{ vars.TENNISNOTE_R4_ADMIN_APPROVED_SHA }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-${{ inputs.verification_run }}
+          run-id: ${{ inputs.verification_run }}
+          github-token: ${{ github.token }}
+          path: coach-release
+      - name: Require the exact CI artifact and unchanged recoverable site
+        run: node scripts/r4_scoped_coach_release.mjs deploy-check dev
+      - name: Deploy only the dev administrator site
+        run: npx --yes wrangler@3.90.0 pages deploy coach-release/dev --project-name=tennisnote-admin-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+
+  coach-prod:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && inputs.mode == 'coach-prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: tennisnote-r4-admin-production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ inputs.candidate_sha }}
+      VERIFY_RUN: ${{ inputs.verification_run }}
+      APPROVED_SHA: ${{ vars.TENNISNOTE_R4_ADMIN_APPROVED_SHA }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-${{ inputs.verification_run }}
+          run-id: ${{ inputs.verification_run }}
+          github-token: ${{ github.token }}
+          path: coach-release
+      - name: Require the exact CI artifact and unchanged recoverable site
+        run: node scripts/r4_scoped_coach_release.mjs deploy-check prod
+      - name: Deploy only the prod administrator site
+        run: npx --yes wrangler@3.90.0 pages deploy coach-release/prod --project-name=tennisnote-admin --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=false
