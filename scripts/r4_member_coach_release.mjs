@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {memberCoachEntry} from './build_r4_member_coach_entry.mjs';
 const repository='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-admin-prod-candidate';
-const parent='ea99e40018a9ef3dc68b3980d454779c858c23b8',checkpointParent='aa799510ce9de8862ac6176e1817992a232fa3bc',oldRun=42344119447,oldArtifact=13562887087;
+const parent='ea99e40018a9ef3dc68b3980d454779c858c23b8',checkpointParent='1f73b91598c91bc5f9aca62c55acb8a6eadd0a95',oldRun=42344119447,oldArtifact=13562887087;
 const sha=process.env.GITHUB_SHA,hash=x=>createHash('sha256').update(x).digest('hex');
 const walk=(dir,p='')=>Object.fromEntries(readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0).flatMap(e=>{assert.ok(!e.isSymbolicLink());return e.isDirectory()?Object.entries(walk(join(dir,e.name),p+e.name+'/')):[[p+e.name,hash(readFileSync(join(dir,e.name)))]];}));
 const get=async(url,token)=>{const r=await fetch(url,{cache:'no-store',redirect:'error',headers:token?{Authorization:'Bearer '+token}:{},signal:AbortSignal.timeout(20000)});assert.equal(r.status,200,'REMOTE_READ_BLOCKED');return r;};
@@ -25,7 +25,7 @@ async function oldSeal(){
  return seal;
 }
 async function baseline(mode,files){
- const p=policy[mode];for(const host of [p.site,p.recovery+'.'+p.site])for(const path of ['index.html','tennis-note-coach-app/index.html','shared/config.local.js'])assert.equal(hash(Buffer.from(await(await get('https://'+host+'.pages.dev/'+path)).arrayBuffer())),files[path],'LIVE_OR_RECOVERY_DRIFT');
+ const p=policy[mode];for(const host of [p.site,p.recovery+'.'+p.site])for(const path of ['index.html','tennis-note-coach-app/index.html','shared/config.local.js'])assert.equal(hash(Buffer.from(await(await get('https://'+host+'.pages.dev/'+path.replace(/index\.html$/,''))).arrayBuffer())),files[path],'LIVE_OR_RECOVERY_DRIFT');
 }
 function canonicalParity(files){
  for(const path of changed){
