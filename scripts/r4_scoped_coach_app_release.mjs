@@ -4,8 +4,9 @@ import {readFileSync,writeFileSync,mkdirSync,cpSync} from 'node:fs';
 import {hash,walk,policy,baselineCheck,makeProductionBase,overlay} from './build_r4_scoped_coach_app.mjs';
 const repository='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-admin-prod-candidate';
 const parent='c4ff61948cf34922fb7b6749014729a59e52a3ee';
+const checkpointParent='6e626e29d9c9e9f4739a189d1e8d61ec20b942cb';
 const sourcePin='b45499e49a1dcfec8a86e846bc573620ae908d498799830fa1f8cd12a3084c78';
-const basePins={dev:'6b6e59d62fe9d464b43662c81e24a8e5f45350be2b225d925bc7a587dcd8922b',prod:'60dda805def6895a66986d4acb5f63fdf1531d17edfa142975ce9a1b2f76a629'};
+const basePins={dev:'6b6e59d62fe9d464b43662c81e24a8e5f45350be2b225d925bc7a587dcd8922b',prod:'912b3590682012a3b6c131ee185f9ae66776ef620136417615dc344c62f2e9ba'};
 const configPins={dev:'2876392b257795e386dacf06b07a3ce568dcdaa27357d5e91961564e697cc3de',prod:'0a89879945c847ecf2244823a1a32ff21dfb6936ecc80706b183c7231671bd64'};
 const rootPins={dev:'1b1072ef801d0d3a150b152c96eb5562daf24099945da1e2b3dfbeaeb44250c9',prod:'cdafbcc2f3257fa3fa82fcb2d13040412ce81ddcf53e1ce59e7fd47ff5cd5dbc'};
 const sha=process.env.GITHUB_SHA;
@@ -16,10 +17,11 @@ const exact=()=>{
  assert.equal(process.env.GITHUB_EVENT_NAME,'workflow_dispatch');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
  assert.equal(process.env.REVIEWED_SHA,sha);assert.match(sha||'',/^[a-f0-9]{40}$/);
  const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
- assert.equal(git('rev-list','--parents','-n','1',sha),sha+' '+parent);
+ assert.equal(git('rev-list','--parents','-n','1',sha),sha+' '+checkpointParent);
+ assert.deepEqual(git('diff','--name-only',checkpointParent,sha).split('\n').sort(),['app/tennis-note-coach-app/r4-scoped-workspace.css','scripts/build_r4_scoped_coach_app.mjs','scripts/r4_scoped_coach_app_release.mjs']);
  assert.deepEqual(git('diff','--name-only',parent,sha).split('\n').sort(),['.github/workflows/deploy-cloudflare-pages.yml','app/tennis-note-coach-app/data/r4-scoped-workspace.js','app/tennis-note-coach-app/r4-scoped-workspace.css','scripts/build_r4_scoped_coach_app.mjs','scripts/r4_scoped_coach_app_release.mjs'].sort());
  assert.equal(hash(readFileSync('app/tennis-note-coach-app/data/r4-scoped-workspace.js')),sourcePin);
- assert.equal(hash(readFileSync('app/tennis-note-coach-app/r4-scoped-workspace.css')),'047f3199ed407f67100adc186386cbc68be642b955ea444b3d3d464ad5fc0382');
+ assert.equal(hash(readFileSync('app/tennis-note-coach-app/r4-scoped-workspace.css')),'cce20c1ec9f7b111be6254351e85e9e5b96fec0db08c6f1a3211f2510f03654e');
 };
 const live=async mode=>{
  await baselineCheck(mode);const p=policy[mode];

@@ -7,4 +7,6 @@
 #r4ScopedCoachApp .tabbar{position:static;display:flex;margin:16px 0;}
 #r4ScopedCoachApp .r4-coach-workflow{margin-top:16px;padding-bottom:env(safe-area-inset-bottom);}
 #r4ScopedCoachApp .r4-coach-workflow>section{padding:12px 0;border-top:1px solid var(--line);}
+#r4ScopedCoachApp .r4-coach-workflow>section .approve-button{background:transparent;color:var(--green);border:1px solid var(--line);}
+@media(prefers-color-scheme:dark){#r4ScopedCoachApp .tabbar,#r4ScopedCoachApp .tab{background:var(--paper)!important;color:var(--ink)!important;border-color:var(--line);}#r4ScopedCoachApp select,#r4ScopedCoachApp input,#r4ScopedCoachApp textarea{background:var(--paper)!important;color:var(--ink)!important;-webkit-text-fill-color:var(--ink)!important;}#r4ScopedCoachApp .r4-coach-workflow>section .approve-button{color:#8fdec1;}}
 @media(prefers-color-scheme:dark){#r4ScopedCoachApp{--paper:#16241e;--wash:#0f1b15;--ink:#eef6f0;--muted:#bdcec2;--line:#455e4e;background:var(--wash);color:var(--ink);}#r4ScopedCoachApp input,#r4ScopedCoachApp select,#r4ScopedCoachApp textarea{background:var(--paper);color:var(--ink);border:1px solid var(--line);}}

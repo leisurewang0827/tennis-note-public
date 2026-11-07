@@ -20,7 +20,7 @@ export async function baselineCheck(mode){
 }
 export async function makeProductionBase(destination){
  const temp=mkdtempSync(join(tmpdir(),'tn-coach-current-prod-')),tar=join(temp,'allowed.tar');
- execFileSync('git',['archive','--output='+tar,policy.prod.source,'app/tennis-note-coach-app','app/tennis-note-member-app','app/shared','app/tennis-note-legal','app/release.json','commerce.html','support.html','delete-account.html','scripts/build_cloudflare_pages.py'],{stdio:'pipe'});
+ execFileSync('git',['-c','core.autocrlf=false','archive','--output='+tar,policy.prod.source,'app/tennis-note-coach-app','app/tennis-note-member-app','app/shared','app/tennis-note-legal','app/release.json','commerce.html','support.html','delete-account.html','scripts/build_cloudflare_pages.py'],{stdio:'pipe'});
  execFileSync('tar',['-xf',tar,'-C',temp],{stdio:'pipe'});
  const env={...process.env,TENNISNOTE_ENVIRONMENT:'production',TENNISNOTE_SUPABASE_URL:'https://cnympiwrwgouuvhaivbc.supabase.co',TENNISNOTE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_compilation_only',TENNISNOTE_PAYMENTS_ENABLED:'false'};
  try{execFileSync(process.platform==='win32'?'python':'python3',['scripts/build_cloudflare_pages.py','--target','member','--output','dist/member'],{cwd:temp,env,stdio:'pipe'});}catch{throw Error('CURRENT_BASE_COMPILATION_FAILED');}
