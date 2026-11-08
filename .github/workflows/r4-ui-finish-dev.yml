@@ -1,0 +1,92 @@
+name: R4 UI finish development only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - 'release-sources/r4-ui-finish/**'
+      - 'scripts/r4_ui_finish_release.mjs'
+      - 'scripts/check_r4_ui_finish_release.mjs'
+      - '.github/workflows/r4-ui-finish-dev.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-42340946207
+          run-id: 42340946207
+          github-token: ${{ github.token }}
+          path: base-admin
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-member-coach-42355060909
+          run-id: 42355060909
+          github-token: ${{ github.token }}
+          path: base-coach
+      - run: node scripts/check_r4_ui_finish_release.mjs
+      - run: node scripts/r4_ui_finish_release.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-ui-finish-${{ github.run_id }}
+          path: ui-release/
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    needs: verify
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108'
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-42340946207
+          run-id: 42340946207
+          github-token: ${{ github.token }}
+          path: base-admin
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-member-coach-42355060909
+          run-id: 42355060909
+          github-token: ${{ github.token }}
+          path: base-coach
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-${{ github.run_id }}
+          path: ui-release
+      - run: node scripts/r4_ui_finish_release.mjs deploy-check
+      - name: Deploy development administrator only
+        run: npx --yes wrangler@3.90.0 pages deploy ui-release/admin --project-name=tennisnote-admin-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+      - name: Deploy development coach surface only
+        run: npx --yes wrangler@3.90.0 pages deploy ui-release/coach --project-name=tennisnote-app-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false
+      - name: Verify both development deployments
+        run: node scripts/r4_ui_finish_release.mjs post-check

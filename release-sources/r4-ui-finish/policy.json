@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "publicParent": "0d2a1e5a489cead9957368ffe66c85c0b7c0a261",
+  "privateCommit": "05c5265df33fbb4ed29b2933ed3dae83435644c8",
+  "sourceSha256": {
+    "r4-ui-finish.css": "820af59ee645cacff663ebde03717a293fbef3b757d73a9154fc016fa0c4ff43",
+    "r4-ui-finish.js": "5508d19c7c573d6a4809b751e9b54a3af948e4d3ecab27ed5b41b45d7412a3f2"
+  },
+  "environment": "development",
+  "projectFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+  "admin": {
+    "project": "tennisnote-admin-dev", "source": "c4ff61948cf34922fb7b6749014729a59e52a3ee", "run": 42340946207,
+    "artifactId": 13561513191, "artifactName": "r4-scoped-coach-42340946207", "artifactDigest": "f6dd39cc110cf7a1737131ce3db5512de8f55f3982e8dfd0678e7a22d5024e43", "sealHash": "166b19636050be30404f8d486e663248b024ab1832fde3dc3827e21451fe362c",
+    "indexHash": "2cfc5ec475ffa14e03420510fb4cfbb05981a361436766a67e2efaf1286f08b7", "canonicalId": "ccb667cc-d600-4fc2-aa7b-dd61327c3226", "priorRecoveryId": "ccb667cc-d600-4fc2-aa7b-dd61327c3226"
+  },
+  "coach": {
+    "project": "tennisnote-app-dev", "source": "5653306f0aab741a0abb9dedf49162bf16630fea", "run": 42355060909,
+    "artifactId": 13567208017, "artifactName": "r4-member-coach-42355060909", "artifactDigest": "51a7521e42894586da6fe91c58e213b9b41ace82a0602492e16bcc6d6eca7c61", "sealHash": "0a1724914d54f8ac438766ba138fb9794ca0742200876616b849c983dc8290bf",
+    "indexHash": "44d7c34eb7bc47daedcb9132e39ce8e824bc61ba1ab01804aac625e433ed8a14", "workerHash": "9d80f76919a600e344702328d1c274aa0577e2c9416189debe7e1158f1a8d1b7", "canonicalId": "52915fca-a9bd-427b-88f0-e1618db933f8", "priorRecoveryId": "52915fca-a9bd-427b-88f0-e1618db933f8"
+  }
+}
