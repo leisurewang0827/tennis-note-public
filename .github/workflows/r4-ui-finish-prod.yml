@@ -1,0 +1,115 @@
+name: R4 UI finish production guarded
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - 'release-sources/r4-ui-finish-prod/**'
+      - 'scripts/r4_ui_finish_prod_release.mjs'
+      - 'scripts/check_r4_ui_finish_prod_release.mjs'
+      - '.github/workflows/r4-ui-finish-prod.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-42340946207
+          run-id: 42340946207
+          github-token: ${{ github.token }}
+          path: prod-base-admin
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-store-notice-42426328950
+          run-id: 42426328950
+          github-token: ${{ github.token }}
+          path: prod-base-coach
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-42446829367
+          run-id: 42446829367
+          github-token: ${{ github.token }}
+          path: dev-ui
+      - run: node scripts/check_r4_ui_finish_prod_release.mjs
+      - run: node scripts/r4_ui_finish_prod_release.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-ui-prod-${{ github.run_id }}
+          path: prod-ui-release/
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    needs: verify
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108'
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPROVED_SHA: ${{ vars.TENNISNOTE_R4_UI_PROD_APPROVED_SHA }}
+      PROD_ADMIN_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+      PROD_COACH_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-coach-42340946207
+          run-id: 42340946207
+          github-token: ${{ github.token }}
+          path: prod-base-admin
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-store-notice-42426328950
+          run-id: 42426328950
+          github-token: ${{ github.token }}
+          path: prod-base-coach
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-42446829367
+          run-id: 42446829367
+          github-token: ${{ github.token }}
+          path: dev-ui
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-prod-${{ github.run_id }}
+          path: prod-ui-release
+      - id: admission
+        run: node scripts/r4_ui_finish_prod_release.mjs deploy-check
+      - name: Deploy production administrator surface
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@3.90.0 pages deploy prod-ui-release/admin --project-name=tennisnote-admin --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=false
+      - name: Deploy production coach surface
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@3.90.0 pages deploy prod-ui-release/coach --project-name=tennisnote-app --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=false
+      - run: node scripts/r4_ui_finish_prod_release.mjs post-check
+      - name: Restore this candidate only after deployment failure
+        if: ${{ failure() && steps.admission.outcome == 'success' }}
+        env:
+          DEPLOY_ADMISSION_OK: 'true'
+        run: node scripts/r4_ui_finish_prod_release.mjs rollback-partial

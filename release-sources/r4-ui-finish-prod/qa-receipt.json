@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "status": "PASS",
+  "independentReview": "PASS",
+  "behavioral": {
+    "privateSource": "05c5265df33fbb4ed29b2933ed3dae83435644c8",
+    "devSource": "de0881f2b0746e86a716452d9a6ecf23b2206911",
+    "devRun": 42433857723,
+    "receiptDigests": ["a225ddcef5c16e056c15cadaa49645fd03cee53a6b6d9ff0df56584cbeb70720", "7788fded4d841fd29dadc7aa5d92e74c6c9c58d984a68543d1e94be5524eebcd", "63830837bb8c589ac41bb54e4516bc6f171b6686934369452bce9cbd79f5b25f"],
+    "authCases": 8, "sessionsClosed": 10, "baseOff": true, "workflowOff": true, "linksClosed": true, "leaseRestored": true
+  },
+  "visual": {
+    "privateSource": "71dc6b4fd3a5502641ebf2d4adc14ec736525dfa",
+    "devSource": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+    "devRun": 42446829367, "artifactId": 13603294486,
+    "artifactDigest": "48ed672ee60e6f44bc86aa94a6dd3e1fc75a0958c46f4614ea1fd47d59eda660",
+    "cssSha256": "e08ab69885bd1aabe8995f8f54a5b3b3227576c2a9c76c07a004602e0a7530ea",
+    "jsSha256": "5508d19c7c573d6a4809b751e9b54a3af948e4d3ecab27ed5b41b45d7412a3f2",
+    "token": "7423d1e2d58a3c03", "localRasterCases": 4,
+    "localEvidenceDigest": "1870795cae455d2ebda79b08fb53aefcc22b44003024290c6f53af6b9ca163be",
+    "hostedEvidenceDigest": "3cbded4d3096ad5281b50016f92112fb9859e9950538e4f11f8947bb63932969", "hostedVisual": "PASS"
+  },
+  "unchangedContracts": {"jsUnchanged": true, "authContractUnchanged": true, "dbContractUnchanged": true, "independentReuseReview": "PASS"},
+  "newAuthExecutions": 0, "newAuthAccounts": 0, "businessWrites": 0, "productionWrites": 0
+}

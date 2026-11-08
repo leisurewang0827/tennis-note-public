@@ -1,0 +1,18 @@
+{
+  "schema": 2,
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "privateSource": "71dc6b4fd3a5502641ebf2d4adc14ec736525dfa",
+  "devSource": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "composeSha256": "61a7adbd0ba4a21884e07a3292ce032163a4b6062092e486150e4de35f5d0c34",
+  "projectFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "authReceiptSha256": "eb0df857ff55ae5a3b1c166abec0b4132526dc745d17468947debc049255f90d",
+  "dev": {"run":42446829367,"artifactId":13603294486,"name":"r4-ui-finish-42446829367","digest":"48ed672ee60e6f44bc86aa94a6dd3e1fc75a0958c46f4614ea1fd47d59eda660","sealHash":"077e6c8b8722ab301e639d77f6be854ee4522e36edb3884cc19e7e1a8758dc36"},
+  "behavioral": {"privateSource":"05c5265df33fbb4ed29b2933ed3dae83435644c8","devSource":"de0881f2b0746e86a716452d9a6ecf23b2206911","devRun":42433857723,"receiptDigests":["a225ddcef5c16e056c15cadaa49645fd03cee53a6b6d9ff0df56584cbeb70720","7788fded4d841fd29dadc7aa5d92e74c6c9c58d984a68543d1e94be5524eebcd","63830837bb8c589ac41bb54e4516bc6f171b6686934369452bce9cbd79f5b25f"]},
+  "visual": {"token":"7423d1e2d58a3c03","localEvidenceDigest":"1870795cae455d2ebda79b08fb53aefcc22b44003024290c6f53af6b9ca163be","hostedEvidenceDigest":"3cbded4d3096ad5281b50016f92112fb9859e9950538e4f11f8947bb63932969"},
+  "admin": {"run":42340946207,"artifactId":13561513191,"name":"r4-scoped-coach-42340946207","digest":"f6dd39cc110cf7a1737131ce3db5512de8f55f3982e8dfd0678e7a22d5024e43","sealHash":"166b19636050be30404f8d486e663248b024ab1832fde3dc3827e21451fe362c","source":"c4ff61948cf34922fb7b6749014729a59e52a3ee","project":"tennisnote-admin","canonicalId":"26de0590-e9eb-4218-8140-88661eacf5ba"},
+  "coach": {"run":42426328950,"artifactId":13595980505,"name":"r4-store-notice-42426328950","digest":"9d2a26595c501eb01f99be2de6cb4ee8cefd67ff01c250e5e50dfb94429d4e62","sealHash":"383a1d08c18aa64d40734a19b5b728fb6848aa23faf0cfce421bba099f51cd83","source":"fe7f33b8e54409d84bdb6c0538adb8b8090cc0f6","project":"tennisnote-app","canonicalId":"b97b1ba3-fa26-4953-a324-7647a9931259"},
+  "cssSha256":"e08ab69885bd1aabe8995f8f54a5b3b3227576c2a9c76c07a004602e0a7530ea",
+  "jsSha256":"5508d19c7c573d6a4809b751e9b54a3af948e4d3ecab27ed5b41b45d7412a3f2"
+}
