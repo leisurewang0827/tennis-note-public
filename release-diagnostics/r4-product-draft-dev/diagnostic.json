@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "parent": "0b21d398c508a515c6bd53ae38d8843a522239a0",
+  "environment": "development",
+  "project": "tennisnote-admin-dev",
+  "recoveryId": "7ee771cf-8bfb-407e-aff8-13e0d35cccb4",
+  "routeClasses": ["project", "recovery", "deployments_page1"]
+}
