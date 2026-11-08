@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "privateCommit": "806ae6e7f3b2f17ce0584516c5cd1e3c27c79de3",
+  "sourceCommit": "0b21d398c508a515c6bd53ae38d8843a522239a0",
+  "resumeCommit": "7f732c55cfd27ff3643b11715bba3d6b57474994",
+  "sourceRunId": 42489115768,
+  "resumeRunId": 42490780084,
+  "artifactId": 13620632569,
+  "artifactDigest": "4ec011eae442175915bb85dedb6893a6c2318f8046b4f5b0807343f5b69addd2",
+  "sealSha256": "c6b99afbd52a1d0c878df0c1cb8190f6333ac2828ada6873ffabef7288b1451b",
+  "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+  "assembledSqlSha256": "5c591c47e5c80c5037758ba3d833d88cf5797feea6c09f377626b4b7dcc0d18f",
+  "dbGateOffConfirmed": true,
+  "dbReceiptSha256": "3377990cd01f732695d80e37029af4f00107843d21274642840ad1299665abeb",
+  "dbReceipt": {
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "assembledSqlSha256": "5c591c47e5c80c5037758ba3d833d88cf5797feea6c09f377626b4b7dcc0d18f",
+    "gateOff": true,
+    "temporaryLeaseCount": 0,
+    "productionWrites": 0,
+    "applyExecutionCount": 1,
+    "applyResult": "Success. No rows returned",
+    "separateCommittedReadbackCount": 1,
+    "readbackSqlSha256": "be47d492d298bf39a8aa3be71cefd44b55c65fc7ba719ba94b98000fe0dd610c",
+    "observed": {
+      "draft_gate_off": true,
+      "auto_window_off": true,
+      "active_draft_leases": 0,
+      "draft_rows_preserved": 0,
+      "new_function_acl_pass": true,
+      "marketplace_policy_off": true,
+      "existing_function_acl_unchanged": true
+    },
+    "source": "MAIN existing authenticated Seoul DEV SQL tab, reviewed apply Run1 then separate reviewed read Run1",
+    "interpretation": "Additive draft-only schema installed OFF. Existing five definitions/ACL unchanged; new save/get ACL passed. No business save, Auth, deployment or production writes. Marketplace/auto-window OFF is not a claim about absent legacy pilot tables."
+  },
+  "qaReceiptSha256": "3eaa832088904dfee78fe1c724dc5dd90aacbab42916aeae3027516b1a6c5808",
+  "qaReceipt": {
+    "resumeCommit": "7f732c55cfd27ff3643b11715bba3d6b57474994",
+    "sourceCommit": "0b21d398c508a515c6bd53ae38d8843a522239a0",
+    "approved": true,
+    "approvalScope": "Independent source GO plus consistency review of MAIN recorded DEV additive OFF install and separate committed readback; not Auth or business acceptance PASS",
+    "qaThread": "01a19674-da3e-7231-80e3-e3504cdabdab",
+    "dbReceiptFileSha256": "d330e71dc80b8ac68537b0c25d396e8cd2b3e796fa72693fcb23250ddec3f01b",
+    "dbReceiptCanonicalSha256": "3377990cd01f732695d80e37029af4f00107843d21274642840ad1299665abeb",
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "gateOff": true,
+    "activeDraftLeases": 0,
+    "sourceCiStatus": "Original run failed preflight; original build job succeeded and sealed artifact preserved; independent resume preflight succeeded",
+    "resumeRunId": 42490780084
+  }
+}
