@@ -40,6 +40,12 @@ jobs:
           run-id: 42355060909
           github-token: ${{ github.token }}
           path: base-coach
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-42433857723
+          run-id: 42433857723
+          github-token: ${{ github.token }}
+          path: previous-dev
       - run: node scripts/check_r4_ui_finish_release.mjs
       - run: node scripts/r4_ui_finish_release.mjs build
       - uses: actions/upload-artifact@v4
@@ -79,6 +85,12 @@ jobs:
           run-id: 42355060909
           github-token: ${{ github.token }}
           path: base-coach
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-42433857723
+          run-id: 42433857723
+          github-token: ${{ github.token }}
+          path: previous-dev
       - uses: actions/download-artifact@v4
         with:
           name: r4-ui-finish-${{ github.run_id }}

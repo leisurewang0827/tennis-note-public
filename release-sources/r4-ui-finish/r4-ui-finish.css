@@ -11,6 +11,9 @@
 #r4ScopedCoachApp .small-button,#r4ScopedCoachApp a.small-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 12px;background:transparent;color:var(--green);border:1px solid var(--line);border-radius:12px;text-decoration:none;box-sizing:border-box}
 #r4ScopedCoachApp label{display:grid;gap:8px;min-width:0}
 #r4ScopedCoachApp input,#r4ScopedCoachApp select,#r4ScopedCoachApp textarea{width:100%;max-width:100%;font-size:16px;box-sizing:border-box}
+/* WebKit 기본 선택 UI가 지정한 어두운 배경 대신 밝게 그리는 문제를 방지한다. */
+#r4ScopedCoachApp select{-webkit-appearance:none;appearance:none;background:linear-gradient(45deg,transparent 50%,currentColor 50%) right 20px center/5px 5px no-repeat,linear-gradient(135deg,currentColor 50%,transparent 50%) right 15px center/5px 5px no-repeat,var(--paper)!important;color:var(--ink)!important;-webkit-text-fill-color:var(--ink)!important;padding-right:36px}
+#r4ScopedCoachApp select option{background-color:var(--paper);color:var(--ink)}
 #r4ScopedCoachApp .tabbar{display:flex;gap:4px;flex-wrap:nowrap;padding:4px;border-radius:14px}
 #r4ScopedCoachApp .tabbar .tab{min-height:44px;min-width:0;flex:1 1 0;border:1px solid var(--line);border-radius:12px}
 #r4ScopedCoachApp .tabbar .tab[aria-current="page"]{font-weight:700;background:var(--paper);outline:2px solid var(--green);outline-offset:-2px}

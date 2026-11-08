@@ -28,6 +28,11 @@ export function compose({adminIndex,coachIndex,coachWorker,css,js}) {
   assert.notEqual(worker,w,'SW_INSERT_FAILED');
   return {token,admin:Buffer.from(insert(a,'</head>',tag)),coach:Buffer.from(insert(c,'</head>',tag)),worker:Buffer.from(worker)};
 }
+export function composeSuccessor({adminIndex,coachIndex,coachWorker,css,js,oldToken}) {
+  assert.match(oldToken,/^[0-9a-f]{16}$/);const token=digest(Buffer.concat([css,js])).slice(0,16);assert.notEqual(token,oldToken,'UNCHANGED_TOKEN');
+  const replace=(value,count)=>{const text=value.toString();assert.equal(text.split(oldToken).length-1,count,'PREVIOUS_TOKEN_DRIFT');return Buffer.from(text.split(oldToken).join(token));};
+  return {token,admin:replace(adminIndex,2),coach:replace(coachIndex,2),worker:replace(coachWorker,3)};
+}
 
 const policyPath='release-sources/r4-ui-finish/policy.json';
 const config=()=>JSON.parse(read(policyPath));
@@ -47,9 +52,19 @@ function candidate(p){
   const sha=process.env.GITHUB_SHA;assert.match(sha||'',/^[0-9a-f]{40}$/);
   assert.equal(execFileSync('git',['rev-list','--parents','-n','1',sha],{encoding:'utf8'}).trim(),sha+' '+p.publicParent,'PARENT_DRIFT');
   const changed=execFileSync('git',['diff','--name-only',p.publicParent,sha],{encoding:'utf8'}).trim().split('\n').sort();
-  assert.deepEqual(changed,['.github/workflows/r4-ui-finish-dev.yml','release-sources/r4-ui-finish/policy.json','release-sources/r4-ui-finish/r4-ui-finish.css','release-sources/r4-ui-finish/r4-ui-finish.js','scripts/check_r4_ui_finish_release.mjs','scripts/r4_ui_finish_release.mjs'].sort(),'SCOPE_DRIFT');
+  assert.deepEqual(changed,['.github/workflows/r4-ui-finish-dev.yml','release-sources/r4-ui-finish/policy.json','release-sources/r4-ui-finish/r4-ui-finish.css','scripts/check_r4_ui_finish_release.mjs','scripts/r4_ui_finish_release.mjs'].sort(),'SCOPE_DRIFT');
   for(const [name,sha256] of Object.entries(p.sourceSha256))assert.equal(digest(read('release-sources/r4-ui-finish/'+name)),sha256,'SOURCE_DRIFT');
   return sha;
+}
+async function previous(p){
+  const x=p.previous,run=await github('/actions/runs/'+x.run),a=await github('/actions/artifacts/'+x.artifactId);
+  assert.equal(run.head_sha,x.source);assert.equal(run.conclusion,'success');assert.equal(run.run_attempt,1);assert.equal(run.event,'push');assert.equal(run.head_branch,p.branch);assert.equal(run.path,'.github/workflows/r4-ui-finish-dev.yml');
+  const jobs=await github('/actions/runs/'+x.run+'/jobs?per_page=100');for(const name of ['verify','deploy']){const match=jobs.jobs.filter(j=>j.name===name);assert.equal(match.length,1);assert.equal(match[0].conclusion,'success');}
+  assert.equal(a.name,x.artifactName);assert.equal(a.digest,'sha256:'+x.artifactDigest);assert.equal(a.expired,false);assert.equal(a.workflow_run.id,x.run);
+  const bytes=read('previous-dev/seal.json');assert.equal(digest(bytes),x.sealHash,'PREVIOUS_SEAL_DRIFT');const seal=JSON.parse(bytes);assert.equal(seal.sha,x.source);
+  assert.deepEqual(walk('previous-dev/admin'),seal.admin);assert.deepEqual(walk('previous-dev/coach'),seal.coach);
+  assert.equal(seal.admin['r4-ui-finish.css'],x.cssSha256);assert.equal(seal.coach['tennis-note-coach-app/r4-ui-finish.css'],x.cssSha256);
+  assert.equal(seal.admin['r4-ui-finish.js'],p.sourceSha256['r4-ui-finish.js']);assert.equal(seal.coach['tennis-note-coach-app/r4-ui-finish.js'],p.sourceSha256['r4-ui-finish.js']);return seal;
 }
 async function artifact(spec,dir){
   const run=await github('/actions/runs/'+spec.run),a=await github('/actions/artifacts/'+spec.artifactId);
@@ -61,7 +76,7 @@ async function artifact(spec,dir){
   assert.equal(obj.sha,spec.source);assert.deepEqual(walk(join(dir,'dev')),obj.dev.files,'BASE_CONTENT_DRIFT');return obj.dev.files;
 }
 async function baseline(p,adminFiles,coachFiles){
-  for(const [project,path,hash] of [[p.admin.project,'/',p.admin.indexHash],[p.admin.project,'/views/settings.js',adminFiles['views/settings.js']],[p.coach.project,'/',coachFiles['index.html']],[p.coach.project,'/tennis-note-coach-app/',p.coach.indexHash],[p.coach.project,'/tennis-note-coach-app/service-worker.js',p.coach.workerHash]]){
+  for(const [project,path,hash] of [[p.admin.project,'/',p.admin.indexHash],[p.admin.project,'/views/settings.js',adminFiles['views/settings.js']],[p.admin.project,'/r4-ui-finish.css',adminFiles['r4-ui-finish.css']],[p.admin.project,'/r4-ui-finish.js',adminFiles['r4-ui-finish.js']],[p.coach.project,'/',coachFiles['index.html']],[p.coach.project,'/tennis-note-coach-app/',p.coach.indexHash],[p.coach.project,'/tennis-note-coach-app/service-worker.js',p.coach.workerHash],[p.coach.project,'/tennis-note-coach-app/r4-ui-finish.css',coachFiles['tennis-note-coach-app/r4-ui-finish.css']],[p.coach.project,'/tennis-note-coach-app/r4-ui-finish.js',coachFiles['tennis-note-coach-app/r4-ui-finish.js']]]){
     const body=Buffer.from(await(await get('https://'+project+'.pages.dev'+path)).arrayBuffer());assert.equal(digest(body),hash,'LIVE_DRIFT');
   }
   for(const [project,files] of [[p.admin.project,adminFiles],[p.coach.project,coachFiles]]){
@@ -72,32 +87,32 @@ async function baseline(p,adminFiles,coachFiles){
 }
 function write(path,data){writeFileSync(path,data);}
 async function build(p,sha){
-  const a=await artifact(p.admin,'base-admin'),c=await artifact(p.coach,'base-coach');await baseline(p,a,c);
+  await artifact(p.admin,'base-admin');await artifact(p.coach,'base-coach');const prior=await previous(p),a=prior.admin,c=prior.coach;await baseline(p,a,c);
   const css=read('release-sources/r4-ui-finish/r4-ui-finish.css'),js=read('release-sources/r4-ui-finish/r4-ui-finish.js');
-  const changes=compose({adminIndex:read('base-admin/dev/index.html'),coachIndex:read('base-coach/dev/tennis-note-coach-app/index.html'),coachWorker:read('base-coach/dev/tennis-note-coach-app/service-worker.js'),css,js});
-  mkdirSync('ui-release');cpSync('base-admin/dev','ui-release/admin',{recursive:true,errorOnExist:true});cpSync('base-coach/dev','ui-release/coach',{recursive:true,errorOnExist:true});
+  const changes=composeSuccessor({adminIndex:read('previous-dev/admin/index.html'),coachIndex:read('previous-dev/coach/tennis-note-coach-app/index.html'),coachWorker:read('previous-dev/coach/tennis-note-coach-app/service-worker.js'),css,js,oldToken:p.previous.token});
+  mkdirSync('ui-release');cpSync('previous-dev/admin','ui-release/admin',{recursive:true,errorOnExist:true});cpSync('previous-dev/coach','ui-release/coach',{recursive:true,errorOnExist:true});
   for(const [dir,index] of [['ui-release/admin',changes.admin],['ui-release/coach/tennis-note-coach-app',changes.coach]]){
     write(join(dir,'index.html'),index);write(join(dir,'r4-ui-finish.css'),css);write(join(dir,'r4-ui-finish.js'),js);
   }
   write('ui-release/coach/tennis-note-coach-app/service-worker.js',changes.worker);
   const afterA=walk('ui-release/admin'),afterC=walk('ui-release/coach');
   const delta=(base,after)=>Object.keys({...base,...after}).filter(k=>base[k]!==after[k]).sort();
-  assert.deepEqual(delta(a,afterA),['index.html','r4-ui-finish.css','r4-ui-finish.js'].sort());
-  assert.deepEqual(delta(c,afterC),['tennis-note-coach-app/index.html','tennis-note-coach-app/r4-ui-finish.css','tennis-note-coach-app/r4-ui-finish.js','tennis-note-coach-app/service-worker.js'].sort());
+  assert.deepEqual(delta(a,afterA),['index.html','r4-ui-finish.css'].sort());
+  assert.deepEqual(delta(c,afterC),['tennis-note-coach-app/index.html','tennis-note-coach-app/r4-ui-finish.css','tennis-note-coach-app/service-worker.js'].sort());
   write('ui-release/seal.json',JSON.stringify({sha,policyHash:digest(read(policyPath)),admin:afterA,coach:afterC})+'\n');
-  console.log(JSON.stringify({status:'BUILT',sha,adminChanges:3,coachChanges:4,sourcePrivate:p.privateCommit}));
+  console.log(JSON.stringify({status:'BUILT',sha,adminChanges:2,coachChanges:3,sourcePrivate:p.privateCommit}));
 }
 async function deployCheck(p,sha){
   const seal=JSON.parse(read('ui-release/seal.json'));assert.equal(seal.sha,sha);assert.equal(seal.policyHash,digest(read(policyPath)));
   assert.deepEqual(walk('ui-release/admin'),seal.admin);assert.deepEqual(walk('ui-release/coach'),seal.coach);
-  const baseA=await artifact(p.admin,'base-admin'),baseC=await artifact(p.coach,'base-coach');await baseline(p,baseA,baseC);
+  await artifact(p.admin,'base-admin');await artifact(p.coach,'base-coach');const prior=await previous(p);await baseline(p,prior.admin,prior.coach);
   const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
   assert.match(account||'',/^[0-9a-f]{32}$/);assert.ok(token);assert.equal(digest(account),process.env.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
   for(const spec of [p.admin,p.coach]){
     const base='https://api.cloudflare.com/client/v4/accounts/'+account+'/pages/projects/'+spec.project;
     const data=await(await get(base,token)).json();const project=data.result,now=project?.canonical_deployment;
     assert.equal(data.success,true);assert.equal(project.name,spec.project);assert.equal(project.production_branch,'dev');
-    assert.equal(now?.id,spec.canonicalId,'CANONICAL_DRIFT');assert.equal(now?.deployment_trigger?.metadata?.commit_hash,spec.source);
+    assert.equal(now?.id,spec.canonicalId,'CANONICAL_DRIFT');assert.equal(now?.deployment_trigger?.metadata?.commit_hash,p.previous.source);
     assert.equal(now?.deployment_trigger?.metadata?.branch,'dev');assert.equal(now?.latest_stage?.status,'success');
     const prior=await(await get(base+'/deployments/'+spec.priorRecoveryId,token)).json();
     assert.equal(prior.success,true);assert.equal(prior.result.id,spec.priorRecoveryId);assert.equal(prior.result.latest_stage.status,'success');
