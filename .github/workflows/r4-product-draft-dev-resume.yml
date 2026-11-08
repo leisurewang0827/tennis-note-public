@@ -1,0 +1,51 @@
+name: R4 product draft DEV resume
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-product-draft-dev-resume.yml'
+      - 'scripts/r4_product_draft_dev_resume.mjs'
+      - 'scripts/check_r4_product_draft_dev_resume.mjs'
+      - 'release-resumes/r4-product-draft-dev/resume.json'
+      - 'release-resumes/r4-product-draft-dev/promotion.json'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  resume:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Classify exact checkpoint
+        id: stage
+        run: node scripts/r4_product_draft_dev_resume.mjs classify
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-product-draft-dev-42489115768
+          run-id: 42489115768
+          github-token: ${{ github.token }}
+          path: promotion-artifact
+      - name: Verify original build and DEV preview
+        run: node scripts/r4_product_draft_dev_resume.mjs admit
+      - name: Publish administrator preview only
+        if: steps.stage.outputs.stage == 'promotion'
+        run: npx --yes wrangler@3.90.0 pages deploy promotion-artifact/admin --project-name=tennisnote-admin-dev --branch=r4-product-draft-qa --commit-hash=0b21d398c508a515c6bd53ae38d8843a522239a0 --commit-dirty=false
+      - name: Verify preview and unchanged canonical
+        if: steps.stage.outputs.stage == 'promotion'
+        run: node scripts/r4_product_draft_dev_resume.mjs postcheck

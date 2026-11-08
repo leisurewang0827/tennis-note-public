@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "sourceCommit": "0b21d398c508a515c6bd53ae38d8843a522239a0",
+  "diagnosticCommit": "147bee0d433de3b66219c11145e16d83bb73f199",
+  "pins": {
+    ".github/workflows/r4-product-draft-dev-resume.yml": "7c649a56e6cd616eeb8a12abee7fdb911a4809f851a7d0c5a2518ac6f31aaa15",
+    "scripts/r4_product_draft_dev_resume.mjs": "a92db8ffa48698b4b004c1934db61e4b4e4178f56034e09eb680069d12fd955d",
+    "scripts/check_r4_product_draft_dev_resume.mjs": "ffbd4e826bfd59be9f7c60a07db4039e91375bfda918fe0445f64dfe738dd687"
+  }
+}
