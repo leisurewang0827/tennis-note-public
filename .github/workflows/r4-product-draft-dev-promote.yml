@@ -1,0 +1,45 @@
+name: R4 product draft DEV preview promotion
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['release-promotions/r4-product-draft-dev/promotion.json']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  preview-only:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Resolve immutable artifact identity
+        id: artifact
+        run: |
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("release-promotions/r4-product-draft-dev/promotion.json"));if(!Number.isSafeInteger(p.sourceRunId)||p.sourceRunId<1||!/^[a-f0-9]{40}$/.test(p.sourceCommit))throw Error("UNBOUND");fs.appendFileSync(process.env.GITHUB_OUTPUT,`run=${p.sourceRunId}\nsource=${p.sourceCommit}\n`);'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-product-draft-dev-${{ steps.artifact.outputs.run }}
+          run-id: ${{ steps.artifact.outputs.run }}
+          github-token: ${{ github.token }}
+          path: promotion-artifact
+      - name: Check exact source, DB receipt, artifact and DEV baseline
+        run: node scripts/r4_product_draft_dev_promote.mjs admit
+      - name: Publish administrator preview only
+        run: npx --yes wrangler@3.90.0 pages deploy promotion-artifact/admin --project-name=tennisnote-admin-dev --branch=r4-product-draft-qa --commit-hash='${{ steps.artifact.outputs.source }}' --commit-dirty=false
+      - name: Verify preview and unchanged canonical
+        run: node scripts/r4_product_draft_dev_promote.mjs postcheck

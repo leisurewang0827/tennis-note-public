@@ -1,0 +1,48 @@
+{
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "cc38b03df566c6b3d297e77a00e61757935c4a45",
+  "privateCommit": "806ae6e7f3b2f17ce0584516c5cd1e3c27c79de3",
+  "baseSha": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "baseRun": 42446829367,
+  "baseArtifactId": 13603294486,
+  "baseArtifactName": "r4-ui-finish-42446829367",
+  "baseArtifactSha256": "48ed672ee60e6f44bc86aa94a6dd3e1fc75a0958c46f4614ea1fd47d59eda660",
+  "baseSealSha256": "077e6c8b8722ab301e639d77f6be854ee4522e36edb3884cc19e7e1a8758dc36",
+  "project": "tennisnote-admin-dev",
+  "productionBranch": "dev",
+  "previewBranch": "r4-product-draft-qa",
+  "canonicalId": "200eb1ac-8718-4cd7-904c-3c7426ce90d2",
+  "canonicalSha": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "recoveryId": "7ee771cf-8bfb-407e-aff8-13e0d35cccb4",
+  "privateSourceSha256": {
+    "guard": "06f423b3ed2e20e6896651ab146ef66d22f4b5e04ef1a3d207266e608f419fc6",
+    "server": "f7a1ae6003cb21f2fa11a0be51f49c4e8b3c5accc82acdca5f4cff7a00fdd0e2",
+    "sqlBuilder": "d48b386a3afb8062a6f123eff7a03b49e53cbfbc843b07f045023a8631752d67",
+    "assembledSql": "5c591c47e5c80c5037758ba3d833d88cf5797feea6c09f377626b4b7dcc0d18f",
+    "offSql": "5317589ccdf75e5a5c34b5481da02623ed5c4929a3cebf6e58c66f31e7119dc0"
+  },
+  "sourceSha256": {
+    "overlay-builder.mjs": "e792340e99af9543d4f02404c926c776481255d102db427826aa9123e98bf48f",
+    "preflight-guard.mjs": "ec7de5b97c69b8f33aef538b98767ba0c81e569c8b17c6fa84570e73011c3b9b",
+    "r4-product-draft-candidate.css": "def287718da0fdb9ff064f286d5d44fdbc216681af8eceb21984e8abf6b0e1cd",
+    "r4-product-draft-candidate.js": "7a6649cd5f367a477f20cee3f73a8d6e386cc8342470f9d0ec4d8431a11a81d8",
+    "r4-product-draft-dev-scoped-candidate.js": "75f82845ac414648b2ad20e6423a91f5a225f642a5302929786c78e5cfab9704",
+    "r4-product-draft-host-candidate.js": "8436c1163c4ca5f36acb634f75edcd6d579eec19f1c80516326abe25499aa078"
+  },
+  "exactPaths": [
+    ".github/workflows/r4-product-draft-dev-promote.yml",
+    ".github/workflows/r4-product-draft-dev-source.yml",
+    "release-sources/r4-product-draft-dev/overlay-builder.mjs",
+    "release-sources/r4-product-draft-dev/policy.json",
+    "release-sources/r4-product-draft-dev/preflight-guard.mjs",
+    "release-sources/r4-product-draft-dev/r4-product-draft-candidate.css",
+    "release-sources/r4-product-draft-dev/r4-product-draft-candidate.js",
+    "release-sources/r4-product-draft-dev/r4-product-draft-dev-scoped-candidate.js",
+    "release-sources/r4-product-draft-dev/r4-product-draft-host-candidate.js",
+    "scripts/r4_product_draft_dev_promote.mjs",
+    "scripts/r4_product_draft_dev_release.mjs",
+    "scripts/test_r4_product_draft_dev_build_local.mjs",
+    "scripts/test_r4_product_draft_dev_promotion_local.mjs",
+    "scripts/test_r4_product_draft_dev_release_local.mjs"
+  ]
+}

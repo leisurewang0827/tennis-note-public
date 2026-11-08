@@ -1,0 +1,9 @@
+#r4ProductDraftHost { border-top: 1px solid #d0d5dd; margin-top: 24px; padding-top: 20px; }
+#r4ProductDraftHost input { font-size: 16px; min-height: 44px; }
+#r4ProductDraftHost button { min-height: 44px; }
+html[data-theme="dark"] #r4ProductDraftHost { color-scheme: dark; background: Canvas; color: CanvasText; }
+html[data-theme="dark"] #r4ProductDraftHost label { color: CanvasText; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) #r4ProductDraftHost { color-scheme: dark; background: Canvas; color: CanvasText; }
+  html:not([data-theme="light"]) #r4ProductDraftHost label { color: CanvasText; }
+}
