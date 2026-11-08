@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {receiptCheck,validateRunMetadata,rollbackDecision} from './r4_ui_finish_prod_release.mjs';
+import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {receiptCheck,validateRunMetadata,rollbackDecision,validateSuccessor} from './r4_ui_finish_prod_release.mjs';
+if(!process.argv.includes('--successor-only')){
 const digest=x=>createHash('sha256').update(x).digest('hex');
 const p={privateSource:'new-private',devSource:'new-dev',dev:{run:2,artifactId:3,digest:'a'.repeat(64)},behavioral:{privateSource:'old-private',devSource:'old-dev',devRun:1,receiptDigests:['1'.repeat(64),'2'.repeat(64),'3'.repeat(64)]},visual:{token:'4'.repeat(16),localEvidenceDigest:'5'.repeat(64),hostedEvidenceDigest:'6'.repeat(64)},cssSha256:'7'.repeat(64),jsSha256:'8'.repeat(64)};
 const receipt={schema:2,status:'PASS',independentReview:'PASS',behavioral:{...p.behavioral,authCases:8,sessionsClosed:10,baseOff:true,workflowOff:true,linksClosed:true,leaseRestored:true},visual:{privateSource:p.privateSource,devSource:p.devSource,devRun:p.dev.run,artifactId:p.dev.artifactId,artifactDigest:p.dev.digest,cssSha256:p.cssSha256,jsSha256:p.jsSha256,token:p.visual.token,localRasterCases:4,localEvidenceDigest:p.visual.localEvidenceDigest,hostedEvidenceDigest:p.visual.hostedEvidenceDigest,hostedVisual:'PASS'},unchangedContracts:{jsUnchanged:true,authContractUnchanged:true,dbContractUnchanged:true,independentReuseReview:'PASS'},newAuthExecutions:0,newAuthAccounts:0,businessWrites:0,productionWrites:0};
@@ -24,3 +27,15 @@ assert.throws(()=>rollbackDecision(deployment('other','unrelated'),spec,'candida
 assert.throws(()=>rollbackDecision(deployment('new','candidate','dev'),spec,'candidate'));
 assert.throws(()=>rollbackDecision(deployment('new','candidate','main','running'),spec,'candidate'));
 console.log('R4_PROD_RECEIPT_GUARD_SYNTHETIC_PASS');
+}
+const current=JSON.parse(readFileSync('release-sources/r4-ui-finish-prod/policy.json'));
+const prior=JSON.parse(execFileSync('git',['show',current.parent+':release-sources/r4-ui-finish-prod/policy.json'],{encoding:'utf8'}));
+const paths=['.github/workflows/r4-ui-finish-prod.yml','release-sources/r4-ui-finish-prod/policy.json','scripts/check_r4_ui_finish_prod_release.mjs','scripts/r4_ui_finish_prod_release.mjs'];
+const sha='f'.repeat(40),parentLine=sha+' '+current.parent,priorLine=current.parent+' '+current.devSource;
+validateSuccessor(current,prior,parentLine,paths,sha,priorLine);
+assert.throws(()=>validateSuccessor({...current,devSource:'0'.repeat(40)},prior,parentLine,paths,sha,priorLine));
+assert.throws(()=>validateSuccessor(current,prior,sha+' '+current.devSource,paths,sha,priorLine));
+assert.throws(()=>validateSuccessor(current,prior,parentLine,[...paths,'unexpected'],sha,priorLine));
+assert.throws(()=>validateSuccessor({...current,cssSha256:'0'.repeat(64)},prior,parentLine,paths,sha,priorLine));
+assert.throws(()=>validateSuccessor(current,prior,parentLine,paths,sha,current.parent+' '+'0'.repeat(40)));
+console.log('R4_PROD_SUCCESSOR_SCOPE_6_PASS');

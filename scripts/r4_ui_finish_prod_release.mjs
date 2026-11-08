@@ -36,18 +36,28 @@ export function receiptCheck(p,bytes){
  assert.equal(r.newAuthExecutions,0);assert.equal(r.newAuthAccounts,0);assert.equal(r.businessWrites,0);assert.equal(r.productionWrites,0);
  return r;
 }
+export function validateSuccessor(p,prior,parentLine,paths,sha,priorParentLine){
+ assert.equal(p.parent,'3cd8cf4e9344205969435516e34d993af070856b','PRODUCTION_PARENT_DRIFT');
+ assert.equal(p.devSource,'ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57','VISUAL_SOURCE_DRIFT');
+ assert.equal(priorParentLine,p.parent+' '+p.devSource,'PRIOR_PARENT_DRIFT');
+ assert.deepEqual({...p,parent:prior.parent},prior,'POLICY_SCOPE_DRIFT');
+ assert.equal(parentLine,sha+' '+p.parent,'PARENT_DRIFT');
+ assert.deepEqual([...paths].sort(),['.github/workflows/r4-ui-finish-prod.yml','release-sources/r4-ui-finish-prod/policy.json','scripts/check_r4_ui_finish_prod_release.mjs','scripts/r4_ui_finish_prod_release.mjs'].sort(),'SUCCESSOR_SCOPE_DRIFT');
+}
 function admission(p){
  assert.equal(p.schema,2);assert.equal(p.repository,'leisurewang0827/tennis-note-public');
- assert.match(p.privateSource||'',/^[0-9a-f]{40}$/,'VISUAL_PRIVATE_UNBOUND');assert.match(p.devSource||'',/^[0-9a-f]{40}$/,'VISUAL_DEV_UNBOUND');assert.equal(p.parent,p.devSource,'VISUAL_PARENT_DRIFT');
+ assert.match(p.privateSource||'',/^[0-9a-f]{40}$/,'VISUAL_PRIVATE_UNBOUND');assert.match(p.devSource||'',/^[0-9a-f]{40}$/,'VISUAL_DEV_UNBOUND');
  assert.match(p.composeSha256||'',/^[0-9a-f]{64}$/,'COMPOSE_UNBOUND');assert.ok(Number.isSafeInteger(p.dev.run)&&Number.isSafeInteger(p.dev.artifactId));assert.match(p.dev.digest||'',/^[0-9a-f]{64}$/);assert.match(p.dev.sealHash||'',/^[0-9a-f]{64}$/);assert.ok(p.dev.name);
  assert.match(p.authReceiptSha256||'',/^[0-9a-f]{64}$/,'DEV_RECEIPT_UNBOUND');
  receiptCheck(p,read(receiptPath));
  assert.equal(process.env.GITHUB_REPOSITORY,p.repository);assert.equal(process.env.GITHUB_REF,'refs/heads/'+p.branch);
  assert.equal(process.env.GITHUB_EVENT_NAME,'push');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
  const sha=process.env.GITHUB_SHA;assert.match(sha||'',/^[0-9a-f]{40}$/);
- assert.equal(execFileSync('git',['rev-list','--parents','-n','1',sha],{encoding:'utf8'}).trim(),sha+' '+p.parent,'PARENT_DRIFT');
+ const parentLine=execFileSync('git',['rev-list','--parents','-n','1',sha],{encoding:'utf8'}).trim();
+ const priorParentLine=execFileSync('git',['rev-list','--parents','-n','1',p.parent],{encoding:'utf8'}).trim();
+ const prior=JSON.parse(execFileSync('git',['show',p.parent+':'+policyPath],{encoding:'utf8'}));
  const paths=execFileSync('git',['diff','--name-only',p.parent,sha],{encoding:'utf8'}).trim().split('\n').sort();
- assert.deepEqual(paths,['.github/workflows/r4-ui-finish-prod.yml','release-sources/r4-ui-finish-prod/policy.json','release-sources/r4-ui-finish-prod/qa-receipt.json','scripts/check_r4_ui_finish_prod_release.mjs','scripts/r4_ui_finish_prod_release.mjs'].sort(),'SCOPE_DRIFT');
+ validateSuccessor(p,prior,parentLine,paths,sha,priorParentLine);
  assert.equal(hash(read('scripts/r4_ui_finish_release.mjs')),p.composeSha256,'COMPOSE_SOURCE_DRIFT');
  return sha;
 }

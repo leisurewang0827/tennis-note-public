@@ -46,7 +46,7 @@ jobs:
           run-id: 42446829367
           github-token: ${{ github.token }}
           path: dev-ui
-      - run: node scripts/check_r4_ui_finish_prod_release.mjs
+      - run: node scripts/check_r4_ui_finish_prod_release.mjs --successor-only
       - run: node scripts/r4_ui_finish_prod_release.mjs build
       - uses: actions/upload-artifact@v4
         with:
