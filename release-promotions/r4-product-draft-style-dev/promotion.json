@@ -1,0 +1,40 @@
+{
+  "sourceCommit": "fde7b04878c9c093ebce73ef6b94a1e816b21fea",
+  "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+  "sourceRunId": 42539210658,
+  "artifactId": 13640727513,
+  "artifactDigest": "316c633f3be7ae887365181709598bcd1ff4cb8cf2f64b4f2afc4b84b9355d50",
+  "sealSha256": "520a2d58f74baac134ec0a9b690040a800db658d04b6296322bdead120669345",
+  "credentialEvidenceSha256": "6a8c217103293a90a41f29adca4710f16ded25fd024bcd912f2daeb98bf3daf3",
+  "credentialEvidence": {
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "priorSuccessRun": 42491397251,
+    "sourceReadOnlyRun": 42539210658,
+    "environment": "development",
+    "repoSecretMetadataUpdatedAt": "2026-07-23T08:38:25Z",
+    "environmentMetadataUpdatedAt": "2026-08-27T16:09:54Z",
+    "environmentSecretMetadata": "HTTP_404_NOT_DISTINGUISHABLE",
+    "metadataUnchanged": true,
+    "writePermissionStatus": "NOT_DIRECTLY_VERIFIED",
+    "evidenceMeaning": "Previously successful same-target credential reference, observed GitHub metadata continuity and fresh read-only target preflight; not proof of current Pages Write scope"
+  },
+  "qaReceiptSha256": "b160a58c0f17574fa7ec38d888c6bc939a6ada033e0404a48fc520585bd09fe0",
+  "qaReceipt": {
+    "approved": true,
+    "sourceCommit": "fde7b04878c9c093ebce73ef6b94a1e816b21fea",
+    "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+    "artifactDigest": "316c633f3be7ae887365181709598bcd1ff4cb8cf2f64b4f2afc4b84b9355d50",
+    "sealSha256": "520a2d58f74baac134ec0a9b690040a800db658d04b6296322bdead120669345"
+  },
+  "recoveryReceiptSha256": "536fbffa31adcc11a3e2a85f70ad961437b5e18ce4163657169a61be43fb4e53",
+  "recoveryReceipt": {
+    "approved": true,
+    "baseSealSha256": "c6b99afbd52a1d0c878df0c1cb8190f6333ac2828ada6873ffabef7288b1451b",
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "noRetryOnUncertainty": true,
+    "aliasIdentityRequired": true,
+    "postReadbackRequired": true
+  }
+}
