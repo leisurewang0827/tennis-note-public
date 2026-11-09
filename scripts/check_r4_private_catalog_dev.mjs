@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {compose,walk,validateTarget,validatePromotion} from "./r4_private_catalog_dev.mjs";
+const p=JSON.parse(readFileSync("release-sources/r4-private-catalog-dev/policy.json"));
+const dir=process.env.R4_CATALOG_BASE || "style-base";
+const input={files:walk(dir+"/admin"),sealBytes:readFileSync(dir+"/seal.json"),policy:p};
+const a=await compose(input);
+assert.equal(Object.keys(a.files).length,177);
+assert.deepEqual(a.changed,Object.keys(p.delta).sort());
+await assert.rejects(compose({...input,files:{...input.files,"r4-onboarding.js":Buffer.from("changed")}}),/BASE_CONTENT_DRIFT/);
+const canonical={id:p.canonicalId,deployment_trigger:{metadata:{commit_hash:p.canonicalSha}},latest_stage:{status:"success"}};
+const prior={id:p.previousPreviewId,url:p.previousPreviewUrl,aliases:["https://r4-product-draft-qa.tennisnote-admin-dev.pages.dev"],latest_stage:{status:"success"},deployment_trigger:{metadata:{branch:p.previewBranch,commit_hash:p.baseSource}}};
+const target={project:{name:p.project,production_branch:p.canonicalBranch,canonical_deployment:canonical},recovery:prior,deployments:[prior]};
+assert.equal(validateTarget(target,p).previewId,p.previousPreviewId);
+assert.throws(()=>validateTarget({...target,deployments:[{...prior,id:"wrong"}]},p));
+assert.throws(()=>validateTarget({...target,project:{...target.project,canonical_deployment:{...canonical,id:"wrong"}}},p));
+assert.throws(()=>validatePromotion({},p.baseSource,p));
+console.log("R4 private catalog: exact new assets, prior preview and canonical binding PASS");
