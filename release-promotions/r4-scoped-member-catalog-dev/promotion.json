@@ -1,0 +1,60 @@
+{
+  "sourceCommit": "75370e049e68fefb0e2d751d4b2e7792c3cf7d9a",
+  "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+  "sourceRunId": 42625150294,
+  "artifactId": 13678027479,
+  "artifactDigest": "e022497bc347a052eef76b5c4d3ff2575f1e6e83c25c3be571c20f5cb1708f9b",
+  "sealSha256": "4e8f6bd749c0088cf247532b88de9f77497dbc64f1f850e0323cd78f1583253b",
+  "credentialEvidence": {
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "priorSuccessRun": 42582835242,
+    "metadataUnchanged": true,
+    "writePermissionStatus": "NOT_DIRECTLY_VERIFIED"
+  },
+  "qaReceipt": {
+    "approved": true,
+    "sourceCommit": "75370e049e68fefb0e2d751d4b2e7792c3cf7d9a",
+    "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+    "artifactDigest": "e022497bc347a052eef76b5c4d3ff2575f1e6e83c25c3be571c20f5cb1708f9b",
+    "sealSha256": "4e8f6bd749c0088cf247532b88de9f77497dbc64f1f850e0323cd78f1583253b",
+    "delta": {
+      "index.html": "6352a530b152c2381d4168ae61c2e2b7e45d6b72a98f582a801fdfd926433af8",
+      "views/settings.js": "394cde6ac0a12968fe6566da2ff8da133b038b45203464ff28115da6721cde8b",
+      "r4-scoped-member-catalog.js": "ceb826af3b1dd9a9d23a98f0d27ef85adbdb5fe7ecebb8b2fccf4bad96ef6ab2"
+    },
+    "devSqlTemplateSha256": "b86559dbb958a153d87c65aea9b0e23f3553c24888b32d31fe37e5dd9753c1ea"
+  },
+  "devOffReceipt": {
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "devSqlTemplateSha256": "b86559dbb958a153d87c65aea9b0e23f3553c24888b32d31fe37e5dd9753c1ea",
+    "devSqlSha256": "33454e840ec0f9d973f0bd33f0f3e646699c6fad2c40049a91a3809984dea034",
+    "defaultOff": true,
+    "activeGrants": 0,
+    "temporarySessions": 0,
+    "authenticatedOnly": true,
+    "productionWrites": 0,
+    "sourceCommit": "75370e049e68fefb0e2d751d4b2e7792c3cf7d9a",
+    "sourceRunId": 42625150294,
+    "artifactId": 13678027479,
+    "artifactDigest": "e022497bc347a052eef76b5c4d3ff2575f1e6e83c25c3be571c20f5cb1708f9b",
+    "fixtureBranches": 1,
+    "noPublicFixture": true,
+    "memberOnly": true,
+    "draftRows": 0,
+    "registrationRows": 0
+  },
+  "recoveryReceipt": {
+    "approved": true,
+    "baseSealSha256": "14f8006070bbf9cd61c6aa893143b29fcf061f3b6aa9c00e829149a6a104a0eb",
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "noRetryOnUncertainty": true,
+    "aliasIdentityRequired": true,
+    "postReadbackRequired": true
+  },
+  "credentialEvidenceSha256": "496de86c2f84a7f61b0a4c20e585f951c27d9c28e7c29f31babd061611494a19",
+  "qaReceiptSha256": "d08e014b9d0762e974cc23a337b8bfd47f8b057be528f3b7ed4adadd66f78206",
+  "devOffReceiptSha256": "f1f11e287e350693bf945f3c18acd953a371f8f6d7883c2f70c87fac15fd1c7f",
+  "recoveryReceiptSha256": "1aea8b10f77c918ed3e32fb1231e56a645dd1a5f2f55d95418082d8bd1a92d40"
+}
