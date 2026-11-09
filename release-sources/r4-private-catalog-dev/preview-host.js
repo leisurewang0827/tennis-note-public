@@ -15,7 +15,7 @@
   const hoursForm=doc.getElementById('r4BranchHoursForm');
   if(hoursForm)new MutationObserver(()=>{if(hoursForm.hidden)close();}).observe(hoursForm,{attributes:true,attributeFilter:['hidden']});
   const el=(tag,text)=>{const n=doc.createElement(tag);if(text)n.textContent=text;return n;};
-  function currentSession(client){
+  function currentSession(client,expectedActor){
     try{
       if(typeof client?.authStorageKey!=='string'||typeof client?.authPersistenceKey!=='string')return null;
       const persistence=root.localStorage.getItem(client.authPersistenceKey);
@@ -24,16 +24,16 @@
       const token=JSON.parse(store.getItem(client.authStorageKey)||'null')?.access_token;
       const jwt=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
       const c=JSON.parse(root.atob(jwt.padEnd(Math.ceil(jwt.length/4)*4,'=')));
-      return c.sub===client.sessionSubject?.()&&uuid(c.session_id)?{subject:c.sub,sessionId:c.session_id}:null;
+      return c.sub===expectedActor&&uuid(c.sub)&&uuid(c.session_id)?{subject:c.sub,sessionId:c.session_id}:null;
     }catch{return null;}
   }
-  async function open({client,branchId,currentContext}){
+  async function open({client,branchId,expectedActor,currentContext}){
     close();const stamp=revision;
     const config=()=>root.TennisNoteDataClient?.loadConfig?.()||root.TENNISNOTE_CONFIG||{};
     const env=()=>root.location.origin==='https://r4-product-draft-qa.tennisnote-admin-dev.pages.dev'&&
       config().environment==='development'&&config().supabaseUrl==='https://udjmiezroipctytmztwz.supabase.co';
     const readContext=()=>stamp===revision&&env()&&select.value===branchId&&currentContext?.()===true?
-      {origin:root.location.origin,projectFingerprint:config().projectFingerprint,branchId,...currentSession(client)}:null;
+      {origin:root.location.origin,projectFingerprint:config().projectFingerprint,branchId,...currentSession(client,expectedActor)}:null;
     const first=readContext();
     if(!first?.subject)return false;
     try{
@@ -44,7 +44,7 @@
       const alive=()=>stamp===revision&&!!readContext()&&port===bound;
       const initial=await bound.list();
       if(!alive())return false;
-      const storeKey='tennis-note-r4-private-catalog-pending-v1:'+first.subject+':'+branchId;
+      const storePrefix='tennis-note-r4-private-catalog-pending-v2:'+first.subject+':'+branchId+':';
       let busy=false, pending=null, blocked=false, rows=initial;
       const card=el('section');card.id='r4ProductDraftHost';card.setAttribute('aria-label','상품 설정 초안');
       const title=el('h2','상품 정보 초안'), note=el('p','지점 내부용입니다. 공개 판매·결제·회원권 발급은 하지 않습니다.');
@@ -61,9 +61,10 @@
       const list=el('ul');list.setAttribute('aria-label','비공개 상품 초안');
       form.append(save,recover,status);card.append(title,note,form,list);
       const remember=entry=>{
-        const text=JSON.stringify(entry);
-        root.localStorage.setItem(storeKey,text);
-        if(root.localStorage.getItem(storeKey)!==text)throw Error('pointer_write_failed');
+        const key=storePrefix+entry.operationId;
+        const text=JSON.stringify({kind:entry.kind,draftId:entry.draftId,operationId:entry.operationId});
+        root.localStorage.setItem(key,text);
+        if(root.localStorage.getItem(key)!==text)throw Error('pointer_write_failed');
         pending=entry;
       };
       const same=(x,y)=>labels.every(([k])=>x?.[k]===y?.[k]);
@@ -83,21 +84,25 @@
       async function readBack(){
         const next=await bound.list();if(!alive())return;
         rows=next;
-        const match=rows.find(r=>r.draftId===pending?.draftId&&same(r.terms,pending.terms)&&
-          (pending.kind==='save'||r.registrationId===pending.operationId));
+        const match=rows.find(r=>r.draftId===pending?.draftId&&(!pending.terms||same(r.terms,pending.terms))&&
+          (pending.kind==='save'||r.registrationId));
         if(match){
-          root.localStorage.removeItem(storeKey);pending=null;
-          form.reset();status.textContent='저장된 결과를 확인했습니다.';
+          const other=pending.kind==='register'&&match.registrationId!==pending.operationId;
+          root.localStorage.removeItem(storePrefix+pending.operationId);pending=null;
+          form.reset();status.textContent=other?'다른 요청에서 먼저 내부 등록했습니다.':'저장된 결과를 확인했습니다.';
         }else status.textContent='결과가 확인되지 않았습니다. 다시 저장하지 말고 결과를 확인해 주세요.';
       }
       async function act(kind,row){
         if(!alive()||busy||pending||blocked)return;
         busy=true;
         try{
-          const raw=root.localStorage.getItem(storeKey);
-          if(raw!==null){loadPointer(raw);await readBack();return;}
+          if(loadPointer()){await readBack();return;}
           const t=kind==='register'?row.terms:Object.fromEntries(labels.map(([k])=>[k,k==='name'?fields[k].value.trim():Number(fields[k].value)]));
-          if(kind==='save'&&(!form.reportValidity()||labels.slice(1).some(([k])=>!/^\d+$/.test(fields[k].value))))return;
+          if(kind==='save'&&(!form.reportValidity()||!t.name||[...t.name].length>100||
+            labels.slice(1).some(([k])=>!/^\d+$/.test(fields[k].value)||!Number.isSafeInteger(t[k])||
+              t[k]<(k==='price'?0:1)||(k!=='price'&&t[k]>2147483647)))){
+            status.textContent='상품 이름·횟수·시간·기간·가격을 확인해 주세요.';return;
+          }
           const draftId=kind==='save'?root.crypto.randomUUID():row.draftId, operationId=kind==='register'?root.crypto.randomUUID():draftId;
           remember({kind,draftId,operationId,terms:t});render();
           try{if(kind==='save')await bound.save(draftId,t);else await bound.register(draftId,operationId,t);}
@@ -106,11 +111,20 @@
         }catch{if(alive())status.textContent='작업 결과를 확인하지 못했습니다.';}
         finally{busy=false;if(alive())render();}
       }
-      function loadPointer(raw){
-        const r=JSON.parse(raw);
-        if(!['save','register'].includes(r?.kind)||!uuid(r.draftId)||!uuid(r.operationId)||!r.terms||
-          (r.kind==='save')!==(r.draftId===r.operationId)){blocked=true;throw Error('pointer_invalid');}
-        pending=r;
+      function loadPointer(){
+        for(let i=0;i<root.localStorage.length;i++){
+          const key=root.localStorage.key(i);
+          if(!key?.startsWith(storePrefix))continue;
+          const raw=root.localStorage.getItem(key);
+          if(raw===null)continue;
+          const r=JSON.parse(raw);
+          if(!['save','register'].includes(r?.kind)||!uuid(r.draftId)||!uuid(r.operationId)||
+            key!==storePrefix+r.operationId||(r.kind==='save')!==(r.draftId===r.operationId)){
+            blocked=true;throw Error('pointer_invalid');
+          }
+          pending=r;return true;
+        }
+        return false;
       }
       form.addEventListener('submit',e=>{e.preventDefault();void act('save');});
       recover.addEventListener('click',async()=>{
@@ -121,7 +135,7 @@
       section=card;host.append(card);render();
       const hoursSave=hoursForm?.querySelector('button[type="submit"].primary-button:not(.ghost-button)');
       if(hoursSave){hoursSave.classList.remove('primary-button');hoursSave.classList.add('ghost-button');demoted=hoursSave;}
-      try{const raw=root.localStorage.getItem(storeKey);if(raw!==null){loadPointer(raw);render();recover.click();}}
+      try{if(loadPointer()){render();recover.click();}}
       catch{blocked=true;status.textContent='이전 작업 정보를 확인할 수 없습니다.';render();}
       listeners=new AbortController();
       const hideIfChanged=()=>{const c=readContext();if(!c||c.subject!==first.subject||c.sessionId!==first.sessionId)close();};

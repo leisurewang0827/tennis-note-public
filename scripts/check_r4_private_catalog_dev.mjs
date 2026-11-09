@@ -7,6 +7,14 @@ const input={files:walk(dir+"/admin"),sealBytes:readFileSync(dir+"/seal.json"),p
 const a=await compose(input);
 assert.equal(Object.keys(a.files).length,177);
 assert.deepEqual(a.changed,Object.keys(p.delta).sort());
+const host=a.files["r4-product-draft-host-candidate.js"].toString();
+const onboarding=a.files["r4-onboarding.js"].toString();
+assert.doesNotMatch(host,/sessionSubject\(/);
+assert.doesNotMatch(host,/sessionSubject\?\./);
+assert.match(onboarding,/expectedActor: ctx\.actor, currentContext: \(\) => session === ctx/);
+assert.match(host,/removeItem\(storePrefix\+pending\.operationId\)/);
+assert.match(host,/JSON\.stringify\(\{kind:entry\.kind,draftId:entry\.draftId,operationId:entry\.operationId\}\)/);
+assert.match(host,/2147483647/);
 await assert.rejects(compose({...input,files:{...input.files,"r4-onboarding.js":Buffer.from("changed")}}),/BASE_CONTENT_DRIFT/);
 const canonical={id:p.canonicalId,deployment_trigger:{metadata:{commit_hash:p.canonicalSha}},latest_stage:{status:"success"}};
 const prior={id:p.previousPreviewId,url:p.previousPreviewUrl,aliases:["https://r4-product-draft-qa.tennisnote-admin-dev.pages.dev"],latest_stage:{status:"success"},deployment_trigger:{metadata:{branch:p.previewBranch,commit_hash:p.baseSource}}};

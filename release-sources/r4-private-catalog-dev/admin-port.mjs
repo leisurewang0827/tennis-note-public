@@ -1,7 +1,8 @@
 // BRANCH-02 existing 관리자 상품 설정 binding candidate. No network except the explicit scoped client.
 const uuid=s=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(s);
 const terms=t=>t&&typeof t.name==='string'&&t.name.trim()===t.name&&[...t.name].length>0&&[...t.name].length<=100&&
-  ['sessions','minutes','days','price'].every(k=>Number.isSafeInteger(t[k])&&t[k]>=(k==='price'?0:1))&&Object.keys(t).length===5;
+  ['sessions','minutes','days','price'].every(k=>Number.isSafeInteger(t[k])&&t[k]>=(k==='price'?0:1)&&
+    (k==='price'||t[k]<=2147483647))&&Object.keys(t).length===5;
 const privateOnly=r=>r?.public===false&&r.saleEnabled===false&&r.paymentEnabled===false&&r.membershipEnabled===false;
 const options=Object.freeze({requireCurrentSession:true,retryAuth:false});
 const devOrigin='https://r4-product-draft-qa.tennisnote-admin-dev.pages.dev';

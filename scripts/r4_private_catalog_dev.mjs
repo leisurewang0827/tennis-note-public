@@ -56,7 +56,7 @@ export async function compose({files,sealBytes,policy}) {
   const hostAsset=once(host,"__PORT_HASH__",hash(port).slice(0,16));
   const onboarding=once(files["r4-onboarding.js"].toString(),
     "if (row.selfServe && seoulDev) root.TennisNoteR4ProductDraftHost?.open({ client: root.TennisNoteR4ProductDraftDevScoped.forBranch(ctx.client, row.branch_id), branchId: row.branch_id });",
-    "if (row.selfServe && seoulDev) await root.TennisNoteR4ProductDraftHost?.open({ client: ctx.client, branchId: row.branch_id, currentContext: () => current(ctx) });");
+    "if (row.selfServe && seoulDev) await root.TennisNoteR4ProductDraftHost?.open({ client: ctx.client, branchId: row.branch_id, expectedActor: ctx.actor, currentContext: () => session === ctx });");
   let index=files["index.html"].toString();
   index=once(index,"./r4-product-draft-host-candidate.js?v=4dd7538884f2c337","./r4-product-draft-host-candidate.js?v="+hash(hostAsset).slice(0,16));
   index=once(index,"./r4-onboarding.js?v=r4-first-workspace-97054ce0860a&r4draft=4dd7538884f2c337","./r4-onboarding.js?v="+hash(onboarding).slice(0,16));
@@ -67,7 +67,7 @@ export async function compose({files,sealBytes,policy}) {
   assert.equal(Object.keys(result).length,177,"CANDIDATE_COUNT_DRIFT");
   return {files:result,changed:Object.keys(delta).sort(),hashes:{...seal.admin,...hashes}};
 }
-const sourcePaths=[".github/workflows/r4-private-catalog-dev.yml","release-sources/r4-private-catalog-dev/admin-port.mjs","release-sources/r4-private-catalog-dev/policy.json","release-sources/r4-private-catalog-dev/preview-host.js","scripts/check_r4_private_catalog_dev.mjs","scripts/r4_private_catalog_dev.mjs"];
+const sourcePaths=["release-sources/r4-private-catalog-dev/admin-port.mjs","release-sources/r4-private-catalog-dev/policy.json","release-sources/r4-private-catalog-dev/preview-host.js","scripts/check_r4_private_catalog_dev.mjs","scripts/r4_private_catalog_dev.mjs"];
 const promotionPath="release-promotions/r4-private-catalog-dev/promotion.json";
 const sha=x=>assert.match(x||"",/^[a-f0-9]{40}$/,"SHA_REQUIRED");
 const git=(...args)=>execFileSync("git",args,{encoding:"utf8"}).trim();
