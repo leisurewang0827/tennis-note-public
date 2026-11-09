@@ -1,0 +1,47 @@
+name: R4 internal registration production source only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-internal-registration-prod-source.yml'
+      - 'release-sources/r4-internal-registration-prod/**'
+      - 'scripts/build_r4_internal_registration_prod.mjs'
+      - 'scripts/check_r4_internal_registration_prod.mjs'
+      - 'scripts/check_r4_internal_registration_prod_browser.mjs'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-prod-42449225848
+          run-id: 42449225848
+          github-token: ${{ github.token }}
+          path: prod-base
+      - name: Verify synthetic guards
+        env:
+          R4_PROD_BASE: prod-base
+        run: |
+          node scripts/check_r4_internal_registration_prod.mjs
+          env R4_PROD_SESSION_ONLY=1 node scripts/check_r4_internal_registration_prod.mjs
+          env R4_PROD_IDLE_ONLY=1 node scripts/check_r4_internal_registration_prod.mjs
+          env R4_PROD_STORAGE_ONLY=1 node scripts/check_r4_internal_registration_prod.mjs
+      - name: Build sealed admin source only
+        run: node scripts/build_r4_internal_registration_prod.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-internal-registration-prod-source-${{ github.run_id }}
+          path: prod-internal-release/
+          if-no-files-found: error
+          retention-days: 7
