@@ -1,0 +1,58 @@
+{
+  "sourceCommit": "e60857d8fc3f1630aed03bbaa0bf3733f69523e9",
+  "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+  "sourceRunId": 42582452375,
+  "artifactId": 13657686702,
+  "artifactDigest": "35b932f5fcdc950d1f335c9c49482ea56aadce6f41384e32fd7616fe89835587",
+  "sealSha256": "14f8006070bbf9cd61c6aa893143b29fcf061f3b6aa9c00e829149a6a104a0eb",
+  "credentialEvidence": {
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "priorSuccessRun": 42559360968,
+    "metadataUnchanged": true,
+    "writePermissionStatus": "NOT_DIRECTLY_VERIFIED"
+  },
+  "credentialEvidenceSha256": "65122a188b9b6800eec051289eef12efdc151f08e2259707e0207f091b9d0071",
+  "qaReceipt": {
+    "approved": true,
+    "sourceCommit": "e60857d8fc3f1630aed03bbaa0bf3733f69523e9",
+    "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+    "artifactDigest": "35b932f5fcdc950d1f335c9c49482ea56aadce6f41384e32fd7616fe89835587",
+    "sealSha256": "14f8006070bbf9cd61c6aa893143b29fcf061f3b6aa9c00e829149a6a104a0eb",
+    "delta": {
+      "index.html": "5f6f1ee1f9538b6e345fe6e6735485e46c03c90994dec96c194d9155d2ca0950",
+      "r4-onboarding.js": "a949d6b75f7c2be1a6e2fef3b1e3dafea52143b27b1eebd9d7cf4f1242a494fc",
+      "r4-product-draft-host-candidate.js": "c0d962a4b1baf257447f4aeb31abc39338f2e6ac82c040116598f59604f4b90c",
+      "dev-private-catalog-admin-port.js": "1fb9c7175bfcf6aa88a5a5277efba81cc68346a5de0c3cb2eeaf1702648900f7"
+    },
+    "devSqlSha256": "0cbf7d2e27124ec0ae826b8aced61d7b9a76baba8367474900b9bb8eb5a4ae26"
+  },
+  "qaReceiptSha256": "fb027c5e088f7c817587487e4417151472d9118c0d9746da3f82e99ec9f31d3a",
+  "devOffReceipt": {
+    "activeGrants": 0,
+    "authenticatedOnly": true,
+    "draftRows": 0,
+    "legacyClosed": true,
+    "registrationRows": 0,
+    "temporarySessions": 0,
+    "defaultOff": true,
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "devSqlSha256": "0cbf7d2e27124ec0ae826b8aced61d7b9a76baba8367474900b9bb8eb5a4ae26",
+    "productionWrites": 0,
+    "sourceCommit": "e60857d8fc3f1630aed03bbaa0bf3733f69523e9",
+    "sourceRunId": 42582452375,
+    "artifactId": 13657686702,
+    "artifactDigest": "35b932f5fcdc950d1f335c9c49482ea56aadce6f41384e32fd7616fe89835587"
+  },
+  "devOffReceiptSha256": "f7b7563cd1de3484343bb55bf4af629de83ac29994c3b053b330cc5d0a971954",
+  "recoveryReceipt": {
+    "approved": true,
+    "baseSealSha256": "656bc8414a5d9cbce07ff84ad6187cac0d457cfdaa8fc295bc1abe32a3d67923",
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "noRetryOnUncertainty": true,
+    "aliasIdentityRequired": true,
+    "postReadbackRequired": true
+  },
+  "recoveryReceiptSha256": "c1a61096c7e3eaeec2e96091fedc48aa552e99c088a7d9f9f83fdc5db7d28092"
+}
