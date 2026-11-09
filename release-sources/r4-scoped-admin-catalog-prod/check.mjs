@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {expectedSeal,fixed,verifyOff,verifyBaseline,verifyPost,rollbackDecision} from './gate.mjs';
+import {createHash} from 'node:crypto';
+const sha=x=>createHash('sha256').update(x).digest('hex');
+const {seal,built}=expectedSeal('0'.repeat(40),process.argv[2]||'prod-base');
+assert.deepEqual(built.changed,['index.html','r4-scoped-member-catalog.js','views/settings.js']);
+assert.equal(Object.keys(seal.admin).length,175);
+const module=built.files['r4-scoped-member-catalog.js'].toString();
+assert.match(module,/tn_r4_prod_member_private_catalog/);
+assert.match(module,/tennisnote-admin\.pages\.dev/);
+assert.match(module,new RegExp(fixed.productionFingerprint));
+assert.doesNotMatch(module,/udjmiezroipctytmztwz|dev_member_private_catalog/);
+assert.match(built.files['views/settings.js'].toString(),/ready && !workspaceMode && !restoringSession && role === "admin"/);
+assert.match(module,/getElementById\("dashboardView"\)/);
+const d={id:fixed.prior.id,url:fixed.prior.url,latest_stage:{status:'success'},deployment_trigger:{metadata:{branch:'main',commit_hash:fixed.prior.source}}};
+const project={name:fixed.project,production_branch:'main',canonical_deployment:d};
+const artifact={id:fixed.prior.artifact,workflow_run:{id:fixed.prior.run},digest:'sha256:'+fixed.prior.digest,expired:false,expires_at:'2099-01-01'};
+verifyBaseline(project,d,artifact);
+assert.throws(()=>verifyBaseline({...project,production_branch:'dev'},d,artifact));
+assert.throws(()=>verifyPost(project,d.id,fixed.prior.source));
+assert.equal(rollbackDecision({publishedId:d.id,canonicalId:d.id,immutableMismatch:true,uncertain:false,recoveryVerified:true}),'HOLD');
+const readback={off:true,authOnly:true,oldOff:true,adminBound:true,grants:0,activeGrants:0,drafts:0,registrations:0,effectiveGrants:0,protectedTables:4,functionDefinition:'a'.repeat(64)};
+const p={sourceCommit:'b'.repeat(40),targetFingerprint:fixed.productionFingerprint,installSha256:fixed.installSha256,recoveryId:fixed.prior.id,
+ sourceRunId:1,artifactId:2,artifactDigest:'a'.repeat(64),candidateSeal:'c'.repeat(64),functionDefinition:readback.functionDefinition,readback,readbackSha256:sha(JSON.stringify(readback))};
+verifyOff(p,p.sourceCommit);
+const wrong={...readback,activeGrants:1};
+assert.throws(()=>verifyOff({...p,readback:wrong,readbackSha256:sha(JSON.stringify(wrong))},p.sourceCommit));
+console.log(JSON.stringify({status:'SCOPED_PROD_DELTA_PASS',delta:seal.delta,assets:175}));

@@ -1,0 +1,20 @@
+{
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "ad410ca60f8431c7ce3d77ff7dc24a02467724e6",
+  "project": "tennisnote-admin",
+  "productionBranch": "main",
+  "origin": "https://tennisnote-admin.pages.dev",
+  "productionFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "prior": {
+    "id": "48d1aabf-b856-40a7-898c-fb9e979f3b88",
+    "source": "ef5ca64fe799340424905ed7abe0f227c41f0175",
+    "url": "https://48d1aabf.tennisnote-admin.pages.dev",
+    "artifact": 13679233697,
+    "run": 42629207927,
+    "digest": "e32b50ff62183933d51d7644bbd1e4b04bdc9e20b44571f54c4af34454c2708e",
+    "seal": "04d85ed6eb9744500aa7fa8261befd4e2bde4619d6d6e9430cd81d59aeee1de7"
+  },
+  "installSha256": "5e32960ab6a707d03cba9989d2c205c75ef5e8cc8248b7404cd1c86af0eef31f",
+  "workflow": ".github/workflows/r4-scoped-admin-catalog-prod.yml"
+}

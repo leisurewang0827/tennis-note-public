@@ -1,0 +1,138 @@
+name: R4 scoped existing administrator catalog production
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-scoped-admin-catalog-prod.yml'
+      - 'release-sources/r4-scoped-admin-catalog-prod/**'
+      - 'release-promotions/r4-scoped-admin-catalog-prod/promotion.json'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stage: ${{ steps.classify.outputs.stage }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - id: classify
+        run: node release-sources/r4-scoped-admin-catalog-prod/gate.mjs classify
+  source:
+    needs: classify
+    if: needs.classify.outputs.stage == 'source'
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-member-catalog-prod-42629207927
+          run-id: 42629207927
+          github-token: ${{ github.token }}
+          path: prod-base
+      - name: Check production delta and seal exact administrator assets
+        run: |
+          node release-sources/r4-scoped-admin-catalog-prod/check.mjs
+          node release-sources/r4-scoped-admin-catalog-prod/gate.mjs compose
+          node --check prod-candidate/admin/views/settings.js
+          node --check prod-candidate/admin/r4-scoped-member-catalog.js
+      - name: Verify production target and recovery with GET only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-scoped-admin-catalog-prod/gate.mjs preflight
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-scoped-admin-catalog-prod-${{ github.run_id }}
+          path: prod-candidate/
+          if-no-files-found: error
+          retention-days: 7
+  promote:
+    needs: classify
+    if: needs.classify.outputs.stage == 'promotion'
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Resolve sealed source
+        id: source
+        run: |
+          node -e 'const f=require("fs"),p=JSON.parse(f.readFileSync("release-promotions/r4-scoped-admin-catalog-prod/promotion.json"));if(!Number.isSafeInteger(p.sourceRunId)||p.sourceRunId<1)throw Error("SOURCE_UNBOUND");f.appendFileSync(process.env.GITHUB_OUTPUT,"run="+p.sourceRunId+"\n");'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-member-catalog-prod-42629207927
+          run-id: 42629207927
+          github-token: ${{ github.token }}
+          path: prod-base
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-admin-catalog-prod-${{ steps.source.outputs.run }}
+          run-id: ${{ steps.source.outputs.run }}
+          github-token: ${{ github.token }}
+          path: prod-candidate
+      - name: Prepare existing single-post transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0 > "$RUNNER_TEMP/r4-wrangler-install.log" 2>&1
+          node release-sources/r4-scoped-admin-catalog-prod/gate.mjs prepare
+      - name: Bind source, independent approval, committed DB OFF and current recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-scoped-admin-catalog-prod/gate.mjs admit
+      - name: Publish administrator only once
+        id: publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy prod-candidate/admin --project-name=tennisnote-admin --branch=main --commit-hash="$(node -p 'require("./release-promotions/r4-scoped-admin-catalog-prod/promotion.json").sourceCommit')" --commit-dirty=false > "$RUNNER_TEMP/r4-prod-private-catalog-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/r4-prod-private-catalog-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN_NO_RETRY");f.appendFileSync(process.env.GITHUB_OUTPUT,"url="+m[0]+"\n");'
+      - name: Read back administrator deployment; stop if uncertain
+        id: post
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-scoped-admin-catalog-prod/gate.mjs post
+      - name: Restore exact prior administrator deployment for verified immutable mismatch only
+        if: ${{ failure() && steps.post.outputs.definite_mismatch == 'true' }}
+        env:
+          DEFINITE_MISMATCH: ${{ steps.post.outputs.definite_mismatch }}
+          PUBLISHED_DEPLOYMENT_ID: ${{ steps.post.outputs.deployment_id }}
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-scoped-admin-catalog-prod/gate.mjs rollback
