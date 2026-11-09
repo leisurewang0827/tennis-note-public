@@ -1,0 +1,14 @@
+#r4ProductDraftHost { border-top: 1px solid var(--line, #d0d5dd); margin-top: 24px; padding-top: 20px; background: transparent; color: inherit; color-scheme: inherit; }
+#r4ProductDraftHost input { font-size: 16px; min-height: 44px; }
+#r4ProductDraftHost button { min-height: 44px; }
+#r4BranchHoursPanel:has(> #r4ProductDraftHost) :is(form, label, fieldset, input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#r4BranchHoursPanel:has(> #r4ProductDraftHost) :is(input, select, textarea, button) { min-height: 44px; }
+#r4BranchHoursPanel:has(> #r4ProductDraftHost) :is(#r4BranchOperations, #r4BranchSaveForm) > button.primary-button,
+#r4BranchHoursPanel:has(> #r4ProductDraftHost) #r4FirstLessonSetup > button.primary-button:not(:disabled) {
+  color: var(--blue);
+  background: var(--soft-blue);
+}

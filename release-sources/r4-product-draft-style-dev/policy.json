@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "baseSource": "0b21d398c508a515c6bd53ae38d8843a522239a0",
+  "baseRun": 42489115768,
+  "baseArtifactId": 13620632569,
+  "baseArtifactDigest": "4ec011eae442175915bb85dedb6893a6c2318f8046b4f5b0807343f5b69addd2",
+  "baseSealSha256": "c6b99afbd52a1d0c878df0c1cb8190f6333ac2828ada6873ffabef7288b1451b",
+  "baseIndexSha256": "f35c4e1fc51765670d64ea76a6687fb8c1876b265617dfa6aaa23e0d55ab28cd",
+  "baseCssSha256": "def287718da0fdb9ff064f286d5d44fdbc216681af8eceb21984e8abf6b0e1cd",
+  "candidateCssSha256": "61836d9c2a4518f150cdf5e888c24c392b100fb8ff2dd32cb35264ddae0e768d",
+  "project": "tennisnote-admin-dev",
+  "previewBranch": "r4-product-draft-qa",
+  "canonicalBranch": "dev",
+  "previousPreviewUrl": "https://58f0f421.tennisnote-admin-dev.pages.dev",
+  "previousPreviewRun": 42491397251,
+  "canonicalId": "200eb1ac-8718-4cd7-904c-3c7426ce90d2",
+  "canonicalSha": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "recoveryId": "7ee771cf-8bfb-407e-aff8-13e0d35cccb4",
+  "publicParent": "4c8eb12efb0c5c65fac8b60c8c35b20c59e927b9",
+  "privateParent": "806ae6e7f3b2f17ce0584516c5cd1e3c27c79de3",
+  "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128"
+}

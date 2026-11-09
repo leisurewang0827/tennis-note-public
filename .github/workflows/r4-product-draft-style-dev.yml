@@ -1,0 +1,140 @@
+name: R4 product draft style DEV
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-product-draft-style-dev.yml'
+      - 'release-sources/r4-product-draft-style-dev/**'
+      - 'scripts/r4_product_draft_style_dev.mjs'
+      - 'scripts/check_r4_product_draft_style_dev.mjs'
+      - 'release-promotions/r4-product-draft-style-dev/promotion.json'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.mode.outputs.stage }}
+      source: ${{ steps.mode.outputs.source }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - id: mode
+        run: node scripts/r4_product_draft_style_dev.mjs classify
+  source:
+    needs: classify
+    if: needs.classify.outputs.stage == 'source'
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-product-draft-dev-42489115768
+          run-id: 42489115768
+          github-token: ${{ github.token }}
+          path: style-base
+      - name: Verify exact baseline and style-only composition
+        env:
+          R4_STYLE_BASE: style-base
+          R4_STYLE_OUTPUT: style-release
+        run: node scripts/check_r4_product_draft_style_dev.mjs
+      - name: Verify preview and recovery admission guards
+        run: |
+          for mode in R4_STYLE_GUARD_ONLY R4_STYLE_ROUTE_ONLY R4_STYLE_RECOVERY_ONLY R4_STYLE_POSTCHECK_ONLY R4_STYLE_RECEIPT_ONLY R4_STYLE_IMMUTABLE_ONLY; do
+            env "$mode=1" node scripts/check_r4_product_draft_style_dev.mjs
+          done
+      - name: Confirm current preview and canonical (read-only)
+        run: node scripts/r4_product_draft_style_dev.mjs preflight
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-product-draft-style-dev-${{ github.run_id }}
+          path: style-release/
+          if-no-files-found: error
+          retention-days: 7
+  promotion:
+    needs: classify
+    if: needs.classify.outputs.stage == 'promotion'
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Resolve source artifact run
+        id: artifact
+        run: |
+          node -e 'const f=require("fs"),p=JSON.parse(f.readFileSync("release-promotions/r4-product-draft-style-dev/promotion.json"));if(!Number.isSafeInteger(p.sourceRunId)||p.sourceRunId<1)throw Error("RUN_UNBOUND");f.appendFileSync(process.env.GITHUB_OUTPUT,`run=${p.sourceRunId}\n`);'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-product-draft-style-dev-${{ steps.artifact.outputs.run }}
+          run-id: ${{ steps.artifact.outputs.run }}
+          github-token: ${{ github.token }}
+          path: style-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-product-draft-dev-42489115768
+          run-id: 42489115768
+          github-token: ${{ github.token }}
+          path: style-base
+      - name: Bind source, artifact, evidence and fresh preview
+        run: node scripts/r4_product_draft_style_dev.mjs admit
+      - name: Publish approved administrator preview only
+        id: publish
+        run: |
+          npx --yes wrangler@3.90.0 pages deploy style-artifact/admin --project-name=tennisnote-admin-dev --branch=r4-product-draft-qa --commit-hash='${{ needs.classify.outputs.source }}' --commit-dirty=false > "$RUNNER_TEMP/style-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/style-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin-dev\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN");f.appendFileSync(process.env.GITHUB_OUTPUT,`url=${m[0]}\n`);'
+      - name: Read back preview and unchanged canonical
+        id: post
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+        run: node scripts/r4_product_draft_style_dev.mjs postcheck
+      - name: Admit recovery only for definite mismatch on our current deployment
+        id: recovery_admit
+        if: ${{ failure() && steps.post.outputs.definite_mismatch == 'true' }}
+        env:
+          DEFINITE_MISMATCH: ${{ steps.post.outputs.definite_mismatch }}
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          PUBLISHED_DEPLOYMENT_ID: ${{ steps.post.outputs.deployment_id }}
+        run: node scripts/r4_product_draft_style_dev.mjs recovery-admit
+      - name: Restore sealed original preview once
+        id: recover
+        if: ${{ failure() && steps.recovery_admit.outcome == 'success' }}
+        run: |
+          npx --yes wrangler@3.90.0 pages deploy style-base/admin --project-name=tennisnote-admin-dev --branch=r4-product-draft-qa --commit-hash=0b21d398c508a515c6bd53ae38d8843a522239a0 --commit-dirty=false > "$RUNNER_TEMP/style-recovery.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/style-recovery.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin-dev\.pages\.dev/g)||[])];if(m.length!==1)throw Error("RECOVERY_ID_UNKNOWN");f.appendFileSync(process.env.GITHUB_OUTPUT,`url=${m[0]}\n`);'
+      - name: Verify original preview restored
+        if: ${{ failure() && steps.recover.outcome == 'success' }}
+        env:
+          RECOVERY_URL: ${{ steps.recover.outputs.url }}
+        run: node scripts/r4_product_draft_style_dev.mjs recovery-postcheck
