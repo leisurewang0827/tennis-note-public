@@ -1,0 +1,26 @@
+{
+  "sourceCommit": "688bbd80980bcde1067b6d62671f80ec974281a2",
+  "targetFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "installSha256": "5e32960ab6a707d03cba9989d2c205c75ef5e8cc8248b7404cd1c86af0eef31f",
+  "recoveryId": "48d1aabf-b856-40a7-898c-fb9e979f3b88",
+  "sourceRunId": 42641803601,
+  "artifactId": 13689828287,
+  "artifactDigest": "d08c1fd03ea5eece66134bd77860f8b64d6f6d424ba207373d2c310df47d9d42",
+  "candidateSeal": "0f022b53350027bcc21ba1dd1e7e23ab58f2f30c88f4cb424f12037fc644c8c5",
+  "functionDefinition": "23c5e37405b2e6e312218bdf743df9ad6a6c2dd35782d9b09de0c892432ce33b",
+  "readback": {
+    "activeGrants": 0,
+    "adminBound": true,
+    "authOnly": true,
+    "drafts": 0,
+    "effectiveGrants": 0,
+    "functionBody": "858203ea9b9d52890c09fb01c3f54308fe0fb45fad3fabec177447ed8c47ee5c",
+    "functionDefinition": "23c5e37405b2e6e312218bdf743df9ad6a6c2dd35782d9b09de0c892432ce33b",
+    "grants": 0,
+    "off": true,
+    "oldOff": true,
+    "protectedTables": 4,
+    "registrations": 0
+  },
+  "readbackSha256": "fabfa4e0dcb1ca27c19fbcdde3cf81431abd8a3b0d86642d5ccc9b15a0d7b556"
+}
