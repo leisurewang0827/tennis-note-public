@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "a03164847a3f3fb40f236cc319e5c65e3a1433dc",
+  "targetFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "candidate": {
+    "seal": "b494d676974e0ee4b6d0b0ca12ca7813d94a5af19d5ff98a991f493e5ae30d59",
+    "sql": "7695c664b5b51289eb727a6bcd279e9430d74b277a33906965d4d25ff3abdaf4",
+    "off": "45f10b02d85d89d59d4dc17db7050d8e975f94256ca6eb0ad85fe4f55e0b1397",
+    "readback": "f0a070037f87ac801633db6163bb210d1ef0cd417012f92fd2c84a9882b84579"
+  },
+  "sourceRunId": 42587262157,
+  "artifactId": 13659308466,
+  "artifactDigest": "30a50f8db5a11d53b8b166a73fc5bfa534b262ba149c1e2b3dd78f319c7681f3",
+  "independentReview": {
+    "approved": true,
+    "sourceCommit": "a03164847a3f3fb40f236cc319e5c65e3a1433dc",
+    "candidateSeal": "b494d676974e0ee4b6d0b0ca12ca7813d94a5af19d5ff98a991f493e5ae30d59"
+  },
+  "recoveryId": "bf15615b-d771-49fc-9359-74128e7248f3",
+  "readback": {
+    "activeGrants": 0,
+    "apiProtected": true,
+    "authRoleConstrained": true,
+    "drafts": 0,
+    "functionDefinitions": {
+      "private.tn_r4_prod_private_catalog_manager(uuid)": "4a2c541cd1ca6b20ee0672643d98bdc3454650c2cae33658fec2a2c331cf05ca",
+      "private.tn_r4_prod_private_catalog_terms(private.tn_r4_prod_private_catalog_drafts)": "03759edfef310c7ec8162eed3743a109c057f682ad452152794fa003898affef",
+      "public.tn_r4_prod_private_catalog_list(uuid)": "6347eb432de63e814cd8bbd63b399b8d009405b1d79dc3858e8161857909b6b1",
+      "public.tn_r4_prod_private_catalog_register(uuid,uuid,uuid,jsonb)": "96adf8c15a345a1c53c805193883ec7bbf8ae4c338ea6a5832a4ffa73fc81277",
+      "public.tn_r4_prod_private_catalog_save(uuid,uuid,text,integer,integer,integer,bigint)": "9997c7245a773b3b865827fd1069f36cb750503852928772474652b1d8e9acbc"
+    },
+    "legacyActiveScopes": 0,
+    "legacyOff": true,
+    "off": true,
+    "ownerDefinition": "e8366bd1a1fce390ccc694638105a82d8a06f1605004addd914c5ada792fce8d",
+    "pilotOff": true,
+    "registrations": 0,
+    "tablesProtected": true,
+    "totalGrants": 0
+  },
+  "readbackSha256": "e9502f5f99dd676b499ada1aabd97ee9b391f592011b6a55d3846dd1acdbde5b"
+}
