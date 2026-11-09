@@ -1,0 +1,99 @@
+name: R4 private catalog production candidate and read-only preflight
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-private-catalog-prod-source.yml'
+      - 'release-sources/r4-private-catalog-prod/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check exact scope
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {fixed} from './release-sources/r4-private-catalog-prod/prod-private-catalog-release-gate.mjs';
+          const git=(...a)=>execFileSync('git',a,{encoding:'utf8'}).trim();
+          assert.equal(process.env.GITHUB_REPOSITORY,fixed.repository);
+          assert.equal(process.env.GITHUB_REF,fixed.branch);
+          assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
+          assert.deepEqual(git('rev-list','--parents','-n','1','HEAD').split(' '),[process.env.GITHUB_SHA,fixed.parent]);
+          const prefix='release-sources/r4-private-catalog-prod/';
+          const names=['compose-prod-private-catalog.mjs','prod-private-catalog-release-gate.mjs',
+            'prod-private-catalog-install-off.sql','prod-private-catalog-readback.sql','prod-private-catalog-emergency-off.sql'];
+          assert.deepEqual(git('diff','--name-only',fixed.parent,'HEAD').split('\n').sort(),
+            ['.github/workflows/r4-private-catalog-prod-source.yml',...names.map(n=>prefix+n)].sort());
+          NODE
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-internal-registration-prod-source-42564720753
+          run-id: 42564720753
+          github-token: ${{ github.token }}
+          path: prod-base
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-private-catalog-dev-42582452375
+          run-id: 42582452375
+          github-token: ${{ github.token }}
+          path: dev-base
+      - name: Compose and pin exactly four administrator asset changes
+        run: |
+          node release-sources/r4-private-catalog-prod/compose-prod-private-catalog.mjs prod-base dev-base prod-candidate
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {fixed} from './release-sources/r4-private-catalog-prod/prod-private-catalog-release-gate.mjs';
+          const bytes=readFileSync('prod-candidate/seal.json');
+          assert.equal(createHash('sha256').update(bytes).digest('hex'),fixed.candidate.seal);
+          NODE
+          node --check prod-candidate/admin/r4-onboarding.js
+          node --check prod-candidate/admin/r4-prod-private-catalog-host.js
+          node --input-type=module --check < prod-candidate/admin/r4-prod-private-catalog-port.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-private-catalog-prod-candidate-${{ github.run_id }}
+          path: prod-candidate/
+          if-no-files-found: error
+          retention-days: 7
+  read-only-preflight:
+    needs: source
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-internal-registration-prod-source-42564720753
+          run-id: 42564720753
+          github-token: ${{ github.token }}
+          path: prod-base
+      - name: Read exact administrator project, canonical and recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-private-catalog-prod/prod-private-catalog-release-gate.mjs preflight
