@@ -1,0 +1,54 @@
+{
+  "sourceCommit": "53c736c0e89a402316fe52b099607909c9fcb485",
+  "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+  "sourceRunId": 42558939818,
+  "artifactId": 13648602034,
+  "artifactDigest": "d0694484ad7e9cc1a8e7298e3ea9605175335a06fce22ae8a633b3c299e5518d",
+  "sealSha256": "656bc8414a5d9cbce07ff84ad6187cac0d457cfdaa8fc295bc1abe32a3d67923",
+  "credentialEvidence": {
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "priorSuccessRun": 42539760515,
+    "metadataUnchanged": true,
+    "writePermissionStatus": "NOT_DIRECTLY_VERIFIED"
+  },
+  "credentialEvidenceSha256": "031cbc66ddeec6b2c0fca159bdda8da20d899c762501e63dcabf3f25e4a7f2dd",
+  "qaReceipt": {
+    "approved": true,
+    "sourceCommit": "53c736c0e89a402316fe52b099607909c9fcb485",
+    "privateCommit": "51123953016df73e8e55132c5ac05ffd31c86128",
+    "artifactDigest": "d0694484ad7e9cc1a8e7298e3ea9605175335a06fce22ae8a633b3c299e5518d",
+    "sealSha256": "656bc8414a5d9cbce07ff84ad6187cac0d457cfdaa8fc295bc1abe32a3d67923",
+    "registrationModuleSha256": "a274a014c3d7d2a265a82810183de18e4a2cdea898a65d7338596befe9dd1849",
+    "devOverlaySha256": "612f99c825f52e7723bd2f8d756cf552483fc98432a455ca1ced193caddebb9d",
+    "devSqlSha256": "5b287e81b636d5bda1e270cf4797ac19e35518a43a611b736147a26161288760"
+  },
+  "qaReceiptSha256": "cbb79f5981f339e9a93c8f5f20eb9e69b40ab857ae8dbf61d473d3242d006eb6",
+  "recoveryReceipt": {
+    "approved": true,
+    "baseSealSha256": "520a2d58f74baac134ec0a9b690040a800db658d04b6296322bdead120669345",
+    "project": "tennisnote-admin-dev",
+    "previewBranch": "r4-product-draft-qa",
+    "noRetryOnUncertainty": true,
+    "aliasIdentityRequired": true,
+    "postReadbackRequired": true
+  },
+  "recoveryReceiptSha256": "df6ded6d00193c18c2052bd38709d9436597ffce72046fb10957bda86d37664f",
+  "devOffReceipt": {
+    "devSqlSha256": "5b287e81b636d5bda1e270cf4797ac19e35518a43a611b736147a26161288760",
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "gateOff": true,
+    "draftGateOff": true,
+    "marketplaceOff": true,
+    "productionWrites": 0,
+    "scopeCount": 1,
+    "neverOpened": true,
+    "registeredCount": 0,
+    "actorSessions": 0,
+    "threeAuthenticatedOnly": true,
+    "sourceCommit": "53c736c0e89a402316fe52b099607909c9fcb485",
+    "sourceRunId": 42558939818,
+    "artifactDigest": "d0694484ad7e9cc1a8e7298e3ea9605175335a06fce22ae8a633b3c299e5518d"
+  },
+  "devOffReceiptSha256": "00297496a37db6d65902667e17c0caa2b6bcc9d109974e55c319edfd999f0b38"
+}
