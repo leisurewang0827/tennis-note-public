@@ -1,0 +1,85 @@
+name: R4 internal registration production administrator promotion
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-internal-registration-prod-promotion.yml'
+      - 'scripts/r4_internal_registration_prod_promotion.mjs'
+      - 'scripts/check_r4_internal_registration_prod_promotion.mjs'
+      - 'release-promotions/r4-internal-registration-prod/promotion.json'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  promote:
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Resolve sealed source run
+        id: source
+        run: |
+          node -e 'const f=require("fs"),p=JSON.parse(f.readFileSync("release-promotions/r4-internal-registration-prod/promotion.json"));if(!Number.isSafeInteger(p.sourceRunId)||p.sourceRunId<1)throw Error("SOURCE_UNBOUND");f.appendFileSync(process.env.GITHUB_OUTPUT,`run=${p.sourceRunId}\n`);'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-prod-42449225848
+          run-id: 42449225848
+          github-token: ${{ github.token }}
+          path: prod-base
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-internal-registration-prod-source-${{ steps.source.outputs.run }}
+          run-id: ${{ steps.source.outputs.run }}
+          github-token: ${{ github.token }}
+          path: prod-artifact
+      - name: Test exact production promotion guards offline
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0 > "$RUNNER_TEMP/r4-wrangler-install.log" 2>&1
+          env R4_WRANGLER_ROOT="$RUNNER_TEMP/r4-wrangler/node_modules/wrangler" node scripts/check_r4_internal_registration_prod_promotion.mjs
+          env R4_PROD_ROLLBACK_TRANSPORT_ONLY=1 node scripts/check_r4_internal_registration_prod_promotion.mjs
+          env R4_PROD_FINAL_CANONICAL_ONLY=1 node scripts/check_r4_internal_registration_prod_promotion.mjs
+          node scripts/r4_internal_registration_prod_promotion.mjs prepare
+      - name: Confirm source, OFF receipt, canonical and recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_internal_registration_prod_promotion.mjs admit
+      - name: Publish administrator only once
+        id: publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy prod-artifact/admin --project-name=tennisnote-admin --branch=main --commit-hash="$(node -p 'require("./release-promotions/r4-internal-registration-prod/promotion.json").sourceCommit')" --commit-dirty=false > "$RUNNER_TEMP/r4-prod-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/r4-prod-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN");f.appendFileSync(process.env.GITHUB_OUTPUT,`url=${m[0]}\n`);'
+      - name: Verify administrator deployment
+        id: post
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_internal_registration_prod_promotion.mjs post
+      - name: Restore prior administrator only on confirmed immutable mismatch
+        if: ${{ failure() && steps.post.outputs.definite_mismatch == 'true' }}
+        env:
+          DEFINITE_MISMATCH: ${{ steps.post.outputs.definite_mismatch }}
+          PUBLISHED_DEPLOYMENT_ID: ${{ steps.post.outputs.deployment_id }}
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_internal_registration_prod_promotion.mjs rollback

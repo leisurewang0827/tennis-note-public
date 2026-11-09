@@ -1,0 +1,30 @@
+{
+  "sourceCommit": "498cdb4167021c032bfa8fd79c1ee92ef31a4f14",
+  "preflightCommit": "dce1f689533a9288e6df7925b0845645060c1164",
+  "sourceRunId": 42564720753,
+  "sourceArtifactId": 13651365401,
+  "preflightRunId": 42564820372,
+  "artifactDigest": "44edc10edce4e72cd9114bb475ae90fd26c1664be989bc4588d692459e3d8c3c",
+  "sealSha256": "dc73cac7dde5074a073ce1d55464d809a0e4f499b26a995f5efed018ec5de2c1",
+  "offReceipt": {
+    "targetFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+    "installSqlSha256": "f76086eea58d4aa0e87a53d370e2c298f485b8500b69ed47249415c4be441ac3",
+    "verifySqlSha256": "6869e4f4f09c3289737dc90e29f014b6f25a2ef331e9182bf9f10144f1ddafc0",
+    "sourceCommit": "498cdb4167021c032bfa8fd79c1ee92ef31a4f14",
+    "sourceRunId": 42564720753,
+    "artifactDigest": "44edc10edce4e72cd9114bb475ae90fd26c1664be989bc4588d692459e3d8c3c",
+    "draftOff": true,
+    "internalOff": true,
+    "accessRows": 0,
+    "draftRows": 0,
+    "registrationRows": 0,
+    "publicRpcCount": 4,
+    "rpcAclOk": true,
+    "privateRlsAclOk": true,
+    "oldContractUnchanged": true,
+    "existingWorkspaceCreateUnchanged": true,
+    "existingPilotOff": true,
+    "devScopeAbsent": true
+  },
+  "offReceiptSha256": "eefa3879a2af5c9a36aaed1a50c0e124a9fa80bddf640b7fb213706e4e5011f7"
+}
