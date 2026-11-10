@@ -44,12 +44,14 @@ jobs:
           node-version: '24'
       - uses: actions/download-artifact@v4
         with:
-          name: r4-scoped-member-catalog-prod-42629207927
-          run-id: 42629207927
+          name: r4-scoped-admin-catalog-prod-42641803601
+          run-id: 42641803601
           github-token: ${{ github.token }}
           path: prod-base
       - name: Check production delta and seal exact administrator assets
         run: |
+          npm install --prefix "$RUNNER_TEMP/r4-pg-client" --no-save --package-lock=false --ignore-scripts pg@8.16.3
+          node release-sources/r4-scoped-admin-catalog-prod/check-standing-db.mjs "$(pg_config --bindir)" "$RUNNER_TEMP/r4-pg-client"
           node release-sources/r4-scoped-admin-catalog-prod/check.mjs
           node release-sources/r4-scoped-admin-catalog-prod/gate.mjs compose
           node --check prod-candidate/admin/views/settings.js
@@ -87,8 +89,8 @@ jobs:
           node -e 'const f=require("fs"),p=JSON.parse(f.readFileSync("release-promotions/r4-scoped-admin-catalog-prod/promotion.json"));if(!Number.isSafeInteger(p.sourceRunId)||p.sourceRunId<1)throw Error("SOURCE_UNBOUND");f.appendFileSync(process.env.GITHUB_OUTPUT,"run="+p.sourceRunId+"\n");'
       - uses: actions/download-artifact@v4
         with:
-          name: r4-scoped-member-catalog-prod-42629207927
-          run-id: 42629207927
+          name: r4-scoped-admin-catalog-prod-42641803601
+          run-id: 42641803601
           github-token: ${{ github.token }}
           path: prod-base
       - uses: actions/download-artifact@v4

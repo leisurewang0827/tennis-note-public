@@ -6,23 +6,24 @@ import {fileURLToPath} from 'node:url';
 import {join,resolve,dirname} from 'node:path';
 import {request as httpsRequest} from 'node:https';
 import {compose} from './compose.mjs';
+import {template} from './bind-standing.mjs';
 import {appendFileSync,mkdirSync} from 'node:fs';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 export const fixed=Object.freeze(JSON.parse(readFileSync(new URL('./policy.json',import.meta.url))));
+const templateHash=sha(template);
 export function verifyOff(packet,source) {
   assert.match(source,/^[a-f0-9]{40}$/);
   assert.equal(packet.sourceCommit,source);
   assert.equal(packet.targetFingerprint,fixed.productionFingerprint);
-  assert.equal(packet.installSha256,fixed.installSha256);
+  assert.equal(packet.installSha256,templateHash);
   assert.equal(packet.recoveryId,fixed.prior.id);
   assert.ok(Number.isSafeInteger(packet.sourceRunId)&&packet.sourceRunId>0);
   assert.ok(Number.isSafeInteger(packet.artifactId)&&packet.artifactId>0);
-  for(const k of ['artifactDigest','candidateSeal','functionDefinition']) assert.match(packet[k],/^[a-f0-9]{64}$/);
+  for(const k of ['artifactDigest','candidateSeal','functionDefinition','boundInstallSha256']) assert.match(packet[k],/^[a-f0-9]{64}$/);
   const d=packet.readback;
   assert.equal(packet.readbackSha256,sha(JSON.stringify(d)));
-  for(const k of ['off','authOnly','oldOff','adminBound'])assert.equal(d[k],true,k);
-  for(const k of ['grants','activeGrants','drafts','registrations','effectiveGrants'])assert.equal(d[k],0,k);
-  assert.equal(d.protectedTables,4);
+  for(const k of ['off','authOnly','oldOff','adminBound','recordsPreserved','standingProtected'])assert.equal(d[k],true,k);
+  for(const k of ['grants','activeGrants','effectiveGrants'])assert.equal(d[k],0,k);
   assert.equal(d.functionDefinition,packet.functionDefinition);
 }
 const assertDeployment=(d,id,source)=>{
@@ -83,7 +84,7 @@ async function protectedBase({cf,gh,token,github}){
     (await get(gh+'/actions/artifacts/'+fixed.prior.artifact,github)).json()]);
   assert.equal(a.success,true);assert.equal(b.success,true);verifyBaseline(a.result,b.result,c);
   const bytes=readFileSync('prod-base/seal.json');assert.equal(sha(bytes),fixed.prior.seal);
-  const seal=JSON.parse(bytes);const paths=['index.html','views/settings.js','r4-onboarding.js','r4-prod-private-catalog-host.js','shared/config.local.js','release.json'];
+  const seal=JSON.parse(bytes);const paths=['index.html','views/settings.js','r4-scoped-member-catalog.js','r4-onboarding.js','r4-prod-private-catalog-host.js','shared/config.local.js','release.json'];
   assert.deepEqual(seal.admin,walk('prod-base/admin'));
   await Promise.all([verifyAssets(fixed.origin,seal,paths),verifyAssets(fixed.prior.url,seal,paths)]);
   const last=await (await get(cf,token)).json();assert.equal(last.success,true);verifyBaseline(last.result,b.result,c);
@@ -108,7 +109,7 @@ export function classification() {
   const parent=git('rev-list','--parents','-n','1',h).split(' ');
   assert.equal(parent.length,2);
   const changes=git('diff','--name-only',parent[1],h).split('\n').sort();
-  const paths=[fixed.workflow,...['module.js','compose.mjs','gate.mjs','check.mjs','policy.json'].map(n=>'release-sources/r4-scoped-admin-catalog-prod/'+n)].sort();
+  const paths=[fixed.workflow,...['module.js','compose.mjs','gate.mjs','check.mjs','policy.json','standing.sql','bind-standing.mjs','check-standing-db.mjs'].map(n=>'release-sources/r4-scoped-admin-catalog-prod/'+n)].sort();
   if(parent[1]===fixed.parent){assert.deepEqual(changes,paths);return {stage:'source',source:h};}
   assert.deepEqual(changes,[promotionPath]);
   assert.deepEqual(git('rev-list','--parents','-n','1',parent[1]).split(' '),[parent[1],fixed.parent]);
@@ -117,7 +118,7 @@ export function classification() {
 }
 export function expectedSeal(source,base='prod-base') {
   const built=build(base), delta=Object.fromEntries(built.changed.map(n=>[n,built.hashes[n]]));
-  const seal={schema:1,source,baseSeal:fixed.prior.seal,installSha256:fixed.installSha256,delta,admin:built.hashes};
+  const seal={schema:1,source,baseSeal:fixed.prior.seal,installSha256:templateHash,delta,admin:built.hashes};
   return {built,bytes:Buffer.from(JSON.stringify(seal)+'\n'),seal};
 }
 function composeStage(){

@@ -1,7 +1,7 @@
 (function installScopedMemberCatalog(root, document) {
   "use strict";
-  const rpc = "tn_r4_prod_member_private_catalog";
-  const auth = Object.freeze({ requireCurrentSession: true, retryAuth: false });
+  const rpc = "tn_r4_prod_admin_standing_catalog";
+  const api = "https://cnympiwrwgouuvhaivbc.supabase.co";
   const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
   const flagsClosed = row => row?.public === false && row.saleEnabled === false &&
     row.paymentEnabled === false && row.membershipEnabled === false;
@@ -46,21 +46,23 @@
   branchSetup.prepend(panel);
 
   let ctx;
-  function sessionKey(client) {
+  const journalKey = "tennis-note-standing-catalog-pending-operation";
+  const journalPrefix = journalKey + ":";
+  function sessionState(client) {
     try {
-      const stores = root.localStorage.getItem(client.authPersistenceKey) === "session"
-        ? [root.sessionStorage] : [root.localStorage, root.sessionStorage];
-      const session = stores.map(store => JSON.parse(store.getItem(client.authStorageKey) || "null"))
-        .find(candidate => candidate?.access_token);
+      const storage = root.localStorage.getItem(client.authPersistenceKey) === "session"
+        ? root.sessionStorage : root.localStorage;
+      const session = JSON.parse(storage.getItem(client.authStorageKey) || "null");
       const token = session?.access_token?.split(".")[1];
       if (!token) return null;
       const base64 = token.replace(/-/g, "+").replace(/_/g, "/");
       const claims = JSON.parse(root.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
       return uuid.test(claims.session_id) && uuid.test(claims.sub) && (!session.user?.id || claims.sub === session.user.id) &&
-        Number.isFinite(claims.exp) && claims.exp * 1000 > Date.now() ? claims.session_id : null;
+        Number.isFinite(claims.exp) && claims.exp * 1000 > Date.now()
+        ? {id:claims.session_id,token:session.access_token} : null;
     } catch { return null; }
   }
-  const current = c => ctx === c && c.session === sessionKey(c.client) && performance.now() < c.until;
+  const current = c => ctx === c && c.session === sessionState(c.client)?.id;
   function close() {
     root.clearTimeout(ctx?.timer);
     ctx = undefined;
@@ -74,14 +76,69 @@
     for (const field of panel.querySelectorAll("button,input")) field.disabled = active || Boolean(c.uncertain);
   }
   async function call(c, action, payload = {}) {
-    if (!current(c)) throw Error("scope_changed");
+    const session = sessionState(c.client);
+    if (ctx !== c || c.session !== session?.id) throw Error("scope_changed");
     const branch = action === "scope" ? null : c.branch;
-    const response = await c.client.rpc(rpc, { p_action: action, p_branch: branch, p_payload: payload }, auth);
+    // 이 전용 호출은 현재 저장소만 읽고, 로그인 저장·갱신·다른 저장소 복원을 하지 않는다.
+    const response = await root.fetch(api + "/rest/v1/rpc/" + rpc, {
+      method:"POST",redirect:"error",cache:"no-store",credentials:"omit",
+      headers:{apikey:c.key,Authorization:"Bearer "+session.token,"Content-Type":"application/json"},
+      body:JSON.stringify({p_action:action,p_branch:branch,p_payload:payload}),
+      signal:AbortSignal.timeout(12000),
+    });
     if (!current(c)) throw Error("scope_changed");
-    return response;
+    if (!response.ok) {
+      const details = await response.json().catch(() => null);
+      throw Object.assign(Error("catalog_request_failed"),{status:response.status,code:details?.code});
+    }
+    const result = await response.json();
+    if (!current(c)) throw Error("scope_changed");
+    return result;
   }
   const denied = e => e?.code === "42501" || e?.status === 401 || e?.status === 403 ||
     /r4_member_catalog_denied|scope_changed/i.test(e?.message ?? "");
+  function scopeValid(scope, branch) {
+    return scope?.standing === true && uuid.test(scope.branchId) &&
+      typeof scope.branchName === "string" && !!scope.branchName &&
+      (scope.verification === null ||
+        (uuid.test(scope.verification?.draft) && uuid.test(scope.verification?.registration) &&
+          scope.verification.draft !== scope.verification.registration)) &&
+      (!branch || branch === scope.branchId);
+  }
+  function pending() {
+    const keys = Object.keys(root.localStorage).filter(key => key.startsWith(journalPrefix));
+    if (keys.length > 32) throw Error("operation_journal_invalid");
+    return keys.map(key => {
+      const value = JSON.parse(root.localStorage.getItem(key));
+      if (!["save","register"].includes(value?.action) || !uuid.test(value.key) ||
+        key !== journalPrefix + value.key) throw Error("operation_journal_invalid");
+      return value;
+    });
+  }
+  function clearPending(key) {
+    if (pending().some(value => value.key === key)) root.localStorage.removeItem(journalPrefix + key);
+  }
+  function reconcilePending(c, rows) {
+    for (const p of pending()) {
+      if (rows.some(r => (p.action === "save" ? r.draftId : r.registrationId) === p.key)) clearPending(p.key);
+    }
+    c.uncertain = pending().length > 0;
+    if (c.uncertain) status.textContent = "이전 저장 결과를 확인할 수 없습니다. 확인되기 전에는 새로 저장할 수 없습니다.";
+  }
+  function scheduleScopeCheck(c) {
+    c.timer = root.setTimeout(async () => {
+      if (ctx !== c) return;
+      if (!current(c)) { close(); return; }
+      if (!c.busy) {
+        try {
+          const scope = await call(c, "scope");
+          if (!scopeValid(scope, c.branch)) { if (ctx === c) close(); return; }
+          c.verification = scope.verification;
+        } catch { if (ctx === c) close(); return; }
+      }
+      if (ctx === c) scheduleScopeCheck(c);
+    }, 60000);
+  }
   function sameTerms(a, b) { return fields.every(([key]) => a?.[key] === b?.[key]); }
   async function read(c) {
     const rows = await call(c, "list");
@@ -95,13 +152,13 @@
       li.className = "tn-market-card";
       li.append(make("strong", terms.name), make("span", `${terms.sessions}회 · ${terms.minutes}분 · ${terms.days}일 · ${terms.price.toLocaleString("ko-KR")}원`));
       if (item.registrationId) li.append(make("span", " · 내부 등록 완료"));
-      else {
+      else if (!c.verification || c.verification.draft === item.draftId) {
         const button = make("button", "내부 등록");
         button.className = "ghost-button";
         button.type = "button";
         button.addEventListener("click", () => {
           if (current(c) && !c.busy && !c.uncertain) {
-            void write(c, "register", { operationId: root.crypto.randomUUID(), draftId: item.draftId, terms });
+            void write(c, "register", { operationId: c.verification?.registration || root.crypto.randomUUID(), draftId: item.draftId, terms });
           }
         });
         li.append(button);
@@ -113,23 +170,57 @@
   async function write(c, action, payload) {
     if (!current(c) || c.busy || c.uncertain) return;
     busy(c, true);
+    try {
+      if (!root.navigator.locks?.request) throw Error("operation_lock_unavailable");
+      await root.navigator.locks.request(journalKey,{mode:"exclusive",ifAvailable:true},async lock=>{
+        if (!current(c)) return;
+        if (!lock) {
+          status.textContent = "다른 탭에서 저장 결과를 확인 중입니다.";
+          return;
+        }
+        await writeLocked(c,action,payload);
+      });
+    } catch {
+      if (current(c)) status.textContent = "저장 보호를 사용할 수 없어 요청하지 않았습니다.";
+    } finally {
+      if (current(c)) busy(c,false);
+    }
+  }
+  async function writeLocked(c, action, payload) {
+    try {
+      if (pending().length) throw Error("operation_journal_busy");
+      root.localStorage.setItem(journalPrefix + payload.operationId, JSON.stringify({action,key:payload.operationId}));
+      if (!pending().some(p => p.key === payload.operationId)) throw Error("operation_journal_busy");
+    } catch {
+      c.uncertain = true;
+      status.textContent = "이전 작업 상태를 확인할 수 없어 저장하지 않았습니다.";
+      return;
+    }
     status.textContent = "저장 결과를 확인하는 중입니다.";
     const desiredId = payload.draftId || payload.operationId;
     const desiredTerms = payload.terms || payload;
     const committed = rows => rows.some(r => r.draftId === desiredId && sameTerms(r.terms, desiredTerms)
-      && (action !== "register" || r.registrationId));
+      && (action !== "register" || r.registrationId === payload.operationId));
+    let acknowledged = false;
     try {
       const saved = await call(c, action, payload);
+      acknowledged = true;
       if (!flagsClosed(saved)) { close(); return; }
       if (!committed(await read(c))) throw Error("readback_missing");
+      clearPending(payload.operationId);
       status.textContent = action === "save" ? "비공개 초안을 저장했습니다." : "내부 등록을 완료했습니다.";
       if (action === "save") form.reset();
     } catch (e) {
       if (ctx !== c) return;
-      if (!current(c) || denied(e)) { close(); return; }
+      if (!current(c) || denied(e)) {
+        if (!acknowledged && e?.code === "42501") clearPending(payload.operationId);
+        close();
+        return;
+      }
       // On uncertain response, one read-back only. Never send another write automatically.
       try {
         if (!committed(await read(c))) throw Error("readback_missing");
+        clearPending(payload.operationId);
         status.textContent = action === "save" ? "저장된 초안을 확인했습니다." : "내부 등록 결과를 확인했습니다.";
         if (action === "save") form.reset();
       } catch (readError) {
@@ -138,8 +229,6 @@
         c.uncertain = true;
         status.textContent = "결과를 확인할 수 없습니다. 다시 저장하지 말고 목록부터 확인해 주세요.";
       }
-    } finally {
-      if (current(c)) busy(c, false);
     }
   }
   form.addEventListener("submit", event => {
@@ -149,7 +238,7 @@
     const data = new FormData(form), name = String(data.get("name")).trim();
     if (!name) { status.textContent = "상품명을 입력해 주세요."; return; }
     const terms = Object.fromEntries(fields.map(([key]) => [key, key === "name" ? name : Number(data.get(key))]));
-    void write(c, "save", { operationId: root.crypto.randomUUID(), ...terms });
+    void write(c, "save", { operationId: c.verification?.draft || root.crypto.randomUUID(), ...terms });
   });
   root.addEventListener("storage", () => { if (ctx && !current(ctx)) close(); });
   root.addEventListener("pageshow", () => { if (ctx && !current(ctx)) close(); });
@@ -158,26 +247,24 @@
       const config = client?.loadConfig?.() ?? {};
       const production = root.location.origin === "https://tennisnote-admin.pages.dev" &&
         config.environment === "production" &&
-        config.supabaseUrl === "https://cnympiwrwgouuvhaivbc.supabase.co" &&
+        config.supabaseUrl === api &&
         config.projectFingerprint === "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a";
-      const session = production && allowed && sessionKey(client);
+      const session = production && allowed && sessionState(client)?.id;
       if (session && ctx?.client === client && ctx.session === session && current(ctx)) return;
       close();
-      if (!session || !client?.rpc) return;
-      const started = performance.now();
-      const c = ctx = { client, session, until: started + 10000 };
+      if (!session || typeof config.supabasePublishableKey !== "string" || !config.supabasePublishableKey) return;
+      const c = ctx = { client, session, key:config.supabasePublishableKey };
       try {
         const scope = await call(c, "scope");
-        if (!uuid.test(scope?.branchId) || typeof scope.branchName !== "string" || !scope.branchName ||
-          !Number.isSafeInteger(scope.remainingMs) || scope.remainingMs < 1 || scope.remainingMs > 1800000) throw Error("invalid_scope");
+        if (!scopeValid(scope)) throw Error("invalid_scope");
         c.branch = scope.branchId;
-        c.until = started + scope.remainingMs;
-        if (!current(c)) throw Error("expired_scope");
-        c.timer = root.setTimeout(() => { if (ctx === c) close(); }, c.until - performance.now());
-        await read(c);
+        c.verification = scope.verification;
+        reconcilePending(c, await read(c));
+        if (!current(c)) return;
         title.textContent = scope.branchName + " 비공개 상품";
         panel.hidden = false;
         busy(c, false);
+        scheduleScopeCheck(c);
       } catch { if (ctx === c) close(); }
     },
   });
