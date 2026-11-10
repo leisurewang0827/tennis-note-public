@@ -1,0 +1,58 @@
+name: R4 private catalog issuance DEV preview only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-internal-catalog-issue-preview.yml'
+      - 'release-sources/r4-internal-catalog-issue-preview/preview.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  preview:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-member-catalog-dev-42625150294
+          run-id: 42625150294
+          github-token: ${{ github.token }}
+          path: preview-base
+      - name: Prepare existing pinned transport
+        run: npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+      - name: Verify exact reviewed source, recovery and preview target
+        id: admit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-internal-catalog-issue-preview/preview.mjs admit
+      - name: Publish only the DEV administrator preview once
+        id: publish
+        if: steps.admit.outputs.approved == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy issue-preview/admin --project-name=tennisnote-admin-dev --branch=r4-product-draft-qa --commit-hash=12664a91ddb71ba3690f9606f655ba2eccc71e5c --commit-dirty=false > "$RUNNER_TEMP/r4-issue-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/r4-issue-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin-dev\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN_NO_RETRY");f.appendFileSync(process.env.GITHUB_OUTPUT,"url="+m[0]+"\n");'
+      - name: Verify new immutable and alias assets and unchanged DEV canonical
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-internal-catalog-issue-preview/preview.mjs post
