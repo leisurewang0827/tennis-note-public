@@ -1,0 +1,34 @@
+{
+  "source": "bd848b8c8f893d3b7be0e2a763065e1ffaa8ec7c",
+  "run": 42774611944,
+  "artifact": 13743341814,
+  "artifactHash": "ebf3da21e1672a93e66b9936747b976762e55f69bc19aad70133ec4ef6ee759a",
+  "sealHash": "5a7b6af33ac72f8ebd879b02555baa720cd309a01b10246af5af66cb9f4c54ad",
+  "receiptHash": "9f0eeddc6684c3ee01b266670cd544b36b2d0f6cd87cf99849c3c8bc6ce34d6c",
+  "receipt": {
+    "status": "COMMITTED_PROD_PENDING_MEMBER_OFF_PASS",
+    "source": "bd848b8c8f893d3b7be0e2a763065e1ffaa8ec7c",
+    "run": 42774611944,
+    "artifact": 13743341814,
+    "artifactHash": "ebf3da21e1672a93e66b9936747b976762e55f69bc19aad70133ec4ef6ee759a",
+    "sealHash": "5a7b6af33ac72f8ebd879b02555baa720cd309a01b10246af5af66cb9f4c54ad",
+    "projectHash": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+    "recovery": "af8eba1b-28f8-42e7-b0b8-f644213dcdd7",
+    "sql": {
+      "installOff": "fdf63f9696b620dc4b31b1fbb1b3f4ce8145fd1f3f2e490c9c149b0a74a03e11",
+      "open": "4ca299f6c134f21a75fa5f86c0b7339365221b89bdf10d9fe7f9e06594e2dd53",
+      "off": "fb5935c679a9611211bb43354047ebdabc5f7cd9e9c7252772f60873fda544a6"
+    },
+    "verifiedAt": "2026-11-10T07:21:48Z",
+    "actual": {
+      "pending_off": true,
+      "pending_receipts": 0,
+      "standing_enabled": 1,
+      "first_enabled": 0,
+      "issue_receipts": 1,
+      "issue_requests": 1,
+      "rpc_acl": true,
+      "rpc_definition": "ccf15461df5d824a6c6ba607eb61ba1ef571ead55356087e5591010084db97ce"
+    }
+  }
+}
