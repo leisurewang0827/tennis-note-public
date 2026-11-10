@@ -474,6 +474,11 @@ function renderMemberManagementModal() {
         <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok)) ? "disabled" : ""}>${isCreate ? "회원 등록 확정" : submitLabel}</button>
       </div>
     </form>`;
+  if (action === "assign" && operationsRole() === "admin") {
+    window.TennisNoteR4InternalCatalogIssueDev?.mount({
+      target, member: member.serverUserId, branch: activeOperationBranchId(), client: window.TennisNoteDataClient,
+    });
+  }
 }
 
 function renderMemberEditorModeBar() {

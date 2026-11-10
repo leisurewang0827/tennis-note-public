@@ -1,0 +1,25 @@
+name: R4 private catalog DEV issuance delta
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-internal-catalog-issue-dev.yml'
+      - 'release-sources/r4-internal-catalog-issue-dev/**'
+      - 'app/admin/r4-internal-catalog-issue-dev.js'
+      - 'app/admin/views/members.js'
+      - 'app/admin/index.html'
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node release-sources/r4-internal-catalog-issue-dev/check.mjs
