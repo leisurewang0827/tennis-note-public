@@ -1,7 +1,8 @@
 {
   "repository": "leisurewang0827/tennis-note-public",
   "branch": "refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108",
-  "parent": "55c89288f6c491e1b82d73d96d5efdf4b3524254",
+  "parent": "96ae1e113fb74d8d6defe2a64d6c3153bbbcf0b6",
+  "originalParent": "55c89288f6c491e1b82d73d96d5efdf4b3524254",
   "project": "tennisnote-admin",
   "productionBranch": "main",
   "origin": "https://tennisnote-admin.pages.dev",

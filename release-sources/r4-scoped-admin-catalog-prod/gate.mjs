@@ -110,10 +110,16 @@ export function classification() {
   assert.equal(parent.length,2);
   const changes=git('diff','--name-only',parent[1],h).split('\n').sort();
   const paths=[fixed.workflow,...['module.js','compose.mjs','gate.mjs','check.mjs','policy.json','standing.sql','bind-standing.mjs','check-standing-db.mjs'].map(n=>'release-sources/r4-scoped-admin-catalog-prod/'+n)].sort();
-  if(parent[1]===fixed.parent){assert.deepEqual(changes,paths);return {stage:'source',source:h};}
+  const repair=[fixed.workflow,...['gate.mjs','policy.json','check-standing-db.mjs'].map(n=>'release-sources/r4-scoped-admin-catalog-prod/'+n)].sort();
+  const assertExactSource=source=>{
+    assert.deepEqual(git('rev-list','--parents','-n','1',source).split(' '),[source,fixed.parent]);
+    assert.deepEqual(git('rev-list','--parents','-n','1',fixed.parent).split(' '),[fixed.parent,fixed.originalParent]);
+    assert.deepEqual(git('diff','--name-only',fixed.parent,source).split('\n').sort(),repair);
+    assert.deepEqual(git('diff','--name-only',fixed.originalParent,source).split('\n').sort(),paths);
+  };
+  if(parent[1]===fixed.parent){assertExactSource(h);return {stage:'source',source:h};}
   assert.deepEqual(changes,[promotionPath]);
-  assert.deepEqual(git('rev-list','--parents','-n','1',parent[1]).split(' '),[parent[1],fixed.parent]);
-  assert.deepEqual(git('diff','--name-only',fixed.parent,parent[1]).split('\n').sort(),paths);
+  assertExactSource(parent[1]);
   return {stage:'promotion',source:parent[1]};
 }
 export function expectedSeal(source,base='prod-base') {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {createHash,randomUUID} from "node:crypto";
-import {mkdtempSync} from "node:fs";
+import {existsSync,mkdtempSync,readFileSync} from "node:fs";
 import {createRequire} from "node:module";
 import {createServer} from "node:net";
 import {tmpdir} from "node:os";
@@ -44,7 +44,18 @@ const disable=`update ${table}_standing set enabled=false,cancelled=true,actor_i
 let started=false,holder,offClient,lateClient;
 try{
   cli("initdb",["-A","trust","-U","postgres","--locale=C","-E","UTF8","-D",dir]);
-  cli("pg_ctl",["start","-w","-t","12","-D",dir,"-l",join(dir,"server.log"),"-o",`-h 127.0.0.1 -p ${port}`]);started=true;
+  const log=join(dir,"server.log");
+  const tcpOnly=process.platform==="win32"?"":" -c unix_socket_directories=";
+  try {
+    cli("pg_ctl",["start","-w","-t","12","-D",dir,"-l",log,"-o",`-h 127.0.0.1 -p ${port}${tcpOnly}`]);
+    started=true;
+  } catch (e) {
+    if(existsSync(log)) {
+      const line=readFileSync(log,"utf8").split(/\r?\n/).find(l=>/\b(FATAL|PANIC)\b/.test(l));
+      if(line)console.error("Isolated cluster startup: "+line.split(/\b(?:FATAL|PANIC):\s*/,2)[1]?.slice(0,250));
+    }
+    throw e;
+  }
   control=new Client(cfg);await control.connect();
   await q(`create role anon;create role authenticated;create role service_role;
     create schema auth;create schema private;
