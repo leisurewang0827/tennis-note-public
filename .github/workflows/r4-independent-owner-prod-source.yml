@@ -1,0 +1,92 @@
+name: R4 independent owner production source verification only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-independent-owner-prod-source.yml'
+      - 'release-sources/r4-independent-owner-prod/**'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - name: Check base artifact metadata
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh api repos/leisurewang0827/tennis-note-public/actions/artifacts/13743341814 | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const x=JSON.parse(s);if(x.expired||x.digest!=="sha256:ebf3da21e1672a93e66b9936747b976762e55f69bc19aad70133ec4ef6ee759a"||x.workflow_run.id!==42774611944||x.workflow_run.head_sha!=="bd848b8c8f893d3b7be0e2a763065e1ffaa8ec7c")process.exit(1)})'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-pending-member-registration-candidate-42774611944
+          run-id: 42774611944
+          github-token: '${{ github.token }}'
+          path: prod-base
+      - name: Seal administrator-only source delta
+        run: |
+          node --check release-sources/r4-independent-owner-prod/independent-ui.js
+          node release-sources/r4-independent-owner-prod/build-source.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-independent-owner-prod-candidate-${{ github.run_id }}
+          path: prod-candidate
+          retention-days: 14
+          if-no-files-found: error
+  synthetic-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: {mode: [basic, lock, expiry, canary, race, deadline, late-close]}
+    services:
+      postgres:
+        image: postgres:17
+        env: {POSTGRES_PASSWORD: synthetic-ci-only}
+        ports: ['5432/tcp']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - name: Prepare isolated synthetic driver
+        run: npm install --prefix "$RUNNER_TEMP/r4-pg" --no-save --package-lock=false pg@8.16.3
+      - name: Check exact new DB contract
+        env:
+          R4_EPHEMERAL_CI: '1'
+          R4_EPHEMERAL_PORT: '${{ job.services.postgres.ports[5432] }}'
+          R4_PG_DRIVER_ROOT: '${{ runner.temp }}/r4-pg'
+          R4_INDEPENDENT_LOCK_ONLY: '${{ matrix.mode == ''lock'' && ''1'' || '''' }}'
+          R4_INDEPENDENT_EXPIRY_ONLY: '${{ matrix.mode == ''expiry'' && ''1'' || '''' }}'
+          R4_INDEPENDENT_CANARY_ONLY: '${{ (matrix.mode == ''canary'' || matrix.mode == ''race'' || matrix.mode == ''deadline'' || matrix.mode == ''late-close'') && ''1'' || '''' }}'
+          R4_INDEPENDENT_CANARY_RACE_ONLY: '${{ matrix.mode == ''race'' && ''1'' || '''' }}'
+          R4_INDEPENDENT_CANARY_EXPIRED_ONLY: '${{ matrix.mode == ''deadline'' && ''1'' || '''' }}'
+          R4_INDEPENDENT_LATE_CLOSE_ONLY: '${{ matrix.mode == ''late-close'' && ''1'' || '''' }}'
+        run: node release-sources/r4-independent-owner-prod/check-db.mjs
+  synthetic-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - name: Prepare synthetic browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-browser" --no-save --package-lock=false playwright@1.56.1
+          "$RUNNER_TEMP/r4-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify isolated UI behavior
+        env: {R4_PLAYWRIGHT_ROOT: '${{ runner.temp }}/r4-browser/node_modules/playwright'}
+        run: node release-sources/r4-independent-owner-prod/check-web.mjs
+      - name: Verify rejection and safe recovery delta
+        env:
+          R4_PLAYWRIGHT_ROOT: '${{ runner.temp }}/r4-browser/node_modules/playwright'
+          R4_WEB_REJECTION_ONLY: '1'
+        run: node release-sources/r4-independent-owner-prod/check-web.mjs
