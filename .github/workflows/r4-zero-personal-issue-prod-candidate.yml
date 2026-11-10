@@ -1,0 +1,69 @@
+name: R4 zero personal issue production candidate only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-zero-personal-issue-prod-candidate.yml'
+      - 'release-sources/r4-zero-personal-issue-prod/**'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    services:
+      pg:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated
+          POSTGRES_DB: tn_zero_personal_ci
+        ports: ['5432/tcp']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check approved existing administrator artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REPOSITORY" = leisurewang0827/tennis-note-public
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/42732459784" --jq '.head_sha + ":" + .conclusion' |
+            grep -Fx 'caafa15aa8a05dbf6c54812316cff6c909b8ff1b:success'
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/13725347078" --jq '(.workflow_run.id|tostring) + ":" + .digest + ":" + (.expired|tostring)' |
+            grep -Fx '42732459784:sha256:75ea630c84d0984e4d0fe72ed653d8bf99db6609cb1b60adfbdf35ddac35010b:false'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-admin-catalog-prod-42732459784
+          run-id: 42732459784
+          github-token: ${{ github.token }}
+          path: candidate-base
+      - name: Install focused test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-focused" --no-save --package-lock=false --ignore-scripts pg@8.16.3 playwright@1.56.1
+          "$RUNNER_TEMP/r4-focused/node_modules/.bin/playwright" install chromium
+      - name: Verify production-only delta in isolated database and browser
+        env:
+          TN_QA_DB: postgresql://postgres:isolated@127.0.0.1:${{ job.services.pg.ports[5432] }}/tn_zero_personal_ci
+        run: |
+          export TN_QA_PG_MODULE="$RUNNER_TEMP/r4-focused/node_modules/pg"
+          export TN_QA_PLAYWRIGHT_MODULE="$RUNNER_TEMP/r4-focused/node_modules/playwright"
+          node release-sources/r4-zero-personal-issue-prod/check-db.mjs
+          node release-sources/r4-zero-personal-issue-prod/check-browser.mjs candidate-base
+          node release-sources/r4-zero-personal-issue-prod/compose.mjs candidate-base candidate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-zero-personal-issue-prod-candidate-${{ github.run_id }}
+          path: candidate
+          retention-days: 14
+          if-no-files-found: error
