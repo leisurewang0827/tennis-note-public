@@ -1,0 +1,33 @@
+{
+  "sourceCommit": "ecdbdac4a7a9ca8821eea85eb0a78d66809a52ba",
+  "sourceRunId": 42805153957,
+  "artifactId": 13757264546,
+  "artifactDigest": "1272658b5a72962e789b11babcde9a5e5aa28f8104ee154f72ccff6622f34c98",
+  "sealSha256": "42c9a5a7c54cd5033edd5e0623d669eb4d1739b995802be3c46cbe873e34333d",
+  "qaReceipt": {
+    "approved": true,
+    "sourceCommit": "ecdbdac4a7a9ca8821eea85eb0a78d66809a52ba",
+    "sourceRunId": 42805153957,
+    "artifactDigest": "1272658b5a72962e789b11babcde9a5e5aa28f8104ee154f72ccff6622f34c98",
+    "sealSha256": "42c9a5a7c54cd5033edd5e0623d669eb4d1739b995802be3c46cbe873e34333d",
+    "moduleSha256": "d9343e6abda15331a6a32ae7befe41eeccda967cc1dcaa3b702a39d4084f4001",
+    "sqlSha256": "a584408fceb91030697cc554cba5821d99e960adfb0cc00d33043cc401c5dc76"
+  },
+  "qaReceiptSha256": "2f9358f0f01ea35e6e9f0d9c685bef37c64c5b5a2ae4e5f40a6655115409433d",
+  "devOffReceipt": {
+    "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+    "sqlSha256": "a584408fceb91030697cc554cba5821d99e960adfb0cc00d33043cc401c5dc76",
+    "sourceCommit": "ecdbdac4a7a9ca8821eea85eb0a78d66809a52ba",
+    "sourceRunId": 42805153957,
+    "artifactDigest": "1272658b5a72962e789b11babcde9a5e5aa28f8104ee154f72ccff6622f34c98",
+    "rosterOff": true,
+    "lessonOff": true,
+    "activeLeases": 0,
+    "existingRecordsPreserved": true,
+    "legacySwitchesUnchanged": true,
+    "rpcAclOk": true,
+    "privateRlsAclOk": true,
+    "productionWrites": 0
+  },
+  "devOffReceiptSha256": "eba94eb6dfa9c3c2a8fb623085369d9465681e1127d12b6ee2b3850995989ea0"
+}
