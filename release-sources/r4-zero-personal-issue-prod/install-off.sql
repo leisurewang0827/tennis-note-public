@@ -17,6 +17,10 @@ begin
       <> '420c228b364835151a2e09a288a44c4cd146fa1e795122ab6d130ae922537dba'
     or not exists(select from pg_constraint where conrelid='public.tn_member_database_records'::regclass and contype='u'
       and conkey=array[(select attnum from pg_attribute where attrelid='public.tn_member_database_records'::regclass and attname='user_id')])
+    or encode(sha256(convert_to(pg_get_functiondef('private.tn_reconcile_future_regular_ticket_core(uuid,uuid,boolean)'::regprocedure),'UTF8')),'hex')
+      is distinct from 'faf666a2a803548dc2bd26a5f8a0d301fff1e027e1609ce9f3e743bdd8462c2d'
+    or encode(sha256(convert_to(pg_get_functiondef('public.tn_schedule_v2_reserved_regular_units(uuid,date)'::regprocedure),'UTF8')),'hex')
+      is distinct from '03be6593c8831c589ebfa1e4a310e7baa56948312739007522386ea7f1081411'
   then raise exception 'r4_zero_issue_preimage_drift'; end if;
 end $pre$;
 
@@ -149,7 +153,6 @@ create trigger tn_r4_zero_personal_payment_guard before insert or update of prod
 create function public.tn_r4_prod_zero_personal_issue(p_action text,p_branch uuid,p_member uuid,
   p_registration uuid default null,p_operation uuid default null)
 returns jsonb language plpgsql security definer set search_path=pg_catalog
-set tennisnote.skip_future_regular_reconcile = 'on'
 as $issue$
 declare
   g private.tn_r4_zero_personal_issue_gate%rowtype;
@@ -192,6 +195,14 @@ begin
   if not found or expires_at is null or clock_timestamp()>=expires_at
   then raise insufficient_privilege using message='r4_zero_personal_denied'; end if;
 
+  -- Take the legacy scheduler's locks before reading its business rows, without blocking other
+  -- scheduling operations or changing a protected session parameter.
+  if p_action='issue' then
+    if not pg_try_advisory_xact_lock(hashtextextended('tennisnote-schedule-write-v1',0))
+      or not pg_try_advisory_xact_lock(hashtextextended('tennisnote-schedule-v2-write',0))
+    then raise lock_not_available using message='r4_zero_personal_schedule_busy'; end if;
+  end if;
+
   -- Only an already-active member with a current, same-branch ticket can use this path.
   -- The existing AFTER INSERT CRM trigger cannot replace that active current-ticket link.
   select m.* into crm from public.tn_member_database_records m
@@ -200,7 +211,9 @@ begin
   join public.tn_member_tickets t on t.id=m.current_ticket_id and t.user_id=m.user_id
     and t.branch_id=m.branch_id and t.status in ('active','paused') and t.remaining_sessions>0 and t.refund_hold_at is null
   where m.user_id=p_member and m.branch_id=g.branch_id and m.record_status='active'
-  for share of m,u,t;
+  -- An existing ticket change can already hold this row and then need a scheduler lock.
+  -- Do not wait while our advisory locks are held.
+  for share of m,u,t nowait;
   if not found then raise insufficient_privilege using message='r4_zero_personal_member_scope'; end if;
 
   if p_action='list' then
@@ -237,6 +250,12 @@ begin
         and tgname not in ('tn_r4_zero_personal_ref_guard','tn_r4_zero_personal_ticket_guard','tn_r4_zero_personal_payment_guard')) ,''),'UTF8')),'hex')
         <> '420c228b364835151a2e09a288a44c4cd146fa1e795122ab6d130ae922537dba'
       then raise exception 'r4_zero_issue_preimage_drift'; end if;
+      -- The pinned scheduler returns before materialization for a new ticket with no rules.
+      if encode(sha256(convert_to(pg_get_functiondef('private.tn_reconcile_future_regular_ticket_core(uuid,uuid,boolean)'::regprocedure),'UTF8')),'hex')
+          is distinct from 'faf666a2a803548dc2bd26a5f8a0d301fff1e027e1609ce9f3e743bdd8462c2d'
+        or encode(sha256(convert_to(pg_get_functiondef('public.tn_schedule_v2_reserved_regular_units(uuid,date)'::regprocedure),'UTF8')),'hex')
+          is distinct from '03be6593c8831c589ebfa1e4a310e7baa56948312739007522386ea7f1081411'
+      then raise exception 'r4_zero_issue_scheduler_drift'; end if;
       if (select count(*) from pg_trigger where not tgisinternal and tgenabled='O' and
         (tgrelid,tgname,tgfoid) in (
           ('public.tn_membership_products'::regclass,'tn_r4_zero_personal_ref_guard','private.tn_r4_zero_personal_reference_guard()'::regprocedure),
@@ -260,6 +279,12 @@ begin
         start_day,start_day+item.days-1,'active',0,0,null,jsonb_build_object('r4ProdZeroPersonal',item.id));
       if not exists(select from public.tn_member_database_records m where m.id=crm.id and to_jsonb(m)=to_jsonb(crm))
       then raise exception 'r4_zero_issue_existing_member_record_changed'; end if;
+      if exists(select from public.tn_regular_schedule_rules x where x.ticket_id=receipt.ticket_id)
+        or exists(select from public.tn_lessons x where x.member_ticket_id=receipt.ticket_id)
+        or exists(select from public.tn_lesson_participants x where x.ticket_id=receipt.ticket_id)
+        or exists(select from public.tn_audit_logs x where x.target_id=receipt.ticket_id
+          and x.target_table='tn_member_tickets' and x.action='future_regular_schedule_auto_reconcile_failed')
+      then raise exception 'r4_zero_issue_schedule_side_effect'; end if;
     end if;
     if receipt.ticket_id is not null then
       if receipt.profile_id is distinct from g.profile_id

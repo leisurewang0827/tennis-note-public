@@ -55,15 +55,36 @@ try{
       source_payment_id uuid,refund_hold_at timestamptz,policy_snapshot jsonb default '{}'::jsonb);
     create table public.tn_member_database_records(id uuid primary key,user_id uuid unique,current_ticket_id uuid,branch_id uuid,record_status text);
     create table public.tn_payments(id uuid primary key,product_id uuid,ticket_id uuid);
-    create table public.qa_schedule_log(ticket_id uuid);
+    create table public.tn_regular_schedule_rules(ticket_id uuid,status text);
+    create table public.tn_lessons(member_ticket_id uuid);
+    create table public.tn_lesson_participants(ticket_id uuid);
+    create table public.tn_audit_logs(target_id uuid,target_table text,action text);
+    create table public.qa_scheduler_invocations(ticket_id uuid);
     create table public.qa_revision_log(branch_id uuid);
+    create function public.tn_schedule_v2_reserved_regular_units(uuid,date) returns int language sql stable as
+      $$select count(*)::int from public.tn_lesson_participants where ticket_id=$1$$;
+    create function private.tn_reconcile_future_regular_ticket_core(uuid,uuid,boolean) returns jsonb language plpgsql as $$begin
+      perform pg_advisory_xact_lock(hashtextextended('tennisnote-schedule-write-v1',0));
+      perform pg_advisory_xact_lock(hashtextextended('tennisnote-schedule-v2-write',0));
+      insert into public.qa_scheduler_invocations values($1);
+      if current_setting('qa.issue_fault',true)='audit' then raise exception 'synthetic failure'; end if;
+      if current_setting('qa.issue_fault',true)='lesson' then insert into public.tn_lessons values($1); end if;
+      perform public.tn_schedule_v2_reserved_regular_units($1,current_date);
+      if not exists(select from public.tn_regular_schedule_rules where ticket_id=$1 and status='active') then
+        return jsonb_build_object('reason','regular_schedule_rule_missing'); end if;
+      insert into public.tn_lessons values($1);
+      return '{}'::jsonb;
+      end$$;
     create function public.qa_lifecycle() returns trigger language plpgsql as $$begin
       update public.tn_member_database_records set current_ticket_id=new.id,branch_id=new.branch_id
       where user_id=new.user_id and (current_ticket_id is null or record_status<>'active'); return new; end$$;
     create trigger legacy_crm after insert on public.tn_member_tickets for each row execute function public.qa_lifecycle();
     create function public.qa_future() returns trigger language plpgsql as $$begin
-      if current_setting('tennisnote.skip_future_regular_reconcile',true) is distinct from 'on' then
-        insert into public.qa_schedule_log values(new.id); end if;return new;end$$;
+      begin perform private.tn_reconcile_future_regular_ticket_core(new.id,null,false);
+      exception when others then
+        insert into public.tn_audit_logs values(new.id,'tn_member_tickets','future_regular_schedule_auto_reconcile_failed');
+      end;
+      return new;end$$;
     create trigger legacy_future after insert on public.tn_member_tickets for each row execute function public.qa_future();
     create function public.qa_revision() returns trigger language plpgsql as $$begin
       insert into public.qa_revision_log values(new.branch_id);return new;end$$;
@@ -98,7 +119,7 @@ try{
       (gen_random_uuid(),'${unsafeMember}',null,'${branch}','historical'),
       (gen_random_uuid(),'${secondMember}','${secondTicket}','${branch}','active');
     insert into public.tn_payments values(gen_random_uuid(),'${legacyProduct}','${legacyTicket}');
-    truncate public.qa_schedule_log,public.qa_revision_log;
+    truncate public.qa_scheduler_invocations,public.qa_revision_log;
   `);
   const footprint=()=>row(db,`select
     (select jsonb_agg(to_jsonb(x) order by id) from public.tn_member_database_records x) crm,
@@ -106,18 +127,29 @@ try{
     (select jsonb_agg(to_jsonb(x) order by id) from public.tn_payments x) payments,
     (select jsonb_agg(to_jsonb(x) order by id) from auth.sessions x) sessions,
     (select jsonb_agg(to_jsonb(x) order by id) from private.tn_r4_prod_member_catalog_registration x) registrations,
-    (select count(*)::int from public.qa_schedule_log) schedules`);
+    (select count(*)::int from public.tn_lessons) schedules,
+    (select count(*)::int from public.tn_lesson_participants) participants,
+    (select count(*)::int from public.tn_regular_schedule_rules) rules,
+    (select count(*)::int from public.tn_audit_logs) audit`);
   const baseline=await footprint();
   await sql(db,"set search_path=pg_catalog");
   const seal=await row(db,`select ${triggers} t,encode(sha256(convert_to(pg_get_functiondef(
-    'public.tn_r4_prod_admin_standing_catalog(text,uuid,jsonb)'::regprocedure),'UTF8')),'hex') s`);
+    'public.tn_r4_prod_admin_standing_catalog(text,uuid,jsonb)'::regprocedure),'UTF8')),'hex') s,
+    encode(sha256(convert_to(pg_get_functiondef('private.tn_reconcile_future_regular_ticket_core(uuid,uuid,boolean)'::regprocedure),'UTF8')),'hex') f,
+    encode(sha256(convert_to(pg_get_functiondef('public.tn_schedule_v2_reserved_regular_units(uuid,date)'::regprocedure),'UTF8')),'hex') u`);
   const original=from("install-off.sql");
   const st="e76652c1e8d06edfc790e5a1552691369fb2453ad5734b8b8da26d05568e52cf";
   const tr="420c228b364835151a2e09a288a44c4cd146fa1e795122ab6d130ae922537dba";
+  const fu="faf666a2a803548dc2bd26a5f8a0d301fff1e027e1609ce9f3e743bdd8462c2d";
+  const un="03be6593c8831c589ebfa1e4a310e7baa56948312739007522386ea7f1081411";
   assert.equal(original.split(st).length,2);assert.equal(original.split(tr).length,3);
+  assert.equal(original.split(fu).length,3);assert.equal(original.split(un).length,3);
+  assert.doesNotMatch(original,/skip_future_regular_reconcile|set_config\(/i);
   await assert.rejects(sql(db,original),{message:"r4_zero_issue_preimage_drift"});
   await sql(db,"rollback");
-  await sql(db,original.replace(st,seal.s).replaceAll(tr,seal.t));
+  await sql(db,original.replace(st,seal.s).replaceAll(tr,seal.t).replaceAll(fu,seal.f).replaceAll(un,seal.u));
+  assert.deepEqual((await row(db,`select proconfig from pg_proc where oid='${rpc}(text,uuid,uuid,uuid,uuid)'::regprocedure`)).proconfig,
+    ["search_path=pg_catalog"]);
   assert.deepEqual(await footprint(),baseline);
   await login(db);await login(other);
   await rejected(call(db,"list"));
@@ -137,6 +169,21 @@ try{
   await login(db,admin,secondSession);await rejected(call(db,"issue"));
   await login(db,admin,adminSession,1);await rejected(call(db,"issue"));
   await login(db);
+  await sql(watch,"begin;select pg_advisory_xact_lock(hashtextextended('tennisnote-schedule-v2-write',0))");
+  await assert.rejects(call(db,"issue"),{code:"55P03",message:"r4_zero_personal_schedule_busy"});
+  await sql(watch,"rollback");
+  await sql(watch,"begin");
+  await sql(watch,"select id from public.tn_member_tickets where id=$1 for update",[legacyTicket]);
+  const beforeBusy=Date.now();
+  await assert.rejects(call(db,"issue"),{code:"55P03"});
+  assert.ok(Date.now()-beforeBusy<3000,"ISSUE_WAITED_ON_EXISTING_TICKET");
+  await sql(watch,"rollback");
+  for(const fault of ["lesson","audit"]){
+    await sql(db,"select set_config('qa.issue_fault',$1,false)",[fault]);
+    await assert.rejects(call(db,"issue"),{message:"r4_zero_issue_schedule_side_effect"});
+    assert.equal(await call(db,"read"),null);
+  }
+  await sql(db,"select set_config('qa.issue_fault','',false)");
   await sql(db,"begin");
   const result=await call(db,"issue");
   let done=false;
@@ -192,6 +239,7 @@ try{
     (select count(*)::int from public.qa_revision_log where branch_id='${branch}') revisions,
     (select count(*)::int from private.tn_r4_zero_personal_issue_gate where enabled) enabled`);
   assert.deepEqual(tail,{receipts:1,bound_requests:2,tickets:1,revisions:1,enabled:0});
+  assert.equal((await row(db,"select count(*)::int n from public.qa_scheduler_invocations")).n,1);
   // Existing authorized correction deletes the ticket even when issuance is OFF.
   await sql(db,"delete from public.tn_member_tickets where id=$1",[result.ticketId]);
   await rejected(sql(db,"insert into public.tn_member_tickets(id,product_id,user_id,branch_id,policy_snapshot) values($1,$2,$3,$4,jsonb_build_object('r4ProdZeroPersonal',$5::uuid))",
@@ -210,5 +258,5 @@ try{
     (select count(*)::int from public.tn_member_tickets where policy_snapshot ? 'r4ProdZeroPersonal') tickets`);
   assert.deepEqual(preserved,{tombstones:1,bound_requests:3,tickets:0});
   assert.deepEqual(await footprint(),baseline);
-  console.log("PG17_DELTA_PASS: scoped access, request binding, atomic race, no paid route, correction and no reissue, drift denial, readback, OFF lock");
+  console.log("PG17_DELTA_PASS: scheduler invoked without protected SET; no rules, no schedules; busy and side effects fail closed; prior issuance protections preserved");
 }finally{await Promise.all(clients.map(c=>c.end()));}
