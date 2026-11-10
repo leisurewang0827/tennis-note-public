@@ -1,0 +1,51 @@
+name: R4 pending member registration sealed administrator candidate
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-pending-member-registration-candidate.yml'
+      - '.github/workflows/r4-pending-member-registration-promotion.yml'
+      - 'release-sources/r4-pending-member-registration/pending-member-registration-install-off.sql'
+      - 'release-sources/r4-pending-member-registration/pending-member-registration-open.sql'
+      - 'release-sources/r4-pending-member-registration/pending-member-registration-off.sql'
+      - 'release-sources/r4-pending-member-registration/pending-member-registration.js'
+      - 'release-sources/r4-pending-member-registration/compose-pending-member-registration.mjs'
+      - 'release-sources/r4-pending-member-registration/check-pending-member-db.mjs'
+      - 'release-sources/r4-pending-member-registration/check-pending-member-web.mjs'
+      - 'release-sources/r4-pending-member-registration/release.mjs'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Verify exact new paths and approved recovery artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node release-sources/r4-pending-member-registration/release.mjs candidate-source
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-zero-personal-issue-prod-candidate-42747801159
+          run-id: 42747801159
+          github-token: ${{ github.token }}
+          path: prod-base
+      - name: Check new release wiring and seal administrator-only delta
+        run: |
+          node --check release-sources/r4-pending-member-registration/release.mjs
+          node --check release-sources/r4-pending-member-registration/pending-member-registration.js
+          node release-sources/r4-pending-member-registration/release.mjs candidate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-pending-member-registration-candidate-${{ github.run_id }}
+          path: prod-candidate
+          retention-days: 14
+          if-no-files-found: error
