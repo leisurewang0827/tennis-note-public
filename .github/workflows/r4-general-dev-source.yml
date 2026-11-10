@@ -1,0 +1,67 @@
+name: R4 general DEV administrator source and recovery preflight
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-general-dev-source.yml'
+      - 'release-sources/r4-general-dev/**'
+      - 'scripts/r4_general_dev_source.mjs'
+      - 'scripts/check_r4_general_dev_source.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-ui-finish-42446829367
+          run-id: 42446829367
+          github-token: ${{ github.token }}
+          path: base
+      - name: Verify exact source and baseline delta
+        env:
+          R4_GENERAL_BASE: base
+        run: |
+          node scripts/check_r4_general_dev_source.mjs
+          env R4_GENERAL_CONFIG_ONLY=1 node scripts/check_r4_general_dev_source.mjs
+      - name: Build sealed administrator candidate only
+        run: node scripts/r4_general_dev_source.mjs build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-general-dev-source-${{ github.run_id }}
+          path: general-artifact/
+          if-no-files-found: error
+          retention-days: 7
+  preflight:
+    needs: build
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Read canonical and recovery only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_general_dev_source.mjs preflight

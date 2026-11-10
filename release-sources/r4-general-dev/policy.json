@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "parent": "8c6be565df5adf83b460ea05003c46700235f492",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "baseRun": 42446829367,
+  "baseArtifactId": 13603294486,
+  "baseArtifactName": "r4-ui-finish-42446829367",
+  "baseArtifactDigest": "48ed672ee60e6f44bc86aa94a6dd3e1fc75a0958c46f4614ea1fd47d59eda660",
+  "baseSource": "ca5528d3b7b8cd1b9ef41c4cefd7122d9671af57",
+  "baseSealSha256": "077e6c8b8722ab301e639d77f6be854ee4522e36edb3884cc19e7e1a8758dc36",
+  "baseIndexSha256": "f959884f4859d59e8d2f236c7c4dcc1812956dbff5932dbdb65f440c460a49b0",
+  "baseConfigSha256": "2876392b257795e386dacf06b07a3ce568dcdaa27357d5e91961564e697cc3de",
+  "baseReleaseSha256": "1f3be9b74f63dd1abb54507989cba001fc4be2b21dd7c60359ab51c085d78581",
+  "moduleSha256": "d9343e6abda15331a6a32ae7befe41eeccda967cc1dcaa3b702a39d4084f4001",
+  "sqlSha256": "a584408fceb91030697cc554cba5821d99e960adfb0cc00d33043cc401c5dc76",
+  "project": "tennisnote-admin-dev",
+  "branchName": "dev",
+  "canonicalId": "200eb1ac-8718-4cd7-904c-3c7426ce90d2",
+  "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba"
+}
