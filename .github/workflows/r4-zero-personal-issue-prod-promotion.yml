@@ -1,0 +1,69 @@
+name: R4 zero personal issue administrator production only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-zero-personal-issue-prod-promotion.yml'
+      - 'release-promotions/r4-zero-personal-issue-prod/promote.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  promote:
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Resolve exact reviewed candidate and committed OFF evidence
+        id: source
+        run: node release-promotions/r4-zero-personal-issue-prod/promote.mjs source
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-zero-personal-issue-prod-candidate-${{ steps.source.outputs.run }}
+          run-id: ${{ steps.source.outputs.run }}
+          github-token: ${{ github.token }}
+          path: prod-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-scoped-admin-catalog-prod-42732459784
+          run-id: 42732459784
+          github-token: ${{ github.token }}
+          path: prod-base
+      - name: Prepare existing one-request Pages transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+          node release-promotions/r4-zero-personal-issue-prod/promote.mjs transport
+      - name: Verify administrator target, pinned artifacts and recovery before any deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-promotions/r4-zero-personal-issue-prod/promote.mjs admit
+      - name: Publish sealed administrator artifact once
+        id: publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANDIDATE_SOURCE: ${{ steps.source.outputs.source }}
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy prod-candidate/admin --project-name=tennisnote-admin --branch=main --commit-hash="$CANDIDATE_SOURCE" --commit-dirty=false > "$RUNNER_TEMP/r4-zero-personal-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/r4-zero-personal-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN_NO_RETRY");f.appendFileSync(process.env.GITHUB_OUTPUT,"url="+m[0]+"\n");'
+      - name: Read back new production deployment and preserve recovery point
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-promotions/r4-zero-personal-issue-prod/promote.mjs post
