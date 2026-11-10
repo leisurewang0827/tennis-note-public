@@ -1,0 +1,73 @@
+name: R4 independent owner production administrator only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['release-promotions/r4-independent-owner-prod/promotion.json']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  promote:
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 3, persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-independent-owner-prod-candidate-42846945596
+          run-id: 42846945596
+          github-token: '${{ github.token }}'
+          path: prod-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-pending-member-registration-candidate-42774611944
+          run-id: 42774611944
+          github-token: '${{ github.token }}'
+          path: prod-base
+      - name: Validate focused promotion guards without network
+        run: node scripts/check_r4_independent_owner_prod_promotion.mjs prod-base prod-candidate
+      - name: Prepare existing single-request Pages transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+          node scripts/r4_independent_owner_prod_promotion.mjs prepare
+      - name: Recheck OFF receipt, exact artifacts, canonical and recovery
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node scripts/r4_independent_owner_prod_promotion.mjs admit
+      - name: Publish sealed administrator artifact once
+        id: publish
+        env:
+          CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy prod-candidate/admin --project-name=tennisnote-admin --branch=main --commit-hash=7ba4e453e5e89540c0578db1dd76312c6f8d9442 --commit-dirty=false > "$RUNNER_TEMP/r4-independent-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/r4-independent-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_OUTCOME_UNKNOWN");f.appendFileSync(process.env.GITHUB_OUTPUT,"url="+m[0]+"\n");'
+      - name: Verify canonical and immutable administrator assets
+        id: post
+        env:
+          PUBLISHED_URL: '${{ steps.publish.outputs.url }}'
+          GH_TOKEN: '${{ github.token }}'
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node scripts/r4_independent_owner_prod_promotion.mjs post
+      - name: Restore exact prior administrator only on definite immutable mismatch
+        if: failure() && steps.post.outputs.definite_mismatch == 'true'
+        env:
+          DEFINITE_MISMATCH: '${{ steps.post.outputs.definite_mismatch }}'
+          PUBLISHED_DEPLOYMENT_ID: '${{ steps.post.outputs.deployment_id }}'
+          GH_TOKEN: '${{ github.token }}'
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node scripts/r4_independent_owner_prod_promotion.mjs rollback

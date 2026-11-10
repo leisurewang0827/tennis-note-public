@@ -1,0 +1,27 @@
+{
+  "status": "COMMITTED_PROD_R4_INDEPENDENT_OFF_PASS",
+  "verifiedAt": "2026-11-10T15:48:36Z",
+  "source": "7ba4e453e5e89540c0578db1dd76312c6f8d9442",
+  "run": 42846945596,
+  "artifact": 13777303858,
+  "artifactHash": "66eed766bd596422bbbd352641f1f1c7b67d2ab0bf8c4fee8e4a22a3ccadeeae",
+  "sealHash": "44c31617fc2c1d8ea5377d0e6d6a0f2d2b52ee1aa048a023e8c4ac08f497c85b",
+  "projectHash": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "recovery": "2652a679-cc7b-4b85-a4d0-166c393faa0d",
+  "sql": {
+    "install-off.sql": "1f7d415291d3b9be9067476acbb2bd6721c425dcfc609a6451005765a109f618",
+    "canary-open.sql": "f3dd0710c70064cb4dd8bfe9ea65c0b549457018669cb05681dfbaabc4fbe16f",
+    "canary-close.sql": "243d45009ad287bde0b57b8602fb9dce7f9434038f52867f1d8340136680dfe0",
+    "canary-postread.sql": "2365d9a81762ed3ae6576d5e4c1d72e82b2bfa3d5eb0114cea392f00d70225a2"
+  },
+  "readbackSha": "df1acda2190993602e31e5ffb7ae66a84369f2fa73284a48fffb33afb254caab",
+  "actual": {
+    "feature_off": true,
+    "functions_exact_and_scoped": true,
+    "no_leases": true,
+    "no_lesson": true,
+    "no_tombstones": true,
+    "no_workspace": true,
+    "private_tables_protected": true
+  }
+}

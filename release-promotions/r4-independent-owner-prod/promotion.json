@@ -1,0 +1,15 @@
+{
+  "source": "7ba4e453e5e89540c0578db1dd76312c6f8d9442",
+  "run": 42846945596,
+  "artifact": 13777303858,
+  "artifactHash": "66eed766bd596422bbbd352641f1f1c7b67d2ab0bf8c4fee8e4a22a3ccadeeae",
+  "sealHash": "44c31617fc2c1d8ea5377d0e6d6a0f2d2b52ee1aa048a023e8c4ac08f497c85b",
+  "offReceiptHash": "514243df35f8a86754b1f11402ca4116d76a3660d178bb05ec8b7e37226fe2ec",
+  "recovery": "2652a679-cc7b-4b85-a4d0-166c393faa0d",
+  "baseSource": "bd848b8c8f893d3b7be0e2a763065e1ffaa8ec7c",
+  "baseRun": 42774611944,
+  "baseArtifact": 13743341814,
+  "baseArtifactHash": "ebf3da21e1672a93e66b9936747b976762e55f69bc19aad70133ec4ef6ee759a",
+  "baseSealHash": "5a7b6af33ac72f8ebd879b02555baa720cd309a01b10246af5af66cb9f4c54ad",
+  "projectHash": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a"
+}
