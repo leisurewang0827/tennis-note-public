@@ -1,0 +1,31 @@
+{
+  "status": "COMMITTED_R4_INDEPENDENT_V2_OFF_PASS",
+  "projectFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "candidateSeal": "f454d23dbce8ca99895945950f4a80ee75a0f1f633a9419b2eb73fdf049daaaa",
+  "recovery": "d0841b4a-a92a-4a87-a5c1-ae40436fb2a3",
+  "installSqlSha256": "e6f0dbe7faf21b859f173ddb98b23fe3614e21fcd19a330a6db10969bb594ab7",
+  "postreadSqlSha256": "00a5040c87ecd22a39bf93967c280bb6f6de1a3cf3adff0ff9bdf738ddf777e2",
+  "sourceCommit": "6ba041bbd89d3598f1bb8649c3a111697b713133",
+  "sourceRun": 42964903382,
+  "sourceArtifact": 13831046696,
+  "artifactDigest": "9fc622ca573b444f0c406b15d6b8648b3577379aaa25de7c79ce2fb4c77e42d1",
+  "legacyBefore": {
+    "count": 1,
+    "digest": "99f7731358bdb36ce79316ee208ec1dae6df0adf16b6d9b2591ae2e4c86543d9"
+  },
+  "actual": {
+    "effectiveDesignated": 0,
+    "effectivePilot": 0,
+    "epoch": 0,
+    "legacyLessonCount": 1,
+    "legacyLessonDigest": "99f7731358bdb36ce79316ee208ec1dae6df0adf16b6d9b2591ae2e4c86543d9",
+    "mode": "off",
+    "prodTarget": true,
+    "surfaceOk": true,
+    "unrevokedDesignated": 0,
+    "unrevokedPilot": 0,
+    "v2Lessons": 0,
+    "v2Operations": 0
+  },
+  "verifiedAt": "2026-11-11T05:20:59.008Z"
+}
