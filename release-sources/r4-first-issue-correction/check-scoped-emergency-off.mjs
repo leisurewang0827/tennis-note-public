@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {reviewComment, renderGuardedBoundOff} from './first-issue-db-actions.mjs';
+import {STOP} from './verify-first-issue-correction.mjs';
+
+const base=process.argv[2]??'C:/Codex/tennis-note-public-release-20260815/release-sources/r4-first-issue-candidate';
+const input=readFileSync(base+'/prod-off-template-v2.sql');
+const operation='11111111-2222-4333-8444-555555555555';
+const fixed=renderGuardedBoundOff(input,operation);
+assert.equal(fixed.split(STOP).length,2);
+const guard=`operation_id is distinct from '${operation}'::uuid`;
+assert.ok(fixed.indexOf('lock table private.tn_r4_first_issue_scope')<fixed.indexOf(guard));
+assert.ok(fixed.indexOf(guard)<fixed.indexOf('update private.tn_r4_first_issue_control'));
+assert.match(fixed,/r4_off_operation_or_options_drift/);
+for(const value of [null,undefined,'00000000-0000-0000-0000-000000000000',"1' OR TRUE --"])assert.throws(()=>renderGuardedBoundOff(input,value));
+assert.throws(()=>renderGuardedBoundOff(Buffer.concat([input,Buffer.from(' ')]),operation));
+const fields={commit:'a'.repeat(40),manifest:'b'.repeat(64),qaDigest:'c'.repeat(64)};
+const scopeDigest='d'.repeat(64);
+assert.equal(reviewComment({...fields,action:'off',operation,scopeDigest}).split('\n').at(-2),operation);
+assert.equal(reviewComment({...fields,action:'install',operation,scopeDigest}),reviewComment({...fields,action:'off',operation,scopeDigest}));
+assert.throws(()=>reviewComment({...fields,action:'off'}));
+assert.throws(()=>reviewComment({...fields,action:'install',operation}));
+console.log(JSON.stringify({scopedOffLockOrder:true,exactApprovalOperation:true,retainedExternalStop:true,wrongBindingDenied:7,network:0,dbWrites:0}));

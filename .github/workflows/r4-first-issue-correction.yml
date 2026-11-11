@@ -1,0 +1,53 @@
+# Local candidate. Publish only as the exact independently reviewed packet.
+name: R4 first issue correction and DB approval evidence
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-first-issue-correction.yml'
+      - 'release-sources/r4-first-issue-correction/**'
+permissions:
+  contents: read
+jobs:
+  correction-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2, persist-credentials: false}
+      - name: Verify exact SQL delta, inherited OFF and unchanged administrator seal
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 30bdd59100426cc6cee740c9b52b84c1e6c10c5d
+          node release-sources/r4-first-issue-correction/verify-first-issue-correction.mjs
+          node release-sources/r4-first-issue-correction/check-first-issue-db-actions.mjs
+          node release-sources/r4-first-issue-correction/check-scoped-emergency-off.mjs release-sources/r4-first-issue-candidate
+          node release-sources/r4-first-issue-correction/check-db-write-journal.mjs
+          node release-promotions/r4-first-issue-admin/check-correction-file-binding.mjs
+          node release-promotions/r4-first-issue-admin/check-trusted-review-bridge.mjs --recovery-only
+          node release-promotions/r4-first-issue-admin/check-admin-single-write-transport.mjs --pages-routes-only
+      - name: Verify only the scoped emergency OFF on isolated PostgreSQL
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/r4-pg-driver" --no-audit --no-fund --ignore-scripts pg@8.16.3
+          NODE_BINARY="$(command -v node)"
+          docker run --rm --network none --user postgres \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/work,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/r4-pg-driver,dst=/deps,readonly" \
+            --mount "type=bind,src=$NODE_BINARY,dst=/usr/local/bin/node,readonly" \
+            --env R4_PG_BIN=/usr/lib/postgresql/17/bin \
+            --env R4_PG_PACKAGE_JSON=/deps/package.json \
+            --platform linux/amd64 --entrypoint /usr/local/bin/node postgres:17.6@sha256:b86568d3e0fe1dfaeff52714f9da36f206a30e4c49131b82bf96982d78627409 \
+            /work/release-sources/r4-first-issue-correction/check-scoped-off-pg.mjs /work/release-sources/r4-first-issue-candidate
+  db-approval-evidence:
+    needs: correction-only
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Observe exact reviewer approval without receiving any operational credentials
+        run: |
+          echo 'Evidence only. No database, deployment, or credential access.'
+          sleep 300

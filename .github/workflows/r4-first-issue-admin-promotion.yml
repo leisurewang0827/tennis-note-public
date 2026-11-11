@@ -1,0 +1,67 @@
+# Local proposed candidate; never install or run before independent review.
+name: R4 first issue administrator promotion
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-first-issue-admin-promotion.yml']
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+  id-token: write
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  protected-promote:
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      recovery_required: ${{ steps.promotion.outputs.recovery_required }}
+      published_id: ${{ steps.promotion.outputs.published_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-first-issue-source-provenance
+          run-id: 43033784106
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/r4-source
+      - name: Prepare pinned single-request administrator transport
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+          node --input-type=module -e 'import {readFileSync,writeFileSync} from "node:fs";import {createHash} from "node:crypto";const p="./scripts/r4_internal_registration_prod_promotion.mjs";if(createHash("sha256").update(readFileSync(p)).digest("hex")!=="e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4")throw Error("HELPER_DRIFT");const {patchProductionWrangler}=await import(p);const d=process.env.RUNNER_TEMP+"/r4-wrangler/node_modules/wrangler/wrangler-dist/";writeFileSync(d+"cli-r4-single.cjs",patchProductionWrangler(readFileSync(d+"cli.js")),{flag:"wx"});'
+      - name: Verify official review and publish once
+        id: promotion
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: |
+          node --input-type=module -e 'import {appendFileSync} from "node:fs";import {executeAuthorized} from "./release-promotions/r4-first-issue-admin/admin-single-write-transport.mjs";const r=await executeAuthorized("publish");console.log(JSON.stringify(r));if(r.status==="KNOWN_IMMUTABLE_INDEX_MISMATCH"&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(r.publishedId)){appendFileSync(process.env.GITHUB_OUTPUT,"recovery_required=true\npublished_id="+r.publishedId+"\n");process.exitCode=2;}else if(r.status!=="POST_READBACK_VERIFIED"){process.exitCode=1;}'
+  protected-rollback:
+    needs: protected-promote
+    if: ${{ always() && needs.protected-promote.outputs.recovery_required == 'true' }}
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify fresh OFF evidence and approved exact recovery; one request only
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+          R4_PUBLISHED_ID: ${{ needs.protected-promote.outputs.published_id }}
+        run: |
+          node --input-type=module -e 'import {executeAuthorized} from "./release-promotions/r4-first-issue-admin/admin-single-write-transport.mjs";const r=await executeAuthorized("rollback",{publishedId:process.env.R4_PUBLISHED_ID});console.log(JSON.stringify(r));if(r.status!=="ROLLBACK_READBACK_VERIFIED")process.exitCode=1;'
