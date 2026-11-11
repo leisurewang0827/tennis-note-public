@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {EXACT_CANDIDATE_PATHS} from './candidate-allowlist.mjs';
+import {validateAddedPaths} from './source-provenance.mjs';
+const good=EXACT_CANDIDATE_PATHS.map(p=>'A\t'+p);
+assert.deepEqual(validateAddedPaths(good),[...EXACT_CANDIDATE_PATHS].sort());
+assert.throws(()=>validateAddedPaths(good.slice(1)),/FILE_SCOPE_MISMATCH/);
+assert.throws(()=>validateAddedPaths([...good,'A\trelease-sources/unapproved']),/FILE_SCOPE_MISMATCH/);
+assert.throws(()=>validateAddedPaths(good.map((x,i)=>i===0?'M\t'+x.slice(2):x)),/FILE_SCOPE_MISMATCH/);
+assert.throws(()=>validateAddedPaths(good.map((x,i)=>i===1?good[0]:x)),/FILE_SCOPE_MISMATCH/);
+console.log(JSON.stringify({exactAddedPaths:'PASS',missingExtraModifiedDuplicate:'DENIED',network:0,dbWrites:0}));

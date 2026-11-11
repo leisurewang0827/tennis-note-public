@@ -1,0 +1,67 @@
+# LOCAL PROPOSAL: reviewer approval is not permission to run production SQL.
+name: R4 first issue protected candidate
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - .github/workflows/r4-first-issue-binding-source.yml
+      - .github/workflows/r4-first-issue-binding-protected.yml
+      - release-sources/r4-first-issue-candidate/**
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      source_run: ${{ steps.find.outputs.source_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Find one successful source run for this commit
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          for iteration in $(seq 1 30); do
+            runs="$(gh api "repos/$repo/actions/workflows/r4-first-issue-binding-source.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=100")"
+            count="$(jq '.workflow_runs | length' <<<"$runs")"
+            if [ "$count" -gt 1 ]; then echo 'Ambiguous source run'; exit 1; fi
+            if [ "$count" -eq 1 ]; then
+              run_id="$(jq -r '.workflow_runs[0].id' <<<"$runs")"
+              status="$(jq -r '.workflow_runs[0].status' <<<"$runs")"
+              if [ "$status" = completed ]; then
+                jq -e --arg sha "$GITHUB_SHA" '.workflow_runs[0] | .head_sha == $sha and .run_attempt == 1 and .conclusion == "success"' <<<"$runs" >/dev/null
+                echo "source_run=$run_id" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo 'Source result unavailable'; exit 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-first-issue-source-provenance
+          path: ${{ runner.temp }}/r4-source
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.find.outputs.source_run }}
+      - name: Verify the artifact against the exact checked-out candidate
+        run: |
+          node release-sources/r4-first-issue-candidate/source-provenance.mjs verify "$RUNNER_TEMP/r4-source/r4-first-issue-provenance.json"
+          node release-sources/r4-first-issue-candidate/verify-admin-artifact.mjs "$RUNNER_TEMP/r4-source/admin"
+  protected-review:
+    needs: source-admission
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Hold read-only approval observation window
+        run: |
+          echo 'Source provenance verified before environment approval.'
+          echo 'No production credentials, DB transport, SQL or deployment are available here; approval observation window is five minutes.'
+          sleep 300

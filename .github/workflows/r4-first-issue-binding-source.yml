@@ -1,0 +1,61 @@
+# LOCAL PROPOSAL: publish only after exact file-scope review. No production access.
+name: R4 first issue binding source only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - .github/workflows/r4-first-issue-binding-source.yml
+      - .github/workflows/r4-first-issue-binding-protected.yml
+      - release-sources/r4-first-issue-candidate/**
+permissions:
+  contents: read
+  actions: read
+jobs:
+  isolated-original-mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify provenance scope checks
+        run: node release-sources/r4-first-issue-candidate/check-source-provenance.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-independent-owner-prod-candidate-42846945596
+          run-id: 42846945596
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/r4-verified-baseline
+      - name: Verify exact original mutation bodies on disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/r4-pg-driver" --no-audit --no-fund --ignore-scripts pg@8.16.3
+          NODE_BINARY="$(command -v node)"
+          docker run --rm --network none --user postgres \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/work,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/r4-pg-driver,dst=/deps,readonly" \
+            --mount "type=bind,src=$NODE_BINARY,dst=/usr/local/bin/node,readonly" \
+            --env R4_PG_BIN=/usr/lib/postgresql/17/bin \
+            --env R4_PG_PACKAGE_JSON=/deps/package.json \
+            --platform linux/amd64 --entrypoint /usr/local/bin/node postgres:17.6@sha256:b86568d3e0fe1dfaeff52714f9da36f206a30e4c49131b82bf96982d78627409 \
+            /work/release-sources/r4-first-issue-candidate/check-v2-original-mutation-fixture.mjs
+      - name: Assemble and verify 180 sealed administrator assets
+        env:
+          R4_BASE_ARTIFACT: ${{ runner.temp }}/r4-verified-baseline
+          R4_INDEPENDENT_SOURCE: ${{ github.workspace }}/release-sources/r4-independent-prod-v2
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/r4-evidence"
+          node release-sources/r4-first-issue-candidate/verify-admin-v4.mjs "$RUNNER_TEMP/r4-evidence/admin"
+          node release-sources/r4-first-issue-candidate/verify-admin-artifact.mjs "$RUNNER_TEMP/r4-evidence/admin"
+          node release-sources/r4-first-issue-candidate/source-provenance.mjs write "$RUNNER_TEMP/r4-evidence/r4-first-issue-provenance.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-first-issue-source-provenance
+          path: ${{ runner.temp }}/r4-evidence
+          if-no-files-found: error
+          retention-days: 7
