@@ -1,0 +1,51 @@
+name: R4 independent v2 source verification
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - 'release-sources/r4-independent-prod-v2/**'
+      - '.github/workflows/r4-independent-prod-v2-source.yml'
+      - 'scripts/r4_independent_prod_v2_release.mjs'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env: {POSTGRES_PASSWORD: synthetic-ci-only}
+        ports: ['5432/tcp']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - name: Verify exact source and baseline artifact metadata
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: node scripts/r4_independent_prod_v2_release.mjs source-meta
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-independent-owner-prod-candidate-42846945596
+          run-id: 42846945596
+          github-token: '${{ github.token }}'
+          path: 2026-11-10-r4-general-dev/prod-independent-source-42846945596
+      - name: Prepare isolated test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-v2-checks" --no-save --package-lock=false pg@8.16.3 playwright@1.56.1
+          "$RUNNER_TEMP/r4-v2-checks/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify v2 only and assemble sealed admin assets
+        env:
+          R4_V2_SYNTHETIC_PORT: '${{ job.services.postgres.ports[5432] }}'
+        run: node scripts/r4_independent_prod_v2_release.mjs source
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-independent-prod-v2-candidate-${{ github.run_id }}
+          path: r4-prod-v2-artifact
+          retention-days: 14
+          if-no-files-found: error
