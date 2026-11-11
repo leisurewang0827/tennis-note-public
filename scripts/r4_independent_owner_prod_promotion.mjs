@@ -18,7 +18,8 @@ const candidateDigest='66eed766bd596422bbbd352641f1f1c7b67d2ab0bf8c4fee8e4a22a3c
 const candidateSeal='44c31617fc2c1d8ea5377d0e6d6a0f2d2b52ee1aa048a023e8c4ac08f497c85b';
 const previousSeal='5a7b6af33ac72f8ebd879b02555baa720cd309a01b10246af5af66cb9f4c54ad';
 const previousDigest='ebf3da21e1672a93e66b9936747b976762e55f69bc19aad70133ec4ef6ee759a';
-const receiptHash='514243df35f8a86754b1f11402ca4116d76a3660d178bb05ec8b7e37226fe2ec';
+const receiptHash='882dc30c419b9ee5057d30d2b98176843157a7170398dd624e89cde741a415b3';
+const previousPromotion='8fc186361e0d0541d46b6eed4310146f57fae0eb';
 const origin='https://tennisnote-admin.pages.dev';
 const oldUrl='https://2652a679.tennisnote-admin.pages.dev';
 const files=['.github/workflows/r4-independent-owner-prod-promotion.yml',root+'promotion.json',root+'off-receipt.json','scripts/r4_independent_owner_prod_promotion.mjs','scripts/check_r4_independent_owner_prod_promotion.mjs'].sort();
@@ -57,15 +58,20 @@ export function verifyAssets(base,candidate){
   assert.equal(fresh.admin['shared/config.local.js'],'0a89879945c847ecf2244823a1a32ff21dfb6936ecc80706b183c7231671bd64');
   return {old,fresh};
 }
+export function verifyAncestry(head,git){
+  assert.equal(git('rev-list','--parents','-n','1',head),head+' '+previousPromotion);
+  assert.deepEqual(git('diff','--name-only',previousPromotion,head).split('\n').sort(),files);
+  assert.equal(git('rev-list','--parents','-n','1',previousPromotion),previousPromotion+' '+source);
+  assert.deepEqual(git('diff','--name-only',source,previousPromotion).split('\n').sort(),files);
+  assert.equal(git('rev-list','--parents','-n','1',source),source+' eeb53af5dfb03291d26da6e84b7454c1cc153c26');
+  assert.deepEqual(git('diff','--name-only','eeb53af5dfb03291d26da6e84b7454c1cc153c26',source).split('\n').sort(),sourceFiles);
+}
 function scope(){
   assert.equal(process.env.GITHUB_REPOSITORY,'leisurewang0827/tennis-note-public');
   assert.equal(process.env.GITHUB_REF,'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108');
   assert.equal(process.env.GITHUB_EVENT_NAME,'push');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
   const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim(),head=git('rev-parse','HEAD');
-  assert.equal(head,process.env.GITHUB_SHA);assert.equal(git('rev-list','--parents','-n','1',head),head+' '+source);
-  assert.deepEqual(git('diff','--name-only',source,head).split('\n').sort(),files);
-  assert.equal(git('rev-list','--parents','-n','1',source),source+' eeb53af5dfb03291d26da6e84b7454c1cc153c26');
-  assert.deepEqual(git('diff','--name-only','eeb53af5dfb03291d26da6e84b7454c1cc153c26',source).split('\n').sort(),sourceFiles);
+  assert.equal(head,process.env.GITHUB_SHA);verifyAncestry(head,git);
   assert.equal(sha(readFileSync('scripts/r4_internal_registration_prod_promotion.mjs')),'e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4');
   for(const [k,v] of Object.entries(sql))assert.equal(sha(readFileSync('release-sources/r4-independent-owner-prod/'+k)),v);
 }

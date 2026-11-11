@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 14
     steps:
       - uses: actions/checkout@v7
-        with: {fetch-depth: 3, persist-credentials: false}
+        with: {fetch-depth: 4, persist-credentials: false}
       - uses: actions/setup-node@v7
         with: {node-version: '24'}
       - uses: actions/download-artifact@v4
@@ -32,6 +32,9 @@ jobs:
           github-token: '${{ github.token }}'
           path: prod-base
       - name: Validate focused promotion guards without network
+        run: node scripts/check_r4_independent_owner_prod_promotion.mjs prod-base prod-candidate
+      - name: Validate fresh receipt and successor ancestry
+        env: {R4_PROMOTION_SUCCESSOR_ONLY: '1'}
         run: node scripts/check_r4_independent_owner_prod_promotion.mjs prod-base prod-candidate
       - name: Prepare existing single-request Pages transport
         run: |
