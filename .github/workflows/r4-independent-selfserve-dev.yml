@@ -1,0 +1,58 @@
+name: R4 independent coach DEV admin only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-independent-selfserve-dev.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  publish-dev-admin:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-general-dev-source-42805153957
+          run-id: 42805153957
+          github-token: ${{ github.token }}
+          path: base
+      - name: Assemble exact admin-only candidate
+        run: node scripts/r4_independent_selfserve_dev.mjs build
+      - name: Prepare pinned single-deployment transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0 > "$RUNNER_TEMP/r4-wrangler-install.log" 2>&1
+          node scripts/r4_independent_selfserve_dev.mjs prepare
+      - name: Verify OFF receipt, previous deployment and immutable recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_independent_selfserve_dev.mjs admit
+      - name: Publish one development administrator deployment
+        id: publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" pages deploy candidate/admin --project-name=tennisnote-admin-dev --branch=dev --commit-hash="$GITHUB_SHA" --commit-dirty=false > "$RUNNER_TEMP/independent-dev-publish.log" 2>&1
+          node -e 'const f=require("fs"),s=f.readFileSync(process.env.RUNNER_TEMP+"/independent-dev-publish.log","utf8"),m=[...new Set(s.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin-dev\.pages\.dev/g)||[])];if(m.length!==1)throw Error("PUBLISH_ID_UNKNOWN");f.appendFileSync(process.env.GITHUB_OUTPUT,`url=${m[0]}\n`);'
+      - name: Verify canonical and immutable byte read-back; do not retry on ambiguity
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node scripts/r4_independent_selfserve_dev.mjs post

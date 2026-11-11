@@ -1,0 +1,17 @@
+{
+  "kind": "DEV_INDEPENDENT_SELF_SERVE_OFF_COMMITTED",
+  "recordedAt": "2026-11-11T03:24:16.325Z",
+  "targetFingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+  "installSha": "7075b26d33f003ce715b6b079fa53dac5b7c1d635b5cc81163552e6b345c3159",
+  "localSealSha": "c819ac761f0197d972b28d85c362b57bbebe623b5f665cf744a3967e5b1bb0f7",
+  "recoveryId": "dde79900-4c3f-4471-9dfa-7ef4fd9d61d4",
+  "actual": {
+    "accessCount": 0,
+    "createOff": true,
+    "lessonCount": 0,
+    "lessonsOff": true,
+    "operationCount": 0,
+    "privateTables": true,
+    "rpcAcl": true
+  }
+}
