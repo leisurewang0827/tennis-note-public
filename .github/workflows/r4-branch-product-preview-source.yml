@@ -1,0 +1,38 @@
+name: R4 branch product isolated preview source only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-branch-product-preview-source.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - name: Verify exact existing DEV base artifact metadata
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh api repos/leisurewang0827/tennis-note-public/actions/artifacts/13757264546 | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const x=JSON.parse(s);if(x.expired||x.digest!=="sha256:1272658b5a72962e789b11babcde9a5e5aa28f8104ee154f72ccff6622f34c98"||x.workflow_run.id!==42805153957||x.workflow_run.head_sha!=="ecdbdac4a7a9ca8821eea85eb0a78d66809a52ba")process.exit(1)})'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-general-dev-source-42805153957
+          run-id: 42805153957
+          github-token: '${{ github.token }}'
+          path: base
+      - name: Check only preview composition delta
+        run: |
+          node --check scripts/r4_branch_product_preview_source.mjs
+          node scripts/check_r4_branch_product_preview_source.mjs
+          node scripts/r4_branch_product_preview_source.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-branch-product-preview-source-${{ github.run_id }}
+          path: branch-preview-source
+          if-no-files-found: error
+          retention-days: 7
