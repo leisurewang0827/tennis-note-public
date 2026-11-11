@@ -1,0 +1,48 @@
+name: R4 independent owner production post diagnosis read only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-independent-owner-prod-post-readonly.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-independent-owner-prod-candidate-42846945596
+          run-id: 42846945596
+          github-token: '${{ github.token }}'
+          path: prod-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-pending-member-registration-candidate-42774611944
+          run-id: 42774611944
+          github-token: '${{ github.token }}'
+          path: prod-base
+      - name: Focused offline negative checks
+        run: node scripts/check_r4_independent_owner_prod_post_readonly.mjs prod-base prod-candidate
+      - name: Read exact published target and preserve original failure
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          R4_ADMIN_CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node scripts/r4_independent_owner_prod_post_readonly.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-independent-owner-prod-post-readonly-${{ github.run_id }}
+          path: '${{ runner.temp }}/r4-independent-readonly-receipt.json'
+          retention-days: 14
+          if-no-files-found: error
