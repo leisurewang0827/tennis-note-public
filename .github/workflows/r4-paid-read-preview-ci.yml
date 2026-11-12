@@ -1,0 +1,32 @@
+name: R4 DEV member preview source
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - .github/workflows/r4-paid-read-preview-ci.yml
+      - .github/workflows/deploy-cloudflare-pages-dev.yml
+      - release-sources/r4-paid-read-preview/**
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Verify sealed member preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: node --check release-sources/r4-paid-read-preview/read.js
+      - run: node release-sources/r4-paid-read-preview/preview.mjs ci "$RUNNER_TEMP/r4-paid-member-pack"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-paid-read-preview-${{ github.sha }}
+          path: ${{ runner.temp }}/r4-paid-member-pack/
+          if-no-files-found: error
+          retention-days: 7

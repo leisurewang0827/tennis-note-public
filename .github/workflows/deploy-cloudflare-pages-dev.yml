@@ -20,11 +20,52 @@ permissions:
 
 concurrency:
   group: cloudflare-pages-development
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108') }}
 
 jobs:
+  r4-paid-read-member-preview:
+    name: Protected R4 DEV member preview only
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: development
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Read fixed dispatch input and check successful exact-source CI
+        id: admit
+        env:
+          PREVIEW_INPUT: ${{ inputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: node release-sources/r4-paid-read-preview/preview.mjs admit
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.admit.outputs.ci }}
+          name: r4-paid-read-preview-${{ github.sha }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/r4-paid-member-pack
+      - name: Prepare existing pinned deployment transport
+        run: npm install --prefix "$RUNNER_TEMP/r4-paid-wrangler" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+      - name: Publish or restore only the specified DEV member preview, once
+        env:
+          PREVIEW_INPUT: ${{ inputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-paid-read-preview/preview.mjs deploy "$RUNNER_TEMP/r4-paid-member-pack"
+
   build-and-deploy-development:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-dev-20261104') }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/codex/tennisnote-r4-admin-dev-20261104' || github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108')) }}
     runs-on: ubuntu-latest
     environment: development
     env:

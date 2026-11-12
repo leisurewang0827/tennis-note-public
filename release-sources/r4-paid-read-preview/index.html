@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>테니스노트 개발 확인</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/shared/tennisnote-r4-marketplace.css">
+  <style>
+    :root { color-scheme: light dark; font: 100%/1.5 system-ui,sans-serif; }
+    main { margin: 1rem auto; max-width: 40rem; padding: 0 1rem; }
+    button, a { min-height: 44px; } button { font: inherit; padding: .45rem .85rem; }
+    ul { padding-inline-start: 1.25rem; } [hidden] { display: none !important; }
+  </style>
+  <script defer src="/shared/config.local.js?v=local"></script>
+  <script defer src="/shared/tennisnote-data-client.js?v=1.0.578"></script>
+  <script defer src="./read.js"></script>
+</head>
+<body>
+  <main>
+    <h1>상품·이용권 확인</h1>
+    <p>서울 개발계 · 지정 계정만 볼 수 있습니다.</p>
+    <button id="refresh" type="button">조회</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="results" hidden>
+      <h2>검증용 상품</h2>
+      <ul id="products"></ul>
+      <h2>내 검증용 이용권</h2>
+      <p id="membership"></p>
+      <button type="button" disabled>결제할 수 없음</button>
+      <p>공개 판매와 결제는 꺼져 있습니다.</p>
+    </section>
+  </main>
+</body>
+</html>
