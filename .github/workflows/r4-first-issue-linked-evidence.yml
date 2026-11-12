@@ -1,0 +1,29 @@
+name: R4 linked candidate - approval evidence only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-first-issue-linked-evidence.yml'
+      - 'release-sources/r4-first-issue-linked-evidence/**'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  linked-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 2, persist-credentials: false}
+      - run: node release-sources/r4-first-issue-linked-evidence/check.mjs --commit
+  linked-evidence-only:
+    needs: linked-source-only
+    environment: tennisnote-r4-admin-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 2, persist-credentials: false}
+      - run: node release-sources/r4-first-issue-linked-evidence/evidence.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
