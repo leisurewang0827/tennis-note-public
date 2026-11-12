@@ -8,13 +8,15 @@ import {patchWrangler} from "../../scripts/r4_scoped_member_catalog_dev.mjs";
 
 const repo = "leisurewang0827/tennis-note-public";
 const branch = "codex/tennisnote-r4-ui-finish-dev-20261108";
-const parent = "2d0760e8a59433113e4152cd3c4529fdd429c493";
+const parent = "6073e788419a1462a96a7b9077d3b612b01468f8";
 const ciPath = ".github/workflows/r4-paid-read-preview-ci.yml";
 const deployWorkflow = "343938323";
 const actions = "https://api.github.com/repos/" + repo + "/actions";
 const project = "tennisnote-app-dev", preview = "r4-marketplace-qa";
 const alias = "https://r4-marketplace-qa.tennisnote-app-dev.pages.dev";
 const old = {id:"55c6bb21-cae5-4020-b1bf-4fe6f3feb247", url:"https://55c6bb21.tennisnote-app-dev.pages.dev", sha:"58bb20d2f808d850973349cb62f2862edff8834a"};
+const retryFrom = {id:"b3b3dd9d-28a6-4125-862a-4b0c56d8b725", url:"https://b3b3dd9d.tennisnote-app-dev.pages.dev", sha:parent};
+const priorCi = {source:parent,run:"43178443915",digest:"sha256:9a410712754f2a1afc893c3e775382eae1ebf10552600ae8bbea3323fab3c2be"};
 const root = dirname(fileURLToPath(import.meta.url));
 const sealed = JSON.parse(await readFile(join(root, "seal.json"), "utf8"));
 const baseline = sealed.restore, candidate = {...baseline, ...sealed.additions};
@@ -65,18 +67,21 @@ function configOff(bytes) {
     return claims.role === "anon" && claims.ref === ref;
   } catch {return false;}
 }
-async function asset(origin, name) {
+async function asset(origin, name, {postPublish=false,fetcher=fetch}={}) {
   check(origin === alias || liveOrigin.test(origin), "PUBLIC_ORIGIN_DENIED");
   const path = name === "index.html" ? "/" : "/" + name.split("/").map(encodeURIComponent).join("/");
   let url = new URL(path, origin);
   for (let hops = 0; hops < 4; hops++) {
-    const res = await fetch(url,{redirect:"manual", cache:"no-store",headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+    const res = await fetcher(url,{redirect:"manual", cache:"no-store",headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
     if ([301,302,303,307,308].includes(res.status)) {
       url = new URL(res.headers.get("location"), url);
       check(url.origin === origin && !url.username && !url.password, "PUBLIC_REDIRECT_DENIED");
       continue;
     }
-    check(res.status === 200, "PUBLIC_ASSET_MISSING");
+    // Use only the allowlisted initial file path, never a response URL, headers or body.
+    check(res.status === 200, postPublish
+      ? "POST_PUBLIC_ASSET_MISSING:" + (origin === alias ? "ALIAS" : "IMMUTABLE") + ":" + path + ":HTTP_" + res.status
+      : "PUBLIC_ASSET_MISSING");
     return Buffer.from(await res.arrayBuffer());
   }
   throw Error("PUBLIC_REDIRECT_LIMIT");
@@ -132,7 +137,7 @@ function githubFence(event) {
   check(env.GITHUB_REPOSITORY === repo && env.GITHUB_REF === "refs/heads/" + branch &&
     env.GITHUB_EVENT_NAME === event && env.GITHUB_RUN_ATTEMPT === "1" && sha.test(env.GITHUB_SHA || ""), "GITHUB_IDENTITY_DENIED");
   check(git("rev-list","--parents","-n","1",env.GITHUB_SHA) === env.GITHUB_SHA + " " + parent,"GITHUB_PARENT_DENIED");
-  const expected = [ciPath,".github/workflows/deploy-cloudflare-pages-dev.yml",...["index.html","preview.mjs","read.js","seal.json"].map(n=>"release-sources/r4-paid-read-preview/"+n)].sort();
+  const expected = [ciPath,"release-sources/r4-paid-read-preview/preview.mjs"].sort();
   assert.deepEqual(git("diff","--name-only",parent,env.GITHUB_SHA).split("\n").sort(),expected,"GITHUB_CHANGESET_DENIED");
 }
 function dispatch(value, now) {
@@ -149,8 +154,8 @@ async function json(url, token) {
   check(res.ok,"PROTECTED_READ_HTTP_" + res.status);
   return await res.json();
 }
-async function verifyCi(input) {
-  check(input.source === env.GITHUB_SHA,"DISPATCH_SOURCE_DENIED");
+async function verifyCi(input, expectedSource=env.GITHUB_SHA) {
+  check(input.source === expectedSource,"DISPATCH_SOURCE_DENIED");
   const base = "https://api.github.com/repos/" + repo + "/actions/runs/" + input.run;
   const [run, jobs, artifacts] = await Promise.all(["","/jobs","/artifacts"].map(s=>json(base+s,env.GH_TOKEN)));
   check(String(run.id) === input.run && run.path === ciPath && run.head_sha === input.source &&
@@ -159,7 +164,8 @@ async function verifyCi(input) {
   check(jobs.total_count === 1 && jobs.jobs[0]?.name === "Verify sealed member preview" && jobs.jobs[0]?.conclusion === "success","EXACT_CI_JOB_DENIED");
   check(artifacts.total_count === 1 && artifacts.artifacts[0]?.name === "r4-paid-read-preview-" + input.source &&
     artifacts.artifacts[0]?.expired === false && artifacts.artifacts[0]?.workflow_run?.head_sha === input.source &&
-    /^sha256:[a-f0-9]{64}$/.test(artifacts.artifacts[0]?.digest || ""),"EXACT_ARTIFACT_DENIED");
+    /^sha256:[a-f0-9]{64}$/.test(artifacts.artifacts[0]?.digest || "") &&
+    (input.digest === undefined || artifacts.artifacts[0].digest === input.digest),"EXACT_ARTIFACT_DENIED");
 }
 async function verifyDeploymentWindow(input) {
   const query = new URLSearchParams({branch,head_sha:input.source,event:"workflow_dispatch",per_page:"100"});
@@ -223,10 +229,10 @@ async function cloudState(api) {
   check(Array.isArray(latest.aliases) && latest.aliases.includes(alias),"PREVIEW_ALIAS_DENIED");
   return {latest, canonical:p.canonical_deployment.id};
 }
-async function readback(origin, isCandidate) {
+async function readback(origin, isCandidate, {postPublish=false}={}) {
   const pack = isCandidate ? candidate : baseline;
   await Promise.all([...canaries,...(isCandidate ? added : [])].map(async name=>{
-    const bytes = await asset(origin,name);
+    const bytes = await asset(origin,name,{postPublish});
     verifyBytes(bytes,pack[name],"LIVE_DIGEST_MISMATCH:" + name);
     if (name === configPath) check(configOff(bytes),"LIVE_DEV_CONFIG_NOT_OFF");
   }));
@@ -254,9 +260,10 @@ async function deploy(dest, value) {
   const api = cf();
   const publish = input.kind === "publish";
   const before = await cloudState(api);
-  check(before.latest.id === (publish ? old.id : input.current) &&
-    before.latest.deployment_trigger.metadata.commit_hash === (publish ? old.sha : input.source),"PREVIEW_TARGET_DRIFT");
-  await Promise.all([readback(alias,!publish),readback(before.latest.url,!publish)]);
+  check(before.latest.id === (publish ? retryFrom.id : input.current) &&
+    before.latest.deployment_trigger.metadata.commit_hash === (publish ? retryFrom.sha : input.source) &&
+    (!publish || before.latest.url === retryFrom.url),"PREVIEW_TARGET_DRIFT");
+  await Promise.all([readback(alias,true),readback(before.latest.url,true)]);
   const cliDir = join(env.RUNNER_TEMP,"r4-paid-wrangler/node_modules/wrangler/wrangler-dist");
   const cli = join(cliDir,"cli-r4-member-single.cjs");
   await writeFile(cli,memberWrangler(await readFile(join(cliDir,"cli.js"))),{flag:"wx"});
@@ -275,27 +282,55 @@ async function deploy(dest, value) {
     try {
       const observed = await cloudState(api);
       const changed = observed.latest.id !== before.latest.id;
-      if (changed) await readback(observed.latest.url,publish);
+      if (changed) await readback(observed.latest.url,publish,{postPublish:true});
       console.log(JSON.stringify({state:"MUTATION_RECONCILE",changed,id:observed.latest.id,
         expectedSha:observed.latest.deployment_trigger.metadata.commit_hash === deployedSha,
         canonicalUnchanged:observed.canonical === before.canonical}));
-    } catch {console.log("MUTATION_RECONCILE_UNAVAILABLE");}
+    } catch (error) {
+      if (String(error?.message).startsWith("POST_PUBLIC_ASSET_MISSING:")) console.error(safeLogMessage(error));
+      console.log("MUTATION_RECONCILE_UNAVAILABLE");
+    }
     throw Error("PUBLISH_OUTCOME_UNKNOWN_READ_ONLY_RECONCILE_NO_RETRY");
   }
   const after = await cloudState(api);
   check(after.latest.id !== before.latest.id && after.latest.url === urls[0] &&
     after.latest.deployment_trigger.metadata.commit_hash === deployedSha &&
     after.canonical === before.canonical,"POST_PUBLISH_DRIFT_READ_ONLY_RECONCILE_NO_RETRY");
-  await Promise.all([readback(after.latest.url,publish),readback(alias,publish)]);
+  await Promise.all([readback(after.latest.url,publish,{postPublish:true}),readback(alias,publish,{postPublish:true})]);
   console.log(JSON.stringify({state:publish ? "MEMBER_PREVIEW_PUBLISHED" : "MEMBER_PREVIEW_RESTORED",
     source:input.source,ci:input.run,id:after.latest.id,url:after.latest.url,previous:before.latest.id,canonicalUnchanged:true,clientPaymentsOff:true}));
+}
+function safeLogMessage(error) {
+  const message = String(error?.message || "");
+  return /^(?:[A-Z0-9_]+(?::[A-Za-z0-9_./-]+)?|POST_PUBLIC_ASSET_MISSING:(?:ALIAS|IMMUTABLE):\/[A-Za-z0-9_./-]*:HTTP_[1-5][0-9]{2})$/.test(message)
+    ? message : "MEMBER_PREVIEW_GUARD_OR_READ_FAILED";
+}
+async function testPostReadback() {
+  const reply = (status, location) => async () => new Response(null,{status,headers:location ? {location} : {}});
+  await assert.rejects(asset(alias,"manifest.webmanifest",{postPublish:true,fetcher:reply(503)}),
+    {message:"POST_PUBLIC_ASSET_MISSING:ALIAS:/manifest.webmanifest:HTTP_503"});
+  await assert.rejects(asset(retryFrom.url,added[0],{postPublish:true,fetcher:async url=>
+    url.pathname.endsWith("index.html") ? new Response(null,{status:308,headers:{location:"/r4-paid-read-qa/?not-in-log=1"}}) : new Response(null,{status:404})}),
+    {message:"POST_PUBLIC_ASSET_MISSING:IMMUTABLE:/r4-paid-read-qa/index.html:HTTP_404"});
+  await assert.rejects(asset(alias,"manifest.webmanifest",{fetcher:reply(503)}),{message:"PUBLIC_ASSET_MISSING"});
+  await assert.rejects(asset(alias,added[0],{postPublish:true,fetcher:reply(308,"https://example.invalid/")}),{message:"PUBLIC_REDIRECT_DENIED"});
+  assert.equal((await asset(alias,"index.html",{postPublish:true,fetcher:async()=>new Response("ok")})).toString(),"ok");
+  assert.equal(safeLogMessage(Error("POST_PUBLIC_ASSET_MISSING:ALIAS:/:HTTP_500")),"POST_PUBLIC_ASSET_MISSING:ALIAS:/:HTTP_500");
+  assert.equal(safeLogMessage(Error("POST_PUBLIC_ASSET_MISSING:IMMUTABLE:/asset?hidden=1:HTTP_404")),"MEMBER_PREVIEW_GUARD_OR_READ_FAILED");
+  console.log("POST_READBACK_DIAGNOSTICS_PASS");
 }
 const [mode, dest, arg] = process.argv.slice(2);
 try {
   verifySeal();
-  if (mode === "local" || mode === "ci") {
-    if (mode === "ci") githubFence("push");
-    await build(dest,mode === "local" ? arg : undefined);
+  if (mode === "post-readback-test") {
+    await testPostReadback();
+  } else if (mode === "ci") {
+    githubFence("push");
+    await testPostReadback();
+    await verifyCi(priorCi,parent);
+    await appendFile(env.GITHUB_OUTPUT,"ci=" + priorCi.run + "\nsource=" + priorCi.source + "\n");
+  } else if (mode === "local") {
+    await build(dest,arg);
     for (const bad of ["", "publish:wrong","restore:" + parent + ":123456:" + Date.now() + ":wrong"]) assert.throws(()=>dispatch(bad,Date.now()));
     assert.throws(()=>dispatch("publish:" + parent + ":123456:" + (Date.now()-601000),Date.now()));
     assert.equal(dispatch("publish:" + parent + ":123456:" + Date.now(),Date.now()).kind,"publish");
@@ -311,7 +346,6 @@ try {
   } else throw Error("MODE_DENIED");
 } catch (error) {
   // No assertion diffs, vendor bodies, credentials, or local paths in workflow logs.
-  const message = String(error?.message || "");
-  console.error(/^[A-Z0-9_]+(?::[A-Za-z0-9_./-]+)?$/.test(message) ? message : "MEMBER_PREVIEW_GUARD_OR_READ_FAILED");
+  console.error(safeLogMessage(error));
   process.exitCode = 1;
 }

@@ -8,6 +8,7 @@ on:
       - release-sources/r4-paid-read-preview/**
 permissions:
   contents: read
+  actions: read
 jobs:
   verify:
     name: Verify sealed member preview
@@ -22,8 +23,18 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
-      - run: node --check release-sources/r4-paid-read-preview/read.js
-      - run: node release-sources/r4-paid-read-preview/preview.mjs ci "$RUNNER_TEMP/r4-paid-member-pack"
+      - name: Check new readback diagnostics and identify the reviewed pack
+        id: prior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node release-sources/r4-paid-read-preview/preview.mjs ci
+      - name: Reuse the unchanged member preview pack from successful CI
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.prior.outputs.ci }}
+          name: r4-paid-read-preview-${{ steps.prior.outputs.source }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/r4-paid-member-pack
       - uses: actions/upload-artifact@v4
         with:
           name: r4-paid-read-preview-${{ github.sha }}
