@@ -1,0 +1,65 @@
+# Proposed candidate-branch CI only. Does not request approval or run the proof job.
+name: R4 proof source delta only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-first-issue-proof-source-ci.yml']
+permissions:
+  contents: read
+jobs:
+  proof-source-delta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Check exactly the two reviewed proof files
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { execFileSync, spawnSync } from 'node:child_process';
+          const proof = '24afd3baf9def07bdd8db59ccfcc03834640d907';
+          const base = 'cc349e385dce7582b0a8a43f442fe899415b050d';
+          const tree = '52230859eb092ecacb827d50c17dd05f92eddd3e';
+          const ci = '.github/workflows/r4-first-issue-proof-source-ci.yml';
+          const ref = 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108';
+          const files = new Map([
+            ['.github/workflows/r4-first-issue-event-proof.yml', 'f5a654b897a2803af14428b7381c4faa9d7614b92dac0cc3ad479244ec18ce25'],
+            ['release-promotions/r4-first-issue-event-proof/github-event-proof.mjs', '200367d048da7a1f0b389db51637500f35ae6932974e5082defac09d5604a146'],
+          ]);
+          const git = (...args) => execFileSync('git', args);
+          const line = (...args) => git(...args).toString('utf8').trim();
+          const head = line('rev-parse', 'HEAD');
+          const changed = sha => line('diff-tree', '--no-commit-id', '--name-status', '-r', sha).split(/\r?\n/);
+          assert.equal(line('rev-list', '--parents', '-n', '1', proof), proof + ' ' + base);
+          assert.equal(line('rev-parse', proof + '^{tree}'), tree);
+          assert.deepEqual(changed(proof), [...files.keys()].map(path => 'A\t' + path));
+          const hosted = process.env.GITHUB_ACTIONS === 'true';
+          if (hosted) {
+            assert.equal(process.env.GITHUB_REPOSITORY, 'leisurewang0827/tennis-note-public');
+            assert.equal(process.env.GITHUB_EVENT_NAME, 'push');
+            assert.equal(process.env.GITHUB_REF, ref);
+            assert.equal(process.env.GITHUB_RUN_ATTEMPT, '1');
+            assert.equal(process.env.GITHUB_SHA, head);
+            assert.equal(line('rev-list', '--parents', '-n', '1', head), head + ' ' + proof);
+            assert.deepEqual(changed(head), ['A\t' + ci]);
+          } else {
+            assert.equal(head, proof);
+          }
+          for (const [path, expected] of files) {
+            const source = git('show', proof + ':' + path);
+            assert.equal(createHash('sha256').update(source).digest('hex'), expected);
+            if (path.endsWith('.mjs')) {
+              const checked = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: source });
+              assert.equal(checked.status, 0, 'JavaScript parse failed');
+            }
+          }
+          console.log(JSON.stringify({
+            scope: 'proof-source-delta', hosted, proof, ciHead: hosted ? head : null,
+            reviewedFiles: 2, actualProtectedProofRun: false, operationalAuthority: false,
+          }));
+          NODE
