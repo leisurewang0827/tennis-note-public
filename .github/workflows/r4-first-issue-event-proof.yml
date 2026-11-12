@@ -1,0 +1,33 @@
+# Candidate for .github/workflows/r4-first-issue-event-proof.yml, not registered.
+name: R4 GitHub event identity proof only
+on: deployment
+permissions: {}
+jobs:
+  r4-event-proof:
+    if: >-
+      github.repository == 'leisurewang0827/tennis-note-public' &&
+      github.ref == 'refs/heads/codex/tennisnote-r4-ui-finish-dev-20261108' &&
+      github.run_attempt == 1 &&
+      github.event.deployment.task == 'tennisnote-r4-event-proof-v1' &&
+      github.event.deployment.environment == 'tennisnote-r4-evidence-only' &&
+      github.event.deployment.production_environment == false &&
+      github.event.deployment.transient_environment == true &&
+      github.event.deployment.payload.mode == 'proof-only'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment:
+      name: tennisnote-r4-evidence-only
+      deployment: false
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: node release-promotions/r4-first-issue-event-proof/github-event-proof.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
