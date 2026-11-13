@@ -1,0 +1,45 @@
+name: R4 branch finance manual DB review only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-branch-finance-manual-review.yml'
+      - 'release-evidence/r4-branch-finance-manual/manifest.json'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-evidence:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact review-only source and previous artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA 680f7d481121801a83972811bee41496e392aaf4"
+          actual="$(git diff-tree --no-commit-id --name-status -r HEAD | LC_ALL=C sort)"
+          expected="$(printf 'A\t%s\n' .github/workflows/r4-branch-finance-manual-review.yml release-evidence/r4-branch-finance-manual/manifest.json | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          printf '%s  %s\n' fa39453285685bb2586dbdaaf920051dab083e80f61b28cf43299d4ba49e4455 release-evidence/r4-branch-finance-manual/manifest.json | sha256sum -c --status
+          gh api repos/leisurewang0827/tennis-note-public/actions/runs/43391633723 --jq '(.head_sha=="680f7d481121801a83972811bee41496e392aaf4" and .conclusion=="success" and .run_attempt==1)' | grep -Fxq true
+          gh api repos/leisurewang0827/tennis-note-public/actions/artifacts/14021410409 --jq '(.workflow_run.id==43391633723 and .expired==false and .digest=="sha256:e3cedb9135f1f5703a81f65ee96e43d59953596678e649b5b449c333c5d4b6a6")' | grep -Fxq true
+  protected-review-only:
+    needs: exact-evidence
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record approval of the pinned manual evidence
+        run: echo "R4 branch finance manual review only; no database, web, or account actions."
