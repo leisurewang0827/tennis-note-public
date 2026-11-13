@@ -2,6 +2,7 @@ name: R4 branch finance protected administrator publish
 on:
   push:
     branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    # Credential refresh: a new first-attempt run after the no-publish diagnosis.
     paths: ['.github/workflows/r4-branch-finance-protected-publish.yml']
 permissions:
   contents: read
@@ -16,7 +17,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+        with: {ref: '${{ github.sha }}', fetch-depth: 3, persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '24'}
       - name: Verify the new protected release delta without credentials
@@ -35,7 +36,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+        with: {ref: '${{ github.sha }}', fetch-depth: 3, persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '24'}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093

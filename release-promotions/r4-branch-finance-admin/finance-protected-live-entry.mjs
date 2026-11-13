@@ -17,18 +17,20 @@ const sha=x=>createHash('sha256').update(x).digest('hex');
 const need=(x,c)=>{if(!x)throw Error(c);};
 const repo='leisurewang0827/tennis-note-public',branch=expected.branch;
 const workflow='.github/workflows/r4-branch-finance-protected-publish.yml';
-const parent='264bf337ee12562d7f10f2f753db4eef295c4db8';
+const parent='dd04b2782f387b90653ef6f07caa51b91ecc2fb7';
+const first='07be1fc7423d291f4fe094e53c7d446ab303f5c5';
 const recoverySource='81046af5ff14184585533f1a72b22f29a0298050';
 const helperHash='e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4';
 const prefix='release-promotions/r4-branch-finance-admin/';
-const files=[workflow,...['protected-finance-admission.mjs','finance-postread.mjs','finance-mismatch-classifier.mjs','finance-protected-publish-sequence.mjs','finance-publish-review-proof.mjs','finance-publish-queue.mjs','observe-production-off-for-publish.mjs','finance-protected-live-entry.mjs','finance-protected-rollback-proof.mjs','check-live-integration-only.mjs'].map(x=>prefix+x)].sort();
+const files=[workflow,prefix+'check-live-integration-only.mjs',prefix+'finance-protected-live-entry.mjs'].sort();
 const git=(...x)=>execFileSync('git',x,{encoding:'utf8'}).trim();
 function assertContext(e){
  need(e.GITHUB_ACTIONS==='true'&&e.GITHUB_REPOSITORY===repo&&e.GITHUB_REF==='refs/heads/'+branch&&e.GITHUB_EVENT_NAME==='push'&&e.GITHUB_RUN_ATTEMPT==='1','CI_CONTEXT_DENIED');
  need(e.GITHUB_WORKFLOW_REF===`${repo}/${workflow}@refs/heads/${branch}`&&/^[a-f0-9]{40}$/.test(e.GITHUB_SHA||'')&&git('rev-parse','HEAD')===e.GITHUB_SHA,'CI_HEAD_DENIED');
  need(git('rev-list','--parents','-n','1','HEAD')===`${e.GITHUB_SHA} ${parent}`,'CI_PARENT_DENIED');
+ need(git('rev-list','--parents','-n','1',parent)===`${parent} ${first}`,'CI_DIAGNOSTIC_PARENT_DENIED');
  const changes=git('diff-tree','--no-commit-id','--name-status','-r','HEAD').split('\n').sort();
- need(JSON.stringify(changes)===JSON.stringify(files.map(p=>'A\t'+p).sort()),'CI_SCOPE_DENIED');
+ need(JSON.stringify(changes)===JSON.stringify(files.map(p=>'M\t'+p).sort()),'CI_SCOPE_DENIED');
  need(/^[1-9][0-9]*$/.test(e.GITHUB_RUN_ID||'')&&Number.isSafeInteger(Number(e.GITHUB_RUN_ID)),'CI_RUN_DENIED');
 }
 async function assertSignedJob(e,{run,head}){

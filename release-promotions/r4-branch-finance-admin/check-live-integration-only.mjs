@@ -7,14 +7,14 @@ const entry=read('./finance-protected-live-entry.mjs'), flow=tree
  ? readFileSync('.github/workflows/r4-branch-finance-protected-publish.yml','utf8') : read('./r4-branch-finance-protected-publish.yml');
 if(tree){
  const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
- assert.equal(git('rev-list','--parents','-n','1','HEAD'),`${process.env.GITHUB_SHA} 264bf337ee12562d7f10f2f753db4eef295c4db8`);
+ const parent='dd04b2782f387b90653ef6f07caa51b91ecc2fb7';
+ const first='07be1fc7423d291f4fe094e53c7d446ab303f5c5';
+ assert.equal(git('rev-list','--parents','-n','1','HEAD'),`${process.env.GITHUB_SHA} ${parent}`);
+ assert.equal(git('rev-list','--parents','-n','1',parent),`${parent} ${first}`);
  const root='release-promotions/r4-branch-finance-admin/';
- const expected=['.github/workflows/r4-branch-finance-protected-publish.yml',...[
-  'check-live-integration-only.mjs','finance-mismatch-classifier.mjs','finance-postread.mjs','finance-protected-live-entry.mjs',
-  'finance-protected-publish-sequence.mjs','finance-protected-rollback-proof.mjs','finance-publish-queue.mjs',
-  'finance-publish-review-proof.mjs','observe-production-off-for-publish.mjs','protected-finance-admission.mjs',
- ].map(x=>root+x)].sort().map(p=>'A\t'+p);
- assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r','HEAD').split('\n').sort(),expected);
+ const changes=git('diff-tree','--no-commit-id','--name-status','-r','HEAD').split('\n').sort();
+ const expected=['.github/workflows/r4-branch-finance-protected-publish.yml',root+'check-live-integration-only.mjs',root+'finance-protected-live-entry.mjs'].map(p=>'M\t'+p).sort();
+ assert.deepEqual(changes,expected);
 }
 assert.ok(entry.indexOf('const approval=await review()')<entry.indexOf('const child=spawn('));
 assert.ok(entry.includes('OFF_REVIEW_EXPIRED_BEFORE_POST'));
