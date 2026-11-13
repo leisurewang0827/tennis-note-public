@@ -1,0 +1,51 @@
+{
+  "kind": "R4_PRODUCTION_STORAGE_CATALOG_READ_ONLY",
+  "observedAtUtc": "2026-11-12T15:16Z",
+  "targetFingerprint": "3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a",
+  "querySha256": "6b9330ac75c1ecf36a4b88bc04ab1a37a485261f3773cd5673c53031a1119bd7",
+  "issueBackupAbsent": true,
+  "issueFenceAbsent": true,
+  "lessonCanaryAbsent": true,
+  "readOnly": true,
+  "schedulerAnchorOnce": true,
+  "schedulerExpectedPostSha": "1ee110c0ce5fe307bd314ab81b35a88496ae55027736fa43dd6934f539db5375",
+  "schedulerKnown": true,
+  "storage": [
+    {
+      "eligible": true,
+      "metadata_sha256": "0a8acd1a079aba38beb452571d6e44a1c663177995bba7a8548e48f3b48b269c",
+      "name": "tn_lesson_change_requests",
+      "required_columns_present": true,
+      "trigger_name_conflicts": 0
+    },
+    {
+      "eligible": true,
+      "metadata_sha256": "93e51565c5fad388564c815cd95a44f22e0aa630c31e6a9e64d171460fb5054d",
+      "name": "tn_lesson_participants",
+      "required_columns_present": true,
+      "trigger_name_conflicts": 0
+    },
+    {
+      "eligible": true,
+      "metadata_sha256": "289d2cb8865d65f46c5d0b4d5483c4c2cdc10335549e5423c4d2f36618a69e64",
+      "name": "tn_lessons",
+      "required_columns_present": true,
+      "trigger_name_conflicts": 0
+    },
+    {
+      "eligible": true,
+      "metadata_sha256": "7096d6dade5a57d7eb8328046dc3a25e4dcd04007660ff10447baa8f4ecc3364",
+      "name": "tn_one_day_bookings",
+      "required_columns_present": true,
+      "trigger_name_conflicts": 0
+    },
+    {
+      "eligible": true,
+      "metadata_sha256": "52d6fcc964ad5fbd3f796b46a601a27e7dac8c4e3eadf50b9a6d931d0a42a875",
+      "name": "tn_schedule_v2_requests",
+      "required_columns_present": true,
+      "trigger_name_conflicts": 0
+    }
+  ],
+  "storageFenceAbsent": true
+}
