@@ -1,0 +1,62 @@
+name: R4 branch finance administrator source only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - 'release-sources/r4-branch-finance-admin/**'
+      - '.github/workflows/r4-branch-finance-source-ci.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  seal:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Admit only the intended source checkpoint
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$EXPECTED_HEAD bd9f7614344d6684a7b6ec2c6cc50d69ce391056"
+          actual="$(git -c core.quotePath=false diff-tree --no-commit-id --name-status -r HEAD | LC_ALL=C sort)"
+          expected="$(printf 'A\t%s\n' \
+            .github/workflows/r4-branch-finance-source-ci.yml \
+            release-sources/r4-branch-finance-admin/admin-seal.json \
+            release-sources/r4-branch-finance-admin/assemble-admin-finance-ci.mjs \
+            release-sources/r4-branch-finance-admin/paid-admin.js \
+            release-sources/r4-branch-finance-admin/settlement-admin.js | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Check prior artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/leisurewang0827/tennis-note-public/actions/artifacts/13777303858 > "$RUNNER_TEMP/r4-finance-base.json"
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; const a=JSON.parse(readFileSync(process.argv[1])); if(a.id!==13777303858||a.workflow_run?.id!==42846945596||a.expired!==false||a.name!=="r4-independent-owner-prod-candidate-42846945596"||a.digest!=="sha256:66eed766bd596422bbbd352641f1f1c7b67d2ab0bf8c4fee8e4a22a3ccadeeae")process.exit(1)' "$RUNNER_TEMP/r4-finance-base.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: r4-independent-owner-prod-candidate-42846945596
+          run-id: 42846945596
+          github-token: ${{ github.token }}
+          path: r4-finance-base
+      - name: Assemble administrator-only candidate without credentials
+        run: >-
+          node release-sources/r4-branch-finance-admin/assemble-admin-finance-ci.mjs
+          r4-finance-base release-sources/r4-independent-prod-v2
+          release-sources/r4-branch-finance-admin r4-finance-admin-out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: r4-branch-finance-admin-source-${{ github.run_id }}
+          path: r4-finance-admin-out/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
