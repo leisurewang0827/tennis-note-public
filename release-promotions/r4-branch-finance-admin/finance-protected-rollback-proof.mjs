@@ -2,8 +2,9 @@
 import { createHash } from 'node:crypto';
 import { expected, assertRecovery } from './protected-finance-admission.mjs';
 import { canonicalId, route } from './finance-postread.mjs';
+import { pins } from './observe-production-off-for-publish.mjs';
 
-const recoverySource='81046af5ff14184585533f1a72b22f29a0298050';
+const recoverySource=pins.recoverySource;
 const recoveryIndex='66fb7b87c4a9984e85b462968b1682329a177bf41062656737885f659f7d1ef0';
 const digest=x=>createHash('sha256').update(x).digest('hex');
 const need=(ok,code)=>{if(!ok)throw Error(code);};

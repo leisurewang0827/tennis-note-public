@@ -2,7 +2,7 @@ name: R4 branch finance protected administrator publish
 on:
   push:
     branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
-    # Credential refresh: a new first-attempt run after the no-publish diagnosis.
+    # Recovery source correction: admit a new first attempt only.
     paths: ['.github/workflows/r4-branch-finance-protected-publish.yml']
 permissions:
   contents: read

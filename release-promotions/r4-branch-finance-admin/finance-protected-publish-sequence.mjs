@@ -2,7 +2,8 @@
 import { expected, assertRecovery } from './protected-finance-admission.mjs';
 import { canonicalId, route } from './finance-postread.mjs';
 import { createHash } from 'node:crypto';
-const recoverySource='81046af5ff14184585533f1a72b22f29a0298050';
+import { pins } from './observe-production-off-for-publish.mjs';
+const recoverySource=pins.recoverySource;
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const need=(ok,code)=>{if(!ok)throw Error(code);};
 const sha=x=>createHash('sha256').update(x).digest('hex');

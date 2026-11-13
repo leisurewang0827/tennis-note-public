@@ -8,7 +8,8 @@ export const pins=Object.freeze({
  readSqlSha:'646ecf371c0fb1cf3747cbf3fbd769ceec276730f069b0e90495d9190402c16e',
  sourceSha:'680f7d481121801a83972811bee41496e392aaf4',sourceRun:43391633723,artifactId:14021410409,
  artifactDigest:'sha256:e3cedb9135f1f5703a81f65ee96e43d59953596678e649b5b449c333c5d4b6a6',
- recoveryId:'80f7c05f-f66e-4144-b8d1-c09d2dbaa1d4',recoverySource:'81046af5ff14184585533f1a72b22f29a0298050',
+ // Run 42965332447 published this source; its workflow head was 81046af5.
+ recoveryId:'80f7c05f-f66e-4144-b8d1-c09d2dbaa1d4',recoverySource:'6ba041bbd89d3598f1bb8649c3a111697b713133',
 });
 const zero=['termActive','paidActive','historyActive','paidReceipts','termReceipts','gateRows'];
 const yes=['pilotOff','rlsAndTableAcl','rpcAcl','writerPinned','readerPinned','postimagesPinned'];

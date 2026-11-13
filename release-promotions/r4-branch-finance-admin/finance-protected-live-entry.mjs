@@ -12,17 +12,18 @@ import {sequenceProtectedAdmin} from './finance-protected-publish-sequence.mjs';
 import {classifyPostread} from './finance-mismatch-classifier.mjs';
 import {verifyRollbackPreimage} from './finance-protected-rollback-proof.mjs';
 import {readRoutes} from './finance-postread.mjs';
+import {pins} from './observe-production-off-for-publish.mjs';
 
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const need=(x,c)=>{if(!x)throw Error(c);};
 const repo='leisurewang0827/tennis-note-public',branch=expected.branch;
 const workflow='.github/workflows/r4-branch-finance-protected-publish.yml';
-const parent='dd04b2782f387b90653ef6f07caa51b91ecc2fb7';
-const first='07be1fc7423d291f4fe094e53c7d446ab303f5c5';
-const recoverySource='81046af5ff14184585533f1a72b22f29a0298050';
+const parent='71d6b7d59bced58c40ad51b1661394067e0ef200';
+const first='dd04b2782f387b90653ef6f07caa51b91ecc2fb7';
+const recoverySource=pins.recoverySource;
 const helperHash='e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4';
 const prefix='release-promotions/r4-branch-finance-admin/';
-const files=[workflow,prefix+'check-live-integration-only.mjs',prefix+'finance-protected-live-entry.mjs'].sort();
+const files=[workflow,...['check-live-integration-only.mjs','finance-protected-live-entry.mjs','finance-protected-publish-sequence.mjs','finance-protected-rollback-proof.mjs','observe-production-off-for-publish.mjs'].map(p=>prefix+p)].sort();
 const git=(...x)=>execFileSync('git',x,{encoding:'utf8'}).trim();
 function assertContext(e){
  need(e.GITHUB_ACTIONS==='true'&&e.GITHUB_REPOSITORY===repo&&e.GITHUB_REF==='refs/heads/'+branch&&e.GITHUB_EVENT_NAME==='push'&&e.GITHUB_RUN_ATTEMPT==='1','CI_CONTEXT_DENIED');
@@ -86,7 +87,8 @@ async function live(){
  };
  const preimage=async()=>{
   const project=await get(cf,cfToken),recovery=await get(`${cf}/deployments/${expected.recovery}`,cfToken);
-  assertRecovery(project,recovery,recoverySource);
+  try { assertRecovery(project,recovery,recoverySource); }
+  catch (error) { if (error?.code==='ERR_ASSERTION') throw Error('RECOVERY_PREIMAGE_MISMATCH'); throw error; }
   const oldIndex='66fb7b87c4a9984e85b462968b1682329a177bf41062656737885f659f7d1ef0';
   for(const host of ['https://tennisnote-admin.pages.dev','https://80f7c05f.tennisnote-admin.pages.dev']){
    const r=await readPublic(host+'/');need(r.status===200&&sha(Buffer.from(await r.arrayBuffer()))===oldIndex,'PREIMAGE_BYTES_MISMATCH');
