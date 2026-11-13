@@ -1,0 +1,64 @@
+name: R4 branch finance protected administrator publish
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/r4-branch-finance-protected-publish.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  r4-finance-release-delta:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Verify the new protected release delta without credentials
+        run: node release-promotions/r4-branch-finance-admin/check-live-integration-only.mjs --check-tree
+  r4-finance-admin-publish:
+    needs: r4-finance-release-delta
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: r4-branch-finance-admin-source-43391633723
+          run-id: 43391633723
+          github-token: '${{ github.token }}'
+          path: '${{ runner.temp }}/r4-finance-admin-out'
+      - name: Prepare pinned single-request transport
+        run: |
+          set -euo pipefail
+          base=release-promotions/r4-first-issue-off-only/publisher
+          printf '%s  %s\n' f235fcb84bdb03932e0eb942af150feb71190fb8b51674d2e0ec4e119534cd79 "$base/npm-lock.json" eadb69637534a5837f53a1d23fac02e6586c978034b87f6bc26e48a8895bd159 "$base/npm-manifest.json" | sha256sum -c --status
+          mkdir "$RUNNER_TEMP/r4-wrangler"
+          cp "$base/npm-lock.json" "$RUNNER_TEMP/r4-wrangler/package-lock.json"
+          cp "$base/npm-manifest.json" "$RUNNER_TEMP/r4-wrangler/package.json"
+          npm ci --prefix "$RUNNER_TEMP/r4-wrangler" --ignore-scripts --no-audit --no-fund
+          node --input-type=module -e 'import {readFileSync,writeFileSync} from "node:fs";import {createHash} from "node:crypto";import {resolve,join} from "node:path";import {pathToFileURL} from "node:url";const f=resolve("scripts/r4_internal_registration_prod_promotion.mjs");if(createHash("sha256").update(readFileSync(f)).digest("hex")!=="e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4")throw Error("HELPER_DRIFT");const m=await import(pathToFileURL(f));const p=join(process.env.RUNNER_TEMP,"r4-wrangler/node_modules/wrangler");if(JSON.parse(readFileSync(join(p,"package.json"))).version!=="3.90.0")throw Error("WRANGLER_DRIFT");writeFileSync(join(p,"wrangler-dist/cli-r4-single.cjs"),m.patchProductionWrangler(readFileSync(join(p,"wrangler-dist/cli.js"))),{flag:"wx"})'
+          printf '%s  %s\n' e35355b3a5cb45fcb47ad016f043649b8ad891dc5781b7c7e3e278c7deccf5c4 "$RUNNER_TEMP/r4-wrangler/node_modules/wrangler/wrangler-dist/cli-r4-single.cjs" | sha256sum -c --status
+      - name: Verify protected approval and publish administrator once
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node release-promotions/r4-branch-finance-admin/finance-protected-live-entry.mjs
