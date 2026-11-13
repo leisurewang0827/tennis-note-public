@@ -1,0 +1,31 @@
+name: R4 manual promotion checkpoint (evidence only)
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-first-issue-manual-checkpoint.yml'
+      - 'release-evidence/r4-first-issue-manual/**'
+permissions:
+  contents: read
+jobs:
+  candidate-delta-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - run: node release-evidence/r4-first-issue-manual/check.mjs
+  protected-review-only:
+    needs: candidate-delta-only
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record review-only checkpoint
+        run: echo "R4 candidate evidence reviewed; no production actions in this job."

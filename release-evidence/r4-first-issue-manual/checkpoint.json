@@ -1,0 +1,20 @@
+{
+  "schema": "tennisnote-r4-manual-checkpoint/v1",
+  "mode": "review-only",
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "55da99d2d9281a69d62ac28b1467be88c9a54ab1",
+  "environment": "tennisnote-r4-admin-production",
+  "reviewer": "leisurewang0827",
+  "reviewSql": {
+    "install": "3e06d71b538e9f072e64433aaa8549e6e2a9e860699e5c090f73294569731493",
+    "restore": "e9a8c08e5a7c0b066a326c23433e68e4c156ef85b06e3b49e5bdce06878f366d"
+  },
+  "admin": {
+    "source": "30bdd59100426cc6cee740c9b52b84c1e6c10c5d",
+    "artifactId": 13861437991,
+    "artifactSha256": "26ff7deb94d407f83da4c40856bab75ac1756fd7d412f8c99f85de1357664f1e",
+    "sealSha256": "7db1d490e7422665c7bfeeb20451ed134b31e13f6979bcf865899985a174346e",
+    "recoveryDeployment": "80f7c05f-f66e-4144-b8d1-c09d2dbaa1d4"
+  }
+}
