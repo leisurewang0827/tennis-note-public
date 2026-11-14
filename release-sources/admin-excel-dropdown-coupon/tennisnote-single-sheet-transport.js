@@ -1,0 +1,256 @@
+(function (root, factory) {
+  const api = factory(root);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  else root.TennisNoteSingleSheetRemotePreview = api;
+})(globalThis, function (root) {
+  "use strict";
+
+  const PROTOCOL = "scoped-postgrest-import/2";
+  const TIMEOUT_MS = 9000;
+  const DEVELOPMENT_ORIGIN = "https://tennisnote-admin-dev.pages.dev";
+  const PRODUCTION_ORIGIN = "https://tennisnote-admin.pages.dev";
+  const ORIGINS = Object.freeze({ development: DEVELOPMENT_ORIGIN, production: PRODUCTION_ORIGIN });
+  const ROW_KEYS = Object.freeze(["coach", "group", "name", "phone", "product", "slots", "startDate", "total", "used"]);
+  const digest = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  const uuid = value => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const fail = code => { const error = new Error(code); error.code = code; throw error; };
+  const sameScope = (a, b) => ["environment", "projectFingerprint", "branchId"].every(key => a?.[key] && a[key] === b?.[key]);
+  const normalizedMode = value => ["preview", "apply"].includes(String(value || "").trim().toLowerCase())
+    ? String(value).trim().toLowerCase()
+    : "off";
+
+  async function fingerprintFor(url) {
+    const match = /^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/.exec(String(url || "").trim().toLowerCase());
+    if (!match || !root.crypto?.subtle || typeof root.TextEncoder !== "function") return "";
+    const bytes = await root.crypto.subtle.digest("SHA-256", new root.TextEncoder().encode(match[1]));
+    return Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
+  }
+
+  function sessionReady(session) {
+    const token = String(session?.access_token || "");
+    const part = token.split(".")[1] || "";
+    if (!part) return false;
+    try {
+      const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      const payload = JSON.parse(root.atob(padded));
+      return payload?.role === "authenticated" && Number(payload?.exp || 0) > Math.floor(Date.now() / 1000);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function scopeFrom(client, getBranchId) {
+    const config = client?.loadConfig?.() || {};
+    return {
+      config,
+      scope: Object.freeze({
+        environment: String(config.environment || "").trim().toLowerCase(),
+        projectFingerprint: String(config.projectFingerprint || "").trim().toLowerCase(),
+        branchId: String(getBranchId?.() || "").trim(),
+      }),
+      mode: normalizedMode(config.singleSheetImportMode),
+      reverseEnabled: config.singleSheetImportReverseEnabled === true,
+    };
+  }
+
+  function sessionGate(client, getBranchId, canOpen) {
+    const current = scopeFrom(client, getBranchId);
+    let reason = "";
+    if (!ORIGINS[current.scope.environment] || String(root.location?.origin || "") !== ORIGINS[current.scope.environment]) reason = "SHEET_IMPORT_ENVIRONMENT_BLOCKED";
+    else if (!digest(current.scope.projectFingerprint) || !uuid(current.scope.branchId)) reason = "TARGET_UNVERIFIED";
+    else if (canOpen?.() !== true || !sessionReady(client?.getSession?.())) reason = "SHEET_IMPORT_SESSION_REQUIRED";
+    else if (current.mode === "off") reason = "SHEET_IMPORT_SCOPE_DISABLED";
+    return { ...current, reason };
+  }
+
+  async function inspect(client, getBranchId, canOpen) {
+    const current = sessionGate(client, getBranchId, canOpen);
+    if (!current.reason && current.scope.projectFingerprint !== await fingerprintFor(current.config.supabaseUrl)) {
+      current.reason = "TARGET_OR_REVISION_MISMATCH";
+    }
+    return current;
+  }
+
+  function unitsValid(units) {
+    if (!Array.isArray(units) || units.length < 1 || units.length > 500) return false;
+    let rows = 0;
+    for (const unit of units) {
+      if (!unit || Object.keys(unit).length !== 1 || !Array.isArray(unit.rows) || unit.rows.length < 1 || unit.rows.length > 2) return false;
+      rows += unit.rows.length;
+      for (const row of unit.rows) {
+        if (!row || Object.keys(row).sort().join("|") !== ROW_KEYS.join("|")) return false;
+        if (!Array.isArray(row.slots) || row.slots.length > 3) return false;
+      }
+    }
+    return rows <= 500;
+  }
+
+  function mutationArgsValid(unit, revision, planHash, expiresAt, fileHash, operationKey) {
+    return unitsValid([unit]) && digest(revision) && digest(planHash) && digest(fileHash)
+      && Number.isFinite(Date.parse(expiresAt)) && digest(operationKey);
+  }
+
+  function mapFailure(error, fallback) {
+    const raw = `${error?.code || ""} ${error?.message || ""}`.toUpperCase();
+    if (String(error?.code || "") === "23505") return "SHEET_IMPORT_STORAGE_CONFLICT";
+    for (const code of ["SHEET_WORK_RUNTIME_UNAVAILABLE", "SHEET_WORK_ENVIRONMENT_MISMATCH", "SHEET_WORK_BRANCH_UNAVAILABLE", "SHEET_WORK_SESSION_REVOKED", "SHEET_WORK_SESSION_EXPIRED", "SHEET_WORK_SESSION_SUPERSEDED"]) {
+      if (raw.split(/[^A-Z_]+/).includes(code)) return code;
+    }
+    if (error?.status === 401 || raw.includes("ADMIN_SESSION_EXPIRED")) return "SHEET_IMPORT_SESSION_REQUIRED";
+    if (error?.status === 403 && (raw.includes("42501") || raw.includes("SHEET_SCOPE_OFF_OR_MISMATCH") || raw.includes("SHEET_ADMIN_REQUIRED"))) return "SHEET_IMPORT_SCOPE_DISABLED";
+    if (raw.includes("SERVER_REQUEST_TIMEOUT") || raw.includes("ABORTERROR")) return "SHEET_IMPORT_TIMEOUT";
+    if (raw.includes("SHEET_PREVIEW_STALE")) return "STALE_PREVIEW";
+    if (raw.includes("SHEET_PLAN_CHANGED")) return "TARGET_OR_REVISION_MISMATCH";
+    if (raw.includes("SHEET_LATER_ACTIVITY_REVIEW")) return "SHEET_IMPORT_REVERSE_HOLD";
+    if (raw.includes("SHEET_RECEIPT_NOT_FOUND")) return "SHEET_IMPORT_RECEIPT_REQUIRED";
+    if (raw.includes("SHEET_OPERATION_REUSED")) return "SHEET_IMPORT_OPERATION_CONFLICT";
+    return fallback;
+  }
+
+  async function create({ client, getBranchId, canOpen } = {}) {
+    const initial = await inspect(client, getBranchId, canOpen);
+    let workSessionExpiry = "";
+    const initialUrl = String(initial.config.supabaseUrl || "").trim().toLowerCase().replace(/\/$/, "");
+    const requireCurrent = async capability => {
+      const current = await inspect(client, getBranchId, canOpen);
+      if (current.reason) fail(current.reason);
+      if (!sameScope(initial.scope, current.scope) || initialUrl !== String(current.config.supabaseUrl || "").trim().toLowerCase().replace(/\/$/, "")) fail("TARGET_OR_REVISION_MISMATCH");
+      if (capability === "apply" && current.mode !== "apply") fail("SHEET_IMPORT_APPLY_DISABLED");
+      if (capability === "reverse" && (current.mode !== "apply" || current.reverseEnabled !== true)) fail("SHEET_IMPORT_REVERSE_DISABLED");
+      return current;
+    };
+    const call = async (capability, name, parameters, fallback) => {
+      const before = await requireCurrent(capability);
+      if (typeof client?.rpc !== "function") fail("SHEET_IMPORT_TRANSPORT_UNAVAILABLE");
+      try {
+        const response = await client.rpc(name, parameters(before), { timeoutMs: TIMEOUT_MS, requireCurrentSession: true, retryAuth: false });
+        await requireCurrent(capability);
+        return clone(response);
+      } catch (error) {
+        if (/^(SHEET_IMPORT_|SHEET_WORK_|TARGET_|STALE_PREVIEW)/.test(String(error?.code || ""))) throw error;
+        fail(mapFailure(error, fallback));
+      }
+    };
+    async function prepareSession(operationKey) {
+      if (!digest(operationKey)) fail("SHEET_PAYLOAD_INVALID");
+      let response;
+      try { response = await call("preview", "tn_prepare_single_sheet_work_session", current => ({ scope: clone(current.scope), operation_key: operationKey }), "SHEET_WORK_SESSION_FAILED"); }
+      catch (error) { if (error?.code === "SHEET_IMPORT_TIMEOUT") fail("SHEET_WORK_SESSION_FAILED"); throw error; }
+      const prepared = Date.parse(response?.preparedAt), expires = Date.parse(response?.expiresAt);
+      if (response?.contract !== "single-sheet-work-session/1" || !sameScope(response.scope, initial.scope)
+        || typeof response.replay !== "boolean" || !Number.isFinite(prepared) || !Number.isFinite(expires)
+        || expires <= Date.now() || expires <= prepared || expires - prepared > 900000 || prepared > Date.now() + 30000) fail("SHEET_WORK_SESSION_INVALID");
+      workSessionExpiry = response.expiresAt;
+      return { expiresAt: workSessionExpiry, replay: response.replay };
+    }
+    async function preview(requestScope, units) {
+      if (initial.reason) fail(initial.reason);
+      if (!sameScope(requestScope, initial.scope)) fail("TARGET_OR_REVISION_MISMATCH");
+      if (!unitsValid(units)) fail("SHEET_PAYLOAD_INVALID");
+      return call("preview", "tn_preview_single_sheet_import", current => ({ scope: clone(current.scope), units: clone(units) }), "SHEET_IMPORT_PREVIEW_FAILED");
+    }
+    async function apply(requestScope, unit, expectedRevision, expectedPlanHash, previewExpiresAt, fileHash, operationKey) {
+      if (!sameScope(requestScope, initial.scope)) fail("TARGET_OR_REVISION_MISMATCH");
+      if (!mutationArgsValid(unit, expectedRevision, expectedPlanHash, previewExpiresAt, fileHash, operationKey)) fail("SHEET_PAYLOAD_INVALID");
+      return call("apply", "tn_apply_single_sheet_import_unit", current => ({
+        scope: clone(current.scope), unit: clone(unit), expected_revision: expectedRevision, expected_plan_hash: expectedPlanHash,
+        preview_expires_at: previewExpiresAt, file_hash: fileHash, operation_key: operationKey,
+      }), "SHEET_IMPORT_APPLY_FAILED");
+    }
+    async function reverse(requestScope, operationKey) {
+      if (!sameScope(requestScope, initial.scope)) fail("TARGET_OR_REVISION_MISMATCH");
+      if (!digest(operationKey)) fail("SHEET_PAYLOAD_INVALID");
+      return call("reverse", "tn_reverse_single_sheet_import_unit", current => ({ scope: clone(current.scope), operation_key: operationKey }), "SHEET_IMPORT_REVERSE_FAILED");
+    }
+    const currentScope = () => scopeFrom(client, getBranchId).scope;
+    const isReady = () => {
+      const current = sessionGate(client, getBranchId, canOpen);
+      return !current.reason && sameScope(initial.scope, current.scope)
+        && initialUrl === String(current.config.supabaseUrl || "").trim().toLowerCase().replace(/\/$/, "")
+        && current.mode === initial.mode && current.reverseEnabled === initial.reverseEnabled;
+    };
+    const canApply = initial.reason === "" && initial.mode === "apply";
+    const canReverse = canApply && initial.reverseEnabled === true;
+    async function templateProducts() {
+      // Read only; never use the capped roster, local product drafts, or a
+      // catch-to-empty fallback as an authoritative complete catalog.
+      const products = [], ids = new Set();
+      if (!isReady() || initial.reason || typeof client.selectRows !== "function") fail("TEMPLATE_PRODUCTS_REQUIRED");
+      for (let offset = 0; offset <= 500; offset += 100) {
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        const page = await client.selectRows("tn_membership_products", {
+          select: "id,branch_id,name,is_active,product_kind", filters: { branch_id: initial.scope.branchId, is_active: true }, order: "id.asc", limit: 100, offset,
+        });
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        if (!Array.isArray(page) || page.length > 100) fail("TEMPLATE_PRODUCTS_INVALID");
+        for (const p of page) {
+          if (!p || p.branch_id !== initial.scope.branchId || p.is_active !== true || !p.id || ids.has(p.id) || typeof p.product_kind !== "string" || !p.product_kind) fail("TEMPLATE_PRODUCTS_INVALID");
+          ids.add(p.id);
+          // Match tn_sheet_plan's kind gate, never infer eligibility from names.
+          // Validate/count every raw row before filtering so excluded products
+          // cannot hide duplicate IDs, scope drift, or an incomplete snapshot.
+          if (["regular", "group", "coupon"].includes(p.product_kind)) products.push(p);
+        }
+        if (ids.size > 500) fail("TEMPLATE_PRODUCTS_LIMIT");
+        if (page.length < 100) return { branchId: initial.scope.branchId, complete: true, products };
+      }
+      fail("TEMPLATE_PRODUCTS_LIMIT");
+    }
+    async function templateCoaches() {
+      const coaches = [], ids = new Set();
+      if (!isReady() || initial.reason || typeof client.selectRows !== "function") fail("TEMPLATE_COACHES_REQUIRED");
+      for (let offset = 0; offset <= 500; offset += 100) {
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        const page = await client.selectRows("tn_coach_roles", {
+          select: "id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
+          filters: { branch_id: initial.scope.branchId, status: "approved", employment_status: "active", archived_at: { is: null }, deleted_at: { is: null } },
+          order: "id.asc", limit: 100, offset,
+        });
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        if (!Array.isArray(page) || page.length > 100) fail("TEMPLATE_COACHES_INVALID");
+        for (const c of page) {
+          if (!c || c.branch_id !== initial.scope.branchId || c.status !== "approved" || c.employment_status !== "active" || c.archived_at != null || c.deleted_at != null || !c.id || ids.has(c.id)) fail("TEMPLATE_COACHES_INVALID");
+          ids.add(c.id); coaches.push(c);
+        }
+        if (ids.size > 500) fail("TEMPLATE_COACHES_LIMIT");
+        if (page.length < 100) return { branchId: initial.scope.branchId, complete: true, coaches };
+      }
+      fail("TEMPLATE_COACHES_LIMIT");
+    }
+    return Object.freeze({
+      protocol: PROTOCOL,
+      enabled: initial.reason === "",
+      reason: initial.reason,
+      origin: String(root.location?.origin || ""),
+      host: String(root.location?.hostname || ""),
+      scope: initial.scope,
+      canApply,
+      canReverse,
+      cleanupContinuityRequired: true,
+      currentScope,
+      isReady,
+      templateProducts,
+      templateCoaches,
+      prepareSession,
+      workSessionExpiresAt: () => workSessionExpiry,
+      preview,
+      ...(canApply ? { apply } : {}),
+      ...(canReverse ? { reverse } : {}),
+    });
+  }
+
+  function newWorkSessionKey() {
+    if (typeof root.crypto?.getRandomValues !== "function") fail("SHEET_WORK_SESSION_FAILED");
+    return Array.from(root.crypto.getRandomValues(new Uint8Array(32)), value => value.toString(16).padStart(2, "0")).join("");
+  }
+
+  function recognized(transport) {
+    return transport?.protocol === PROTOCOL && typeof transport.preview === "function"
+      && typeof transport.currentScope === "function" && typeof transport.isReady === "function"
+      && typeof transport.canApply === "boolean" && typeof transport.canReverse === "boolean";
+  }
+
+  return Object.freeze({ PROTOCOL, TIMEOUT_MS, DEVELOPMENT_ORIGIN, PRODUCTION_ORIGIN, ORIGINS, fingerprintFor, recognized, newWorkSessionKey, create });
+});
