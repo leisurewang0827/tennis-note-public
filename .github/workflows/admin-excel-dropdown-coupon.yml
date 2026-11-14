@@ -65,3 +65,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
           EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
         run: node release-sources/admin-excel-dropdown-coupon/publish.mjs
+
+# Preserve reviewed CRLF asset bytes after Git LF normalization.

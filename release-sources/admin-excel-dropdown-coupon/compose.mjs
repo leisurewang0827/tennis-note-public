@@ -11,7 +11,7 @@ export function compose(files){
  assert.deepEqual(Object.fromEntries(Object.entries(files).map(([p,b])=>[p,sha(b)])),baseline,'BASELINE_DRIFT');
  const next={...files};
  for(const n of ['import','preview-ui','snapshot','transport']){
-  const p='shared/tennisnote-single-sheet-'+n+'.js',b=readFileSync(join(here,'tennisnote-single-sheet-'+n+'.js')); next[p]=b;
+  const p='shared/tennisnote-single-sheet-'+n+'.js',b=Buffer.from(readFileSync(join(here,'tennisnote-single-sheet-'+n+'.js'),'utf8').replace(/\r?\n/g,'\r\n')); next[p]=b;
   if(n!=='import'){
    const html=next['index.html'].toString(),old='../'+p+'?v=1.0.566';assert.equal(html.split(old).length,2);
    next['index.html']=Buffer.from(html.replace(old,'../'+p+'?v='+sha(b).slice(0,16)));

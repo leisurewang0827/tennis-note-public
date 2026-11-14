@@ -8,7 +8,8 @@ import {expected,assertSource} from '../../release-promotions/r4-branch-finance-
 import {readRoutes} from '../../release-promotions/r4-branch-finance-admin/finance-postread.mjs';
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-excel-dropdown-coupon.yml';
-const parent='c1800ed4713f866ac422c5d923f88bf05cdf2c95';
+const parent='ae16c8cad855de45eeea605645e8bf828e7c85f3';
+const priorSource='c1800ed4713f866ac422c5d923f88bf05cdf2c95';
 const prior='a5d9cb02-dbf0-401a-8074-218015e9a099';
 const origin='https://tennisnote-admin.pages.dev';
 const files=[workflow,...['tennisnote-single-sheet-import.js','tennisnote-single-sheet-preview-ui.js','tennisnote-single-sheet-snapshot.js','tennisnote-single-sheet-transport.js','seal.json','compose.mjs','check.mjs','publish.mjs'].map(p=>'release-sources/admin-excel-dropdown-coupon/'+p)].sort();
@@ -17,7 +18,7 @@ export function preimage(project) {
   assert.equal(project.success,true);const p=project.result,d=p?.canonical_deployment;
   assert.equal(p?.name,'tennisnote-admin');assert.equal(p?.production_branch,'main');
   assert.equal(d?.id,prior);assert.equal(d.environment,'production');assert.equal(d.latest_stage?.status,'success');
-  assert.equal(d.deployment_trigger?.metadata?.branch,'main');assert.equal(d.deployment_trigger?.metadata?.commit_hash,parent);
+  assert.equal(d.deployment_trigger?.metadata?.branch,'main');assert.equal(d.deployment_trigger?.metadata?.commit_hash,priorSource);
 }
 export function review(approvals,commit) {
   assert.equal(approvals.length,1);const a=approvals[0];
@@ -32,7 +33,7 @@ async function main() {
   assert.equal(e.GITHUB_WORKFLOW_REF,`${repo}/${workflow}@refs/heads/${branch}`);
   assert.equal(git('rev-parse','HEAD'),e.GITHUB_SHA);
   assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+parent);
-  assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r','HEAD').split('\n').sort(),files.map(p=>'A\t'+p).sort());
+  assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',priorSource,'HEAD').split('\n').sort(),files.map(p=>'A\t'+p).sort());
   assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);
   assert.equal(sha(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
   assert(e.CLOUDFLARE_API_TOKEN&&e.GH_TOKEN);
