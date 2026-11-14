@@ -1,0 +1,69 @@
+name: Administrator coupon scope
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/admin-coupon-scope.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 7, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: r4-branch-finance-admin-source-43391633723
+          run-id: 43391633723
+          github-token: '${{ github.token }}'
+          path: '${{ runner.temp }}/admin-coupon-scope-base'
+      - name: Verify exact two-asset composition and no side effects
+        run: |
+          node --check release-sources/admin-coupon-scope/publish.mjs
+          node release-sources/admin-coupon-scope/check.mjs "$RUNNER_TEMP/admin-coupon-scope-base" "$RUNNER_TEMP/admin-coupon-scope-checked"
+  publish:
+    needs: verify
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 7, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: r4-branch-finance-admin-source-43391633723
+          run-id: 43391633723
+          github-token: '${{ github.token }}'
+          path: '${{ runner.temp }}/admin-coupon-scope-base'
+      - name: Prepare existing pinned single-post transport
+        run: |
+          set -euo pipefail
+          base=release-promotions/r4-first-issue-off-only/publisher
+          printf '%s  %s\n' f235fcb84bdb03932e0eb942af150feb71190fb8b51674d2e0ec4e119534cd79 "$base/npm-lock.json" eadb69637534a5837f53a1d23fac02e6586c978034b87f6bc26e48a8895bd159 "$base/npm-manifest.json" | sha256sum -c --status
+          mkdir "$RUNNER_TEMP/r4-wrangler"
+          cp "$base/npm-lock.json" "$RUNNER_TEMP/r4-wrangler/package-lock.json"
+          cp "$base/npm-manifest.json" "$RUNNER_TEMP/r4-wrangler/package.json"
+          npm ci --prefix "$RUNNER_TEMP/r4-wrangler" --ignore-scripts --no-audit --no-fund
+      - name: Publish reviewed coupon scope candidate once and verify every public asset
+        env:
+          EXCEL_DIAGNOSTIC_ONLY: 'false'
+          GH_TOKEN: '${{ github.token }}'
+          CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node release-sources/admin-coupon-scope/publish.mjs
+
+# Preserve reviewed CRLF asset bytes after Git LF normalization.
