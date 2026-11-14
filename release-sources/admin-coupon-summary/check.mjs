@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {build,compose,baseline} from './compose.mjs';
+import {preimage,review} from './publish.mjs';
+const project={success:true,result:{name:'tennisnote-admin',production_branch:'main',canonical_deployment:{id:'a5d9cb02-dbf0-401a-8074-218015e9a099',environment:'production',latest_stage:{status:'success'},deployment_trigger:{metadata:{branch:'main',commit_hash:'c1800ed4713f866ac422c5d923f88bf05cdf2c95'}}}}};
+preimage(project);const bad=structuredClone(project);bad.result.canonical_deployment.id='00000000-0000-0000-0000-000000000000';assert.throws(()=>preimage(bad));
+const approval={state:'approved',user:{id:294703475},environments:[{id:26219323796}],comment:'ADMIN-COUPON-SUMMARY '+'a'.repeat(40)+' exact-two-assets no-member-data'};
+review([approval],'a'.repeat(40));assert.throws(()=>review([approval],'b'.repeat(40)));assert.throws(()=>review([approval,approval],'a'.repeat(40)));assert.throws(()=>review([{...approval,state:'rejected'}],'a'.repeat(40)));
+const result=build(process.argv[2],process.argv[3]);
+assert.equal(Object.keys(result.hashes).length,181);assert.equal(Object.keys(result.hashes).filter(p=>result.hashes[p]===baseline[p]).length,179);
+assert.throws(()=>compose({...result.files,'unexpected.js':Buffer.from('x')}));
+console.log('SUMMARY_EXACT_TWO_ASSETS_PASS_179_PRESERVED');
