@@ -8,7 +8,7 @@ import {expected,assertSource} from '../../release-promotions/r4-branch-finance-
 import {readRoutes} from '../../release-promotions/r4-branch-finance-admin/finance-postread.mjs';
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-excel-dropdown-coupon.yml';
-const parent='a6ac4daaeb04eafd6c1b7373105d6e89a3e518b1';
+const parent='f80640f7de850e6d2440574971ed4f1402d8bc9a';
 const priorSource='c1800ed4713f866ac422c5d923f88bf05cdf2c95';
 const prior='a5d9cb02-dbf0-401a-8074-218015e9a099';
 const origin='https://tennisnote-admin.pages.dev';
@@ -26,6 +26,7 @@ export function review(approvals,commit) {
   assert.deepEqual(a.environments.map(e=>e.id),[26219323796]);
   assert.equal(a.comment,'ADMIN-EXCEL-COUPON '+commit+' exact-five-assets no-member-data');
 }
+let stage='runtime';
 async function main() {
   const e=process.env;
   assert.equal(e.GITHUB_ACTIONS,'true');assert.equal(e.GITHUB_REPOSITORY,repo);assert.equal(e.GITHUB_REF,'refs/heads/'+branch);
@@ -45,13 +46,19 @@ async function main() {
   const cf=`https://api.cloudflare.com/client/v4/accounts/${e.CLOUDFLARE_ACCOUNT_ID}/pages/projects/tennisnote-admin`;
   const read=async url=>fetch(url,{method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(15000)});
   const [run,artifact]=await Promise.all([get(`${api}/actions/runs/${expected.run}`,e.GH_TOKEN),get(`${api}/actions/artifacts/${expected.artifact}`,e.GH_TOKEN)]);
+  stage='source-artifact';
   assertSource(run,artifact);
   const out=join(e.RUNNER_TEMP,'admin-excel-coupon-candidate');
+  stage='compose';
   const candidate=build(join(e.RUNNER_TEMP,'admin-excel-coupon-base'),out);
+  stage='canonical';
   preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
+  stage='baseline-http';
   await readRoutes(baseline,[origin],read);
+  stage='approval';
   review(await get(`${api}/actions/runs/${e.GITHUB_RUN_ID}/approvals`,e.GH_TOKEN),e.GITHUB_SHA);
   const ref=await get(`${api}/git/ref/heads/${branch}`,e.GH_TOKEN);assert.equal(ref.object?.sha,e.GITHUB_SHA,'BRANCH_MOVED');
+  stage='transport-source';
   const helper=resolve('scripts/r4_internal_registration_prod_promotion.mjs');
   assert.equal(sha(readFileSync(helper)),'e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4');
   const {patchProductionWrangler}=await import(pathToFileURL(helper));
@@ -60,7 +67,9 @@ async function main() {
   const transport=Buffer.from(patchProductionWrangler(readFileSync(join(wrangler,'wrangler-dist/cli.js'))));
   assert.equal(sha(transport),'e35355b3a5cb45fcb47ad016f043649b8ad891dc5781b7c7e3e278c7deccf5c4');
   const cli=join(wrangler,'wrangler-dist/cli-hide-single.cjs');writeFileSync(cli,transport,{flag:'wx'});
+  stage='canonical';
   preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
+  if(e.EXCEL_DIAGNOSTIC_ONLY==='true'){console.log('READ_ONLY_ADMISSION_PASS_NO_POST');return;}
   const result=await new Promise(done=>{
     let output='',settled=false;
     const child=spawn(process.execPath,[cli,'pages','deploy',out,'--project-name=tennisnote-admin','--branch=main','--commit-hash='+e.GITHUB_SHA,'--commit-dirty=false'],{shell:false,stdio:['ignore','pipe','pipe'],env:{PATH:e.PATH,HOME:e.HOME,TMPDIR:e.TMPDIR,CLOUDFLARE_ACCOUNT_ID:e.CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN:e.CLOUDFLARE_API_TOKEN}});
@@ -80,4 +89,4 @@ async function main() {
   assert.equal((await get(cf,e.CLOUDFLARE_API_TOKEN)).result?.canonical_deployment?.id,d.id,'CANONICAL_MOVED');
   console.log(JSON.stringify({status:'ADMIN_EXCEL_COUPON_PUBLISHED',deploymentId:d.id,source:e.GITHUB_SHA,prior,changed:['index.html',...['import','preview-ui','snapshot','transport'].map(n=>'shared/tennisnote-single-sheet-'+n+'.js')],...counts,dbChanges:0}));
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)) main().catch(error=>{console.error('ADMIN_EXCEL_COUPON_HOLD: '+(error.code||error.message));process.exitCode=1;});
+if(process.argv[1]===fileURLToPath(import.meta.url)) main().catch(error=>{console.error('ADMIN_EXCEL_COUPON_HOLD: '+stage+' '+error.message);process.exitCode=1;});
