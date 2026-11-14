@@ -8,7 +8,7 @@ import {expected,assertSource} from '../../release-promotions/r4-branch-finance-
 import {readRoutes} from '../../release-promotions/r4-branch-finance-admin/finance-postread.mjs';
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-excel-dropdown-coupon.yml';
-const parent='ae16c8cad855de45eeea605645e8bf828e7c85f3';
+const parent='a6ac4daaeb04eafd6c1b7373105d6e89a3e518b1';
 const priorSource='c1800ed4713f866ac422c5d923f88bf05cdf2c95';
 const prior='a5d9cb02-dbf0-401a-8074-218015e9a099';
 const origin='https://tennisnote-admin.pages.dev';
