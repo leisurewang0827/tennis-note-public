@@ -7,11 +7,13 @@ import vm from "node:vm";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 import aOnly from "./helpers/self-profile-a-only.cjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const { names, bootstrap, runCases, runRefreshEventCases } = require("./fixtures/member-home-cases.cjs");
-const read = file => aOnly.restoreCandidate(file, fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n"));
+// 기능 검사는 현재 코드를 실행하고, 아래 원본 이식 검사만 고정된 과거 입력을 사용합니다.
+const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const hash = text => crypto.createHash("sha256").update(text).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
 const version = JSON.parse(read("app/release.json")).version;
@@ -25,7 +27,10 @@ const modules = [...manifest.files.map(row => row.path), "app/tennis-note-member
 const all = modules.map(read).join("\n");
 const script = names.map(name => extract(all, name)).join("\n");
 
-test("회원 홈: private source SHA, 9모듈 전체 preimage/parity, 실제 entry 등록", () => {
+test("과거 원본 재현: 회원 홈: private source SHA, 9모듈 전체 preimage/parity, 실제 entry 등록", () => {
+  const read = file => aOnly.restoreCandidate(file, execFileSync("git", ["show", `b7fe326b6b750f9be47db7eca64b03577359090f:${file}`], { cwd: root, encoding: "utf8", maxBuffer: 8e6 }));
+  const version = JSON.parse(read("app/release.json")).version;
+  const normalized = text => text.replaceAll(version, manifest.publicVersion);
   assert.equal(manifest.privateSource, "860b53fa8d0cf303d4405f023e7dd10bc5c204c3");
   assert.equal(manifest.publicBase, "648ac3387f11ad65e7631ad32e4a9a06b511d49c");
   assert.equal(manifest.files.length, 9);

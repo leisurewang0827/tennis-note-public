@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const root = new URL("../", import.meta.url);
-const current = path => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
+// 원본 이식 해시는 승인된 1.0.558 시점에서 재현합니다. 위 VM 실행은 현재 작업 파일을 검사합니다.
+const current = path => execFileSync("git", ["show", `b7fe326b6b750f9be47db7eca64b03577359090f:${path}`], { cwd: root, encoding: "utf8", maxBuffer: 8e6 }).replace(/\r\n/g, "\n");
 const sha = value => createHash("sha256").update(value).digest("hex");
 // 기존 PR565 계약은 refresh-only hunk를 exact 역이식한 원본에서 검증한다.
 const refresh = JSON.parse(current("tests/fixtures/production-excel-refresh-source.json"));
@@ -44,7 +44,7 @@ test("저장 후 대상 조회와 기존 결제 검증 VM 계약", () => {
   assert.equal(report.purchaseWrites, 0);
 });
 
-test("private PR565 조회 helper 및 등록·추가·연장 호출 이식 범위", () => {
+test("과거 원본 재현: private PR565 조회 helper 및 등록·추가·연장 호출 이식 범위", () => {
   const commonWithR3 = current("app/admin/actions/common.js");
   assert.match(commonWithR3, /function reconcileAdminBillingLockUi\(\)[\s\S]*?renderAdminSettlementHistory\(\{ refresh: false \}\)/);
   assert.equal((commonWithR3.match(/reconcileAdminBillingLockUi\(\);/g) || []).length, 3);

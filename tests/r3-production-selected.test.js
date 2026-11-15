@@ -32,7 +32,7 @@ const snapshot = {snapshotId:"synthetic-snapshot",revision:1,status:"calculated"
 const copy = x => JSON.parse(JSON.stringify(x));
 function element(value="") {
   return {value,disabled:false,hidden:false,textContent:"",isConnected:true,children:[],listeners:{},
-    append(...xs){this.children.push(...xs);},replaceChildren(...xs){this.children=xs;},
+    dataset:{},append(...xs){this.children.push(...xs);},replaceChildren(...xs){this.children=xs;},
     setAttribute(){},focus(){},querySelectorAll(){return [];},
     addEventListener(name,fn){(this.listeners[name]??=[]).push(fn);},
     set innerHTML(_){throw Error("unsafe HTML sink");}};
@@ -60,6 +60,8 @@ function admin() {
     if(name==="tn_admin_monthly_settlement_scope_state")return c.scopeValue();
     if(name==="tn_admin_create_monthly_settlement_snapshot")return copy(snapshot);
     if(name==="tn_admin_confirm_monthly_settlement_snapshot"){c.confirmed=true;if(c.confirmLoss)throw Error("synthetic response loss");return c.scopeValue();}
+    // 이 검사는 조정 RPC가 아직 없는 배포의 실제 PGRST202 호환 경로를 검증합니다.
+    if(name==="tn_monthly_settlement_adjustment_state")throw Object.assign(Error("synthetic missing adjustment RPC"),{payload:{code:"PGRST202"}});
     if(name==="tn_monthly_settlement_payout_state"){if(c.readLoss)throw Error("synthetic read loss");return copy(c.payoutValue());}
     if(name==="tn_admin_record_monthly_settlement_payout"){
       const event={eventId:"synthetic-record",eventType:"payout_recorded",snapshotId:snapshot.snapshotId,snapshotRevision:1,sourceFingerprint:snapshot.sourceFingerprint,amount:14400,paidOn:args.target_paid_on,paymentMethod:args.target_payment_method,operationKeyHash:hash(args.target_operation_key),reversed:false};
@@ -70,6 +72,7 @@ function admin() {
     }
     throw Error("unexpected RPC "+name);
   }};
+  vm.runInContext(raw("app/shared/tennisnote-settlement-adjustment.js"),c);
   vm.runInContext(read("app/admin/data/billing.js"),c);vm.runInContext(read("app/admin/actions/billing.js"),c);
   const value=expr=>vm.runInContext(expr,c);
   const prime=()=>{c.confirmed=true;c.initial=c.scopeValue();c.payout=c.payoutValue();value('Object.assign(adminMonthlySettlementWrite,{status:"CONFIRMED",scopeState:initial,payoutState:payout,payoutReadValid:true})');};
@@ -125,7 +128,10 @@ test("HTML/module wiring has all controls once, response inside existing sheet, 
 test("admin assembled preview -> create/confirm/readback keeps exact scope and one physical group amount",async()=>{
   const h=admin();assert.equal(await h.c.previewAdminMonthlySettlement(),true);assert.equal(h.value("adminMonthlySettlementWrite.status"),"READY");assert.equal(await h.c.confirmAdminMonthlySettlementSnapshot(),true);
   assert.equal(h.count("tn_admin_create_monthly_settlement_snapshot"),1);assert.equal(h.count("tn_admin_confirm_monthly_settlement_snapshot"),1);assert.equal(h.value("adminMonthlySettlementWrite.scopeState.snapshot.totals.totalSettlementAmount"),14400);
-  for(const call of h.calls)assert.equal(call.args.target_coach_role_id,scope.coachRoleId);
+  for(const call of h.calls){
+    if(call.name==="tn_monthly_settlement_adjustment_state")assert.deepEqual(call.args,{b:scope.branchId,c:scope.coachRoleId,m:scope.settlementMonth});
+    else assert.equal(call.args.target_coach_role_id,scope.coachRoleId);
+  }
 });
 test("admin missing session, PIN, role, exact coach or month fails before RPC",async()=>{
   for(const mutate of [h=>h.c.token="",h=>h.c.actorRole="coach",h=>h.c.pinMissing=true,h=>h.c.roles.push({...h.c.roles[0]}),h=>h.c.scope.settlementMonth="invalid"]){const h=admin();mutate(h);assert.equal(await h.c.previewAdminMonthlySettlement(),false);assert.equal(h.calls.length,0);}
@@ -144,11 +150,21 @@ test("manual gate OFF and missing coach acknowledgment are write-zero",async()=>
 });
 test("manual record and reversal keep exact source/readback; never call a financial provider",async()=>{
   const h=admin();h.prime();assert.equal(await h.c.recordAdminMonthlySettlementPayout(),true);assert.equal(h.c.events.length,1);assert.equal(await h.c.reverseAdminMonthlySettlementPayout(),true);assert.equal(h.c.events.length,2);assert.equal(h.c.active,null);assert(h.c.events[0].reversed);assert.equal(h.c.events[1].reversalOfEventId,h.c.events[0].eventId);
-  assert(h.calls.every(x=>["tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_monthly_settlement_payout_state"].includes(x.name)));
+  assert(h.calls.every(x=>["tn_admin_record_monthly_settlement_payout","tn_admin_reverse_monthly_settlement_payout","tn_monthly_settlement_adjustment_state","tn_monthly_settlement_payout_state"].includes(x.name)));
 });
 test("manual response loss uses readback once, uncertain outcome blocks another write",async()=>{
   const h=admin();h.prime();h.c.recordLoss=true;assert.equal(await h.c.recordAdminMonthlySettlementPayout(),true);assert.equal(h.count("tn_admin_record_monthly_settlement_payout"),1);
   const u=admin();u.prime();u.c.recordLoss=true;u.c.readLoss=true;assert.equal(await u.c.recordAdminMonthlySettlementPayout(),false);assert.equal(u.value("adminMonthlySettlementWrite.payoutUncertain"),true);assert.equal(await u.c.recordAdminMonthlySettlementPayout(),false);assert.equal(u.count("tn_admin_record_monthly_settlement_payout"),1);
+});
+
+test("manual adjustment read errors other than missing RPC never fall back to legacy state",async()=>{
+  const h=admin();h.prime();
+  h.c.before=name=>{if(name==="tn_monthly_settlement_adjustment_state")throw Object.assign(Error("synthetic permission denied"),{payload:{code:"42501"}});};
+  assert.equal(await h.c.refreshAdminMonthlySettlementPayoutState(),false);
+  assert.equal(h.count("tn_monthly_settlement_payout_state"),0);
+  assert.equal(h.value("adminMonthlySettlementWrite.payoutReadValid"),false);
+  assert.equal(await h.c.recordAdminMonthlySettlementPayout(),false);
+  assert.equal(h.count("tn_admin_record_monthly_settlement_payout"),0);
 });
 test("coach exact response and duplicate submit produce one POST plus authoritative readback",async()=>{
   const h=coach();await Promise.all([h.c.submitCoachSettlementReconciliation(),h.c.submitCoachSettlementReconciliation()]);assert.equal(h.calls.filter(x=>x.name==="tn_coach_respond_monthly_settlement_confirmation").length,1);assert.equal(h.value("coachSettlementHistory.coachSettlementReconciliationUiState"),"ACKNOWLEDGED");

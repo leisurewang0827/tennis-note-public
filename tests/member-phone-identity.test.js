@@ -1,12 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync as originalReadFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import aOnly from "./helpers/self-profile-a-only.cjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const readFileSync = (file, encoding) => aOnly.restoreCandidate(relative(root, file).replaceAll("\\", "/"), originalReadFileSync(file, encoding));
+const readFileSync = originalReadFileSync;
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
 const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage, emailSignupResponseKind };`)();
 
@@ -71,7 +70,9 @@ test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다"
   assert.match(dataClient, /responseRequestError\(response, rawText, "Supabase auth settings failed"\)/);
   assert.match(auth, /await requireVerifiedIdentityPhone\(normalizedPhone\)/);
   assert.match(auth, /tn_update_my_identity_profile_v3/);
-  assert.match(actions, /identityPhoneVerification = \{ phone, status: "pending", source: "sms" \}/);
+  assert.match(actions, /const verification = \{ phone, status: "pending", source: "sms", owner \}/);
+  assert.match(actions, /else identityPhoneVerification = verification/);
+  assert.match(actions, /phoneVerificationRequestCurrent\(owner, phone, surface\)/);
   assert.match(actions, /refreshAuthProviderCapabilities\(\{ force: true \}\)/);
   assert.match(actions, /identityPhoneRequestInFlight/);
   assert.match(html, /id="identityPhoneSendButton"/);
@@ -80,8 +81,8 @@ test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다"
   assert.match(identityDomain, /function authUserHasProvider/);
   assert.match(actions, /client\.signInWithOAuth\("Naver", \{ authType: "reprompt" \}\)/);
   assert.match(memberForms, /id.*identityNaverPhoneButton|identityNaverPhoneButton/);
-  assert.match(memberForms, /identityPhone.*value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
-  assert.match(memberForms, /identityPhoneVerification.*removeAttribute\("hidden"\)/s);
+  assert.match(memberForms, /controls\.input\.value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
+  assert.match(memberForms, /controls\.block\?\.removeAttribute\("hidden"\)/);
   assert.match(profileEvents, /identityNaverPhoneButton.*requestNaverPhoneConsent/);
   assert.match(html, /id="identityNaverPhoneButton"/);
 });

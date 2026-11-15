@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -45,4 +46,24 @@ test("bump 스크립트가 서비스워커 캐시 이름도 함께 올린다", (
   const output = dryRun();
   assert.match(output, /캐시 이름 {2}tennis-note-member-pwa-v\d+ → tennis-note-member-pwa-v\d+/);
   assert.match(output, /캐시 이름 {2}tennis-note-coach-mode-v\d+ → tennis-note-coach-mode-v\d+/);
+});
+
+test("현재 릴리스 JSON과 실제 앱이 읽는 JS의 네 가지 표시값이 일치한다", () => {
+  const release = JSON.parse(readFileSync(join(repoRoot, "app/release.json"), "utf8"));
+  const context = vm.createContext({ window: {}, document: { readyState: "loading", addEventListener() {} } });
+  vm.runInContext(readFileSync(join(repoRoot, "app/shared/tennisnote-release.js"), "utf8"), context);
+  for (const key of ["version", "releaseId", "appSurfaceVersion", "deployedAt"]) {
+    assert.equal(context.window.TENNIS_NOTE_RELEASE[key], release[key], key);
+  }
+});
+
+test("동적 이동 주소와 앱의 대체 버전도 현재 버전과 일치한다", () => {
+  const release = JSON.parse(readFileSync(join(repoRoot, "app/release.json"), "utf8"));
+  for (const file of readdirSync(join(repoRoot, "app"), { recursive: true })) {
+    if (!file.endsWith(".js") || file.replaceAll("\\", "/").includes("vendor/")) continue;
+    const text = readFileSync(join(repoRoot, "app", file), "utf8");
+    for (const match of text.matchAll(/(?:\bv:\s*"|\|\|\s*")(\d+\.\d+\.\d+)"/g)) {
+      assert.equal(match[1], release.version, file);
+    }
+  }
 });

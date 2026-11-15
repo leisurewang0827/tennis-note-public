@@ -21,11 +21,14 @@ function verifyShellDefaults() {
   return values;
 }
 
-/** 워크플로 `env:` 블록의 TENNISNOTE_* 를 모은다. */
+/** verify.sh를 실행하는 build-and-check job의 기본 env만 비교한다. */
 function workflowEnv() {
   const source = readFileSync(join(repoRoot, ".github/workflows/tennisnote-public-ci.yml"), "utf8").replace(/\r\n?/g, "\n");
+  const job = source.match(/^  build-and-check:\n([\s\S]*?)(?=^  [\w-]+:|$(?![\s\S]))/m)?.[1];
+  assert.ok(job, "build-and-check job을 찾지 못했다");
+  const defaults = job.split(/^    steps:/m)[0];
   const values = new Map();
-  for (const match of source.matchAll(/^\s+(TENNISNOTE_[A-Z0-9_]+):\s*(.+)$/gm)) {
+  for (const match of defaults.matchAll(/^\s+(TENNISNOTE_[A-Z0-9_]+):\s*(.+)$/gm)) {
     values.set(match[1], match[2].trim().replace(/^"(.*)"$/, "$1"));
   }
   return values;

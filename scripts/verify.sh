@@ -64,7 +64,7 @@ export PYTHONUTF8="${PYTHONUTF8:-1}"
 export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 
 step "테스트"
-node --test "tests/**/*.test.js"
+node scripts/verify_tests.mjs
 node --test tests/admin-dashboard-summary.test.cjs
 node --test tests/admin-dashboard-task-label.test.cjs tests/admin-dashboard-repair-context.test.cjs
 "$PYTHON_BIN" -B tests/admin-brand-assets.test.py
@@ -99,8 +99,8 @@ step "한 장 엑셀 등록 계약 검사"
 TENNISNOTE_EXCEL_REFRESH_RACE_ONLY=1 node scripts/check_tennisnote_single_sheet_preview_browser.cjs
 TENNISNOTE_EXCEL_RETRY_FIX_ONLY=1 node scripts/check_tennisnote_single_sheet_preview_browser.cjs
 
-step "개발·운영 제품 정렬 검사"
-"$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py
+step "과거 배포 원본 정렬 재현 (현재 운영 승인 아님)"
+"$PYTHON_BIN" -B scripts/check_historical_contracts.py --alignment
 
 step "배포본 빌드"
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member

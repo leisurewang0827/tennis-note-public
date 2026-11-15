@@ -12,6 +12,7 @@ import sys
 import io
 import tarfile
 import importlib.util
+from contextlib import contextmanager
 from unittest.mock import patch
 from pathlib import Path
 
@@ -63,6 +64,28 @@ SELECTED_RELEASE_PATH = ROOT / "tests/fixtures/r3-production-selected-release.js
 _selected_release_cache = None
 
 
+@contextmanager
+def historical_app_paths(originals):
+    """과거 릴리스 재조립은 읽기와 파일 목록 모두 같은 고정 snapshot을 사용한다."""
+    app = ROOT / "app"
+    paths = tuple(ROOT / name for name in originals)
+    known = set(paths)
+    real_rglob, real_is_file = Path.rglob, Path.is_file
+
+    def rglob(folder, pattern, *args, **kwargs):
+        if folder == app:
+            return iter(p for p in paths if p.match(pattern))
+        return real_rglob(folder, pattern, *args, **kwargs)
+
+    def is_file(p, *args, **kwargs):
+        if p.is_relative_to(app):
+            return p in known
+        return real_is_file(p, *args, **kwargs)
+
+    with patch.object(Path, "rglob", rglob), patch.object(Path, "is_file", is_file):
+        yield
+
+
 def selected_release_plan(contract=None):
     """고정 BASIC+선별11 위의 공식558 메타데이터만 재계산한다. 이전 fixture는 재핀하지 않는다."""
     c = contract if contract is not None else json.loads(SELECTED_RELEASE_PATH.read_text(encoding="utf-8"))
@@ -105,7 +128,7 @@ def selected_release_plan(contract=None):
         for p, text, count in items:
             merged[p] = text
             counts[p] = counts.get(p, 0) + count
-    with patch.object(Path, "read_text", original):
+    with historical_app_paths(originals), patch.object(Path, "read_text", original):
         absorb([bump.plan_release_json("1.0.556", release["version"], release["releaseId"], release["deployedAt"])])
         absorb([bump.plan_release_js("1.0.556", release["version"], release["releaseId"], release["deployedAt"])])
         absorb(bump.plan_version_queries("1.0.556", release["version"], read))
@@ -316,7 +339,7 @@ def basic_refresh_plan(contract=None):
         for p, text, count in items:
             merged[p] = text
             counts[p] = counts.get(p, 0) + count
-    with patch.object(Path, "read_text", original):
+    with historical_app_paths(planned), patch.object(Path, "read_text", original):
         absorb([bump.plan_release_json("1.0.553", release["version"], release["releaseId"], release["deployedAt"])])
         absorb([bump.plan_release_js("1.0.553", release["version"], release["releaseId"], release["deployedAt"])])
         absorb(bump.plan_version_queries("1.0.553", release["version"], read))

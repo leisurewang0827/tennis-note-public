@@ -7,7 +7,15 @@ const vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "../app/admin/views/billing.js"), "utf8");
 const match = source.match(/function adminSettlementResponseLabel\(reconciliation\) \{[\s\S]*?\n\}/);
 assert.ok(match, "actual display helper must exist");
-const label = vm.runInNewContext(`(${match[0]})`);
+// 실제 화면이 사용하는 공통 모듈과 읽기 상태를 함께 제공한다.
+const context = vm.createContext({
+  window: {},
+  adminMonthlySettlementWrite: { payoutState: null },
+  adminSettlementHistory: { value: null },
+  adminSettlementHistoryScope: () => null,
+});
+vm.runInContext(fs.readFileSync(path.join(__dirname, "../app/shared/tennisnote-settlement-adjustment.js"), "utf8"), context);
+const label = vm.runInContext(`(${match[0]})`, context);
 
 test("확정 이력의 실제 응답 상태를 대소문자와 무관하게 표시한다", () => {
   for (const status of ["acknowledged", "ACKNOWLEDGED"]) assert.equal(label({ status }), "확인 완료");

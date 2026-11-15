@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -20,7 +21,13 @@ class AdminBrandAssets(unittest.TestCase):
             (source / "shared").mkdir()
             brand = source / "tennis-note-member-app/assets/brand"
             brand.mkdir(parents=True)
-            (source / "release.json").write_text('{}', encoding="utf-8")
+            release = {"version": "1.0.999", "appSurfaceVersion": "1.0.999",
+                       "releaseId": "2099.01.01.01", "deployedAt": "2099-01-01T00:00:00+09:00"}
+            (source / "release.json").write_text(json.dumps(release), encoding="utf-8")
+            # 현재 빌더의 필수 릴리스 입력도 합성값으로 준비합니다.
+            (source / "shared/tennisnote-release.js").write_text(
+                "window.TENNIS_NOTE_RELEASE = {\n" + "".join(f'    {key}: "old",\n' for key in release) + "};\n",
+                encoding="utf-8")
             (source / "admin/index.html").write_text(' '.join(['../tennis-note-member-app/assets/brand/app-icon-192.png'] * 2 + ['../tennis-note-member-app/assets/brand/app-icon-180.png']), encoding="utf-8")
             (source / "admin/styles.css").write_text('url("../tennis-note-member-app/assets/brand/app-icon-192.png")', encoding="utf-8")
             for size in (180, 192):
@@ -36,6 +43,8 @@ class AdminBrandAssets(unittest.TestCase):
             self.assertIn('./assets/brand/app-icon-180.png', (output / 'index.html').read_text(encoding='utf-8'))
             self.assertIn('url("./assets/brand/app-icon-192.png")', (output / 'styles.css').read_text(encoding='utf-8'))
             self.assertIn('/tennis-note-member-app/* https://tennisnote-app.pages.dev/ 302', (output / '_redirects').read_text(encoding='utf-8'))
+            for key, value in release.items():
+                self.assertIn(f'    {key}: {json.dumps(value)},', (output / 'shared/tennisnote-release.js').read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':
