@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {Script,runInNewContext} from 'node:vm';
+import {build,baseline,changes} from './compose.mjs';
+import {preimage,review} from './publish.mjs';
+const project={success:true,result:{name:'tennisnote-admin',production_branch:'main',canonical_deployment:{id:'dac652c4-5b16-42bb-b421-fd5384b6001d',environment:'production',latest_stage:{status:'success'},deployment_trigger:{metadata:{branch:'main',commit_hash:'a7c5abc9b862b9b7908204181330e784d17dd408'}}}}};
+preimage(project);const bad=structuredClone(project);bad.result.canonical_deployment.id='00000000-0000-0000-0000-000000000000';assert.throws(()=>preimage(bad));
+const approval={state:'approved',user:{id:294703475},environments:[{id:26219323796}],comment:'ADMIN-FEEDBACK-DRAFT '+'a'.repeat(40)+' exact-four-assets no-member-data'};
+review([approval],'a'.repeat(40));assert.throws(()=>review([approval],'b'.repeat(40)));assert.throws(()=>review([approval,approval],'a'.repeat(40)));
+const result=build(process.argv[2],process.argv[3]);
+assert.equal(Object.keys(result.hashes).filter(p=>result.hashes[p]===baseline[p]).length,177);
+for(const path of Object.keys(changes).filter(p=>p.endsWith('.js')))new Script(result.files[path].toString('utf8'));
+const context={window:{}};
+runInNewContext(result.files['shared/tennisnote-comment-draft.js'].toString('utf8'),context);
+const draft=context.window.TennisNoteCommentDraft.generateDetailed('포핸드 타점 안정됨, 백핸드 준비 늦음');
+assert.equal(draft.ok,true);
+assert.deepEqual(Array.from(draft.sections,s=>s.label),['잘된 점','더 연습할 점','개인 연습 제안']);
+console.log('ADMIN_FEEDBACK_EXACT_FOUR_ASSETS_PASS_177_PRESERVED');
