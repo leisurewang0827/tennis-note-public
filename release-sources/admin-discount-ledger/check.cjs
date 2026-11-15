@@ -1,0 +1,21 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync(__dirname+'/ledger.js','utf8');let passed=0;
+const ok=(v)=>{assert(v);passed++;};
+const ctx=vm.createContext({window:{},Date,Set,Number,String,Promise,branch:'a',allowed:true,state:{view:'none'},activeOperationBranchId:()=>ctx.branch,adminApprovalReady:()=>ctx.allowed,renderMembers(){},renderServiceReadiness(){},escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')});
+vm.runInContext(source,ctx);const run=s=>vm.runInContext(s,ctx);
+const issue={id:'i',issued_to_user_id:'u',issued_at:'2026-11-01',expires_at:'2099-01-01',status:'issued',member:{name:'합성회원<script>'},policy:{name:'합성할인<img>',discount_type:'percent',discount_value:10}};
+(async()=>{
+ let calls=[];ctx.window.TennisNoteDataClient={selectRows:async(t,o)=>{calls.push([t,o]);return t==='tn_discount_issues'?[issue]:[];}};
+ ok(await run('loadAdminDiscountLedger()'));ok(calls.every(([,o])=>o.filters.branch_id==='a'&&o.order.endsWith('id.desc')));
+ let h=run("adminMemberDiscountMarkup({serverUserId:'u'},true)");ok(h.includes('보유 할인쿠폰 1장'));ok(h.includes('&lt;img&gt;')&&!h.includes('<img>'));ok(!run("adminMemberDiscountMarkup({serverUserId:'other'})"));
+ h=run("adminDiscountHistoryMarkup('합성회원')");ok(h.includes('1건'));ok(h.includes('&lt;script&gt;'));ok(run("adminDiscountHistoryMarkup('없는이름')").includes('0건'));
+ ctx.expired={...issue,expires_at:'2000-01-01'};ok(run('adminDiscountIssueStatus(expired)')==='만료');ctx.expired.status='cancelled';ok(run('adminDiscountIssueStatus(expired)')==='취소');
+ ctx.branch='b';ok(!run('adminDiscountLedgerReady()'));ok(!run("adminDiscountHistoryMarkup('')").includes('합성회원'));ctx.branch='a';
+ ctx.allowed=false;ok(!run('adminDiscountLedgerReady()'));ctx.allowed=true;
+ ctx.window.TennisNoteDataClient.selectRows=async()=>{throw Error('network');};ok(!await run('loadAdminDiscountLedger()'));ok(run("adminDiscountHistoryMarkup('')").includes('불러오지 못'));ok(!run("adminDiscountHistoryMarkup('')").includes('0건'));
+ calls=[];ctx.window.TennisNoteDataClient.selectRows=async(t,o)=>{calls.push(o.offset);return t==='tn_discount_issues'?(o.offset===0?Array.from({length:500},(_,i)=>({...issue,id:String(i)})):[{...issue,id:'last'}]):[];};ok(await run('loadAdminDiscountLedger()'));ok(calls.includes(500));ok(run("adminMemberDiscountMarkup({serverUserId:'u'})").includes('501장'));
+ ctx.window.TennisNoteDataClient.selectRows=async(t)=>t==='tn_discount_issues'?[{...issue,status:'used',used_at:'2026-11-02'}]:[{id:'r',issue_id:'i',status:'applied',created_at:'2026-11-02',discount_amount:100,member:issue.member,policy:issue.policy}];await run('loadAdminDiscountLedger()');ok(run("adminDiscountHistoryMarkup('')").includes('2건'));ok(!run("adminMemberDiscountMarkup({serverUserId:'u'})"));
+ let resolveOld;ctx.window.TennisNoteDataClient.selectRows=async(t)=>t==='tn_discount_issues'?new Promise(r=>resolveOld=r):[];const old=run('loadAdminDiscountLedger()');ctx.branch='b';ctx.window.TennisNoteDataClient.selectRows=async()=>[];await run('loadAdminDiscountLedger()');resolveOld([issue]);await old;ok(run("adminDiscountHistoryMarkup('')").includes('0건'));ok(!run("adminDiscountHistoryMarkup('')").includes('합성회원'));
+ ok(!/localStorage|sessionStorage|\.rpc\(|insertRows|updateRows|deleteRows/.test(source));
+ console.log(JSON.stringify({passed,remoteWrites:0}));
+})().catch(e=>{console.error(e);process.exitCode=1;});
