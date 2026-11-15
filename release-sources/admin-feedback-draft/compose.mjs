@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {join,dirname} from 'node:path';
-import {sha,walk,compose as hide} from '../admin-private-catalog-hide/compose.mjs';
+import {sha,walk,compose as hide,sealBytes} from '../admin-private-catalog-hide/compose.mjs';
 import {compose as summary} from '../admin-coupon-summary/compose.mjs';
 import {compose as scope} from '../admin-coupon-scope/compose.mjs';
 import {patchAdminDraftSource} from './draft.mjs';
+import {assertArtifact} from '../../release-promotions/r4-branch-finance-admin/protected-finance-admission.mjs';
 export {sha};
 export let baseline;
 export const changes={
@@ -14,7 +15,8 @@ export const changes={
   'shared/tennisnote-comment-draft.js':'be01c5d237d12374a23e0d5fe98d75c1b9dd1d6bbfccc2f0ae2f8cc92d41e6a0',
 };
 export function build(base,out){
-  const previous=scope(summary(hide(walk(base)).files).files);
+  assertArtifact(base,sealBytes);
+  const previous=scope(summary(hide(walk(join(base,'admin'))).files).files);
   const files=previous.files,next={...files};
   assert.equal(Object.keys(files).length,181);
   baseline=Object.freeze(previous.hashes);

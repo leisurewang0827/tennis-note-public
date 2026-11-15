@@ -9,6 +9,7 @@ import {readRoutes} from '../../release-promotions/r4-branch-finance-admin/finan
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-feedback-draft.yml';
 const parent='a7c5abc9b862b9b7908204181330e784d17dd408';
+const first='1fb3114712bcd174bc23e001429c92827d9750f0';
 const priorSource='a7c5abc9b862b9b7908204181330e784d17dd408';
 const prior='dac652c4-5b16-42bb-b421-fd5384b6001d';
 const origin='https://tennisnote-admin.pages.dev';
@@ -26,6 +27,14 @@ export function review(approvals,commit) {
   assert.deepEqual(a.environments.map(e=>e.id),[26219323796]);
   assert.equal(a.comment,'ADMIN-FEEDBACK-DRAFT '+commit+' exact-four-assets no-member-data');
 }
+export function classifyCanonical(project,sha) {
+  const d=project?.result?.canonical_deployment;
+  if(project?.success!==true||project.result.name!=='tennisnote-admin'||project.result.production_branch!=='main'||
+    !/^[a-f0-9-]{36}$/.test(d?.id||'')||d.environment!=='production'||d.deployment_trigger?.metadata?.branch!=='main') return 'UNKNOWN';
+  const source=d.deployment_trigger.metadata.commit_hash;
+  return d.id===prior&&source===priorSource&&d.latest_stage?.status==='success'?'PRIOR_OBSERVED':
+    d.id!==prior&&source===sha?(d.latest_stage?.status==='success'?'CANDIDATE_OBSERVED':'CANDIDATE_NOT_SUCCESS'):'OTHER_DEPLOYMENT';
+}
 let stage='runtime';
 async function main() {
   const e=process.env;
@@ -33,7 +42,8 @@ async function main() {
   assert.equal(e.GITHUB_EVENT_NAME,'push');assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
   assert.equal(e.GITHUB_WORKFLOW_REF,`${repo}/${workflow}@refs/heads/${branch}`);
   assert.equal(git('rev-parse','HEAD'),e.GITHUB_SHA);
-  assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+parent);
+  assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+first);
+  assert.equal(git('rev-list','--parents','-n','1',first),first+' '+parent);
   assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',parent,'HEAD').split('\n').sort(),files.map(p=>'A\t'+p).sort());
   assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);
   assert.equal(sha(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
@@ -54,7 +64,7 @@ async function main() {
   stage='canonical';
   preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
   stage='baseline-http';
-  await readRoutes(baseline,[origin],read);
+  await readRoutes(baseline,[origin,`https://${prior.slice(0,8)}.tennisnote-admin.pages.dev`],read);
   stage='approval';
   review(await get(`${api}/actions/runs/${e.GITHUB_RUN_ID}/approvals`,e.GH_TOKEN),e.GITHUB_SHA);
   const ref=await get(`${api}/git/ref/heads/${branch}`,e.GH_TOKEN);assert.equal(ref.object?.sha,e.GITHUB_SHA,'BRANCH_MOVED');
@@ -70,6 +80,7 @@ async function main() {
   stage='canonical';
   preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
   if(e.EXCEL_DIAGNOSTIC_ONLY==='true'){console.log('READ_ONLY_ADMISSION_PASS_NO_POST');return;}
+  stage='single-publish';
   const result=await new Promise(done=>{
     let output='',settled=false;
     const child=spawn(process.execPath,[cli,'pages','deploy',out,'--project-name=tennisnote-admin','--branch=main','--commit-hash='+e.GITHUB_SHA,'--commit-dirty=false'],{shell:false,stdio:['ignore','pipe','pipe'],env:{PATH:e.PATH,HOME:e.HOME,TMPDIR:e.TMPDIR,CLOUDFLARE_ACCOUNT_ID:e.CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN:e.CLOUDFLARE_API_TOKEN}});
@@ -78,15 +89,21 @@ async function main() {
     child.stdout.on('data',b=>{output+=b;if(output.length>1048576)child.kill();});child.stderr.resume();
     child.on('error',()=>finish(null));child.on('close',code=>{const urls=[...new Set(output.match(/https:\/\/[a-f0-9]{8}\.tennisnote-admin\.pages\.dev/g)||[])];finish(code===0&&urls.length===1?urls[0]:null);});
   });
-  // 불확실한 응답에 재게시하지 않는다. 현재 배포 ID를 보존한 채 HOLD한다.
-  assert(result,'PUBLISH_UNKNOWN_NO_RETRY');
+  // Always perform a GET even if the publish process returned no usable URL.
+  // A prior observation does not exclude a late commit; never retry or rollback automatically.
+  stage='post-publish-canonical';
   const after=await get(cf,e.CLOUDFLARE_API_TOKEN),d=after.result?.canonical_deployment;
-  assert.equal(after.success,true);assert.match(d?.id||'',/^[a-f0-9-]{36}$/);assert.notEqual(d.id,prior);
-  assert.equal(result,`https://${d.id.slice(0,8)}.tennisnote-admin.pages.dev`);
-  assert.equal(d.latest_stage?.status,'success');assert.equal(d.environment,'production');
-  assert.equal(d.deployment_trigger?.metadata?.commit_hash,e.GITHUB_SHA);assert.equal(d.deployment_trigger?.metadata?.branch,'main');
-  const counts=await readRoutes(candidate.hashes,[origin,result],read);
-  assert.equal((await get(cf,e.CLOUDFLARE_API_TOKEN)).result?.canonical_deployment?.id,d.id,'CANONICAL_MOVED');
+  const observed=classifyCanonical(after,e.GITHUB_SHA);
+  console.log(JSON.stringify({postPublishObservation:observed,candidateDeploymentId:observed.startsWith('CANDIDATE_')?d.id:null,retryAllowed:false}));
+  assert.equal(observed,'CANDIDATE_OBSERVED','PUBLISH_NOT_VERIFIED_NO_RETRY');
+  const fixed=`https://${d.id.slice(0,8)}.tennisnote-admin.pages.dev`;
+  if(result)assert.equal(result,fixed,'PUBLISH_URL_DIFFERS_NO_RETRY');
+  stage='post-publish-http';
+  const counts=await readRoutes(candidate.hashes,[origin,fixed],read);
+  stage='post-publish-canonical-final';
+  const final=await get(cf,e.CLOUDFLARE_API_TOKEN);
+  assert.equal(classifyCanonical(final,e.GITHUB_SHA),'CANDIDATE_OBSERVED');
+  assert.equal(final.result.canonical_deployment.id,d.id,'CANONICAL_MOVED');
   console.log(JSON.stringify({status:'ADMIN_FEEDBACK_DRAFT_PUBLISHED',deploymentId:d.id,source:e.GITHUB_SHA,prior,changed:['actions/common.js','index.html','schedule-v2-admin.js','shared/tennisnote-comment-draft.js'],...counts,dbChanges:0}));
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)) main().catch(error=>{console.error('ADMIN_FEEDBACK_DRAFT_HOLD: '+stage+' '+error.message);process.exitCode=1;});

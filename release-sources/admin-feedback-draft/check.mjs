@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import {Script,runInNewContext} from 'node:vm';
 import {build,baseline,changes} from './compose.mjs';
-import {preimage,review} from './publish.mjs';
+import {preimage,review,classifyCanonical} from './publish.mjs';
 const project={success:true,result:{name:'tennisnote-admin',production_branch:'main',canonical_deployment:{id:'dac652c4-5b16-42bb-b421-fd5384b6001d',environment:'production',latest_stage:{status:'success'},deployment_trigger:{metadata:{branch:'main',commit_hash:'a7c5abc9b862b9b7908204181330e784d17dd408'}}}}};
 preimage(project);const bad=structuredClone(project);bad.result.canonical_deployment.id='00000000-0000-0000-0000-000000000000';assert.throws(()=>preimage(bad));
+const proposed='a'.repeat(40);
+assert.equal(classifyCanonical(project,proposed),'PRIOR_OBSERVED');
+assert.equal(classifyCanonical(bad,proposed),'OTHER_DEPLOYMENT');
+bad.result.canonical_deployment.deployment_trigger.metadata.commit_hash=proposed;
+assert.equal(classifyCanonical(bad,proposed),'CANDIDATE_OBSERVED');
+bad.result.canonical_deployment.latest_stage.status='failure';
+assert.equal(classifyCanonical(bad,proposed),'CANDIDATE_NOT_SUCCESS');
+assert.equal(classifyCanonical({success:false},proposed),'UNKNOWN');
 const approval={state:'approved',user:{id:294703475},environments:[{id:26219323796}],comment:'ADMIN-FEEDBACK-DRAFT '+'a'.repeat(40)+' exact-four-assets no-member-data'};
 review([approval],'a'.repeat(40));assert.throws(()=>review([approval],'b'.repeat(40)));assert.throws(()=>review([approval,approval],'a'.repeat(40)));
 const result=build(process.argv[2],process.argv[3]);
