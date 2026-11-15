@@ -1739,7 +1739,7 @@ function memberManagementActionAllowed(action, ticket = null) {
 
 function memberManagementWriteVerification(action, payload, result, statusAction = "keep") {
   const normalizedResult = normalizedRpcResult(result);
-  const userId = normalizedResult.userId || payload?.userId || "";
+  const userId = (["app_link", "link_existing"].includes(action) ? normalizedResult.targetUserId : "") || normalizedResult.userId || payload?.userId || "";
   const ticketId = normalizedResult.ticketId || payload?.ticketId || "";
   const serverUser = (adminLiveDataState.users || []).find((user) => user.id === userId);
   const serverTicket = (adminLiveDataState.tickets || []).find((ticket) => ticket.serverTicketId === ticketId);
@@ -1764,10 +1764,10 @@ function memberManagementWriteVerification(action, payload, result, statusAction
       : "member_management_write_not_confirmed:assign";
   }
   if (action === "link_existing") {
-    return serverUser?.auth_user_id ? "" : "member_management_write_not_confirmed:link_existing";
+    return Boolean(serverUser?.auth_linked ?? serverUser?.auth_user_id) ? "" : "member_management_write_not_confirmed:link_existing";
   }
   if (action === "app_link") {
-    return serverUser?.auth_user_id ? "" : "member_management_write_not_confirmed:app_link";
+    return Boolean(serverUser?.auth_linked ?? serverUser?.auth_user_id) ? "" : "member_management_write_not_confirmed:app_link";
   }
   if (action === "profile") {
     if (!serverUser) return "member_management_write_not_confirmed:profile_user";
