@@ -66,4 +66,4 @@ jobs:
           EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
         run: node release-sources/admin-feedback-draft/publish.mjs
 
-# Preserve reviewed CRLF asset bytes after Git LF normalization.
+# Bind the corrected sealed-archive and readback chain to this new push-only run.

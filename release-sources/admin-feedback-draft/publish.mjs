@@ -10,6 +10,7 @@ const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-f
 const workflow='.github/workflows/admin-feedback-draft.yml';
 const parent='a7c5abc9b862b9b7908204181330e784d17dd408';
 const first='1fb3114712bcd174bc23e001429c92827d9750f0';
+const correction='c0f090c2f447a61f5ae779b31ec4405553666a61';
 const priorSource='a7c5abc9b862b9b7908204181330e784d17dd408';
 const prior='dac652c4-5b16-42bb-b421-fd5384b6001d';
 const origin='https://tennisnote-admin.pages.dev';
@@ -42,8 +43,11 @@ async function main() {
   assert.equal(e.GITHUB_EVENT_NAME,'push');assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
   assert.equal(e.GITHUB_WORKFLOW_REF,`${repo}/${workflow}@refs/heads/${branch}`);
   assert.equal(git('rev-parse','HEAD'),e.GITHUB_SHA);
-  assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+first);
+  assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+correction);
+  assert.equal(git('rev-list','--parents','-n','1',correction),correction+' '+first);
   assert.equal(git('rev-list','--parents','-n','1',first),first+' '+parent);
+  assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',correction,'HEAD').split('\n').sort(),
+    [workflow,'release-sources/admin-feedback-draft/publish.mjs'].map(p=>'M\t'+p).sort());
   assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',parent,'HEAD').split('\n').sort(),files.map(p=>'A\t'+p).sort());
   assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);
   assert.equal(sha(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
