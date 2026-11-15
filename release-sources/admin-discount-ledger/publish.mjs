@@ -8,9 +8,9 @@ import {expected,assertSource} from '../../release-promotions/r4-branch-finance-
 import {readRoutes} from '../../release-promotions/r4-branch-finance-admin/finance-postread.mjs';
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-discount-ledger.yml';
-const parent='0159ee2163d1a8239bda37e8b03ffc81d149ec35';
-const priorSource='0159ee2163d1a8239bda37e8b03ffc81d149ec35';
-const prior='ce62d84e-06a0-4d8a-9307-b7a040b49052';
+const parent='ddea1bdd4262c3a877d3c3ea8d5ed1be21f34d38';
+const priorSource='ddea1bdd4262c3a877d3c3ea8d5ed1be21f34d38';
+const prior='ce2c9f48-386f-4867-90c7-dfdb1ba01170';
 const origin='https://tennisnote-admin.pages.dev';
 const files=[workflow,...['seal.json','compose.mjs','check.mjs','publish.mjs','payload.json','ledger.js','check.cjs'].map(p=>'release-sources/admin-discount-ledger/'+p)].sort();
 const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
@@ -34,7 +34,7 @@ async function main() {
   assert.equal(e.GITHUB_WORKFLOW_REF,`${repo}/${workflow}@refs/heads/${branch}`);
   assert.equal(git('rev-parse','HEAD'),e.GITHUB_SHA);
   assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+parent);
-  assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',parent,'HEAD').split('\n').sort(),files.map(p=>'A\t'+p).sort());
+  assert.deepEqual(git('diff-tree','--no-commit-id','--name-status','-r',parent,'HEAD').split('\n').sort(),[".github/workflows/admin-discount-ledger.yml","release-sources/admin-discount-ledger/check.cjs","release-sources/admin-discount-ledger/compose.mjs","release-sources/admin-discount-ledger/ledger.js","release-sources/admin-discount-ledger/payload.json","release-sources/admin-discount-ledger/publish.mjs","release-sources/admin-discount-ledger/seal.json"].map(p=>'M\t'+p).sort());
   assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);
   assert.equal(sha(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
   assert(e.CLOUDFLARE_API_TOKEN&&e.GH_TOKEN);

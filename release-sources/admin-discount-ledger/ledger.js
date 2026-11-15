@@ -22,7 +22,7 @@ async function loadAdminDiscountLedger() {
   }
   try {
     const [issues, redemptions] = await Promise.all([
-      pages("tn_discount_issues", "id,policy_id,issued_to_user_id,status,issued_at,expires_at,used_at,member:tn_users!issued_to_user_id(name),policy:tn_discount_policies(name,discount_type,discount_value)", "issued_at.desc,id.desc"),
+      pages("tn_discount_issues", "id,policy_id,issued_to_user_id,issued_to_coach_role_id,status,issued_at,expires_at,used_at,member:tn_users!issued_to_user_id(name),policy:tn_discount_policies(name,discount_type,discount_value)", "issued_at.desc,id.desc"),
       pages("tn_discount_redemptions", "id,issue_id,member_user_id,discount_amount,status,created_at,member:tn_users!member_user_id(name),policy:tn_discount_policies(name,discount_type,discount_value)", "created_at.desc,id.desc"),
     ]);
     if (request !== adminDiscountLedger.request || branchId !== activeOperationBranchId() || !adminApprovalReady()) return false;
@@ -66,7 +66,7 @@ function adminDiscountHistoryMarkup(search = "") {
   if (!adminDiscountLedgerReady()) return `<p class="empty-text">${adminDiscountLedger.status === "error" ? "할인권 내역을 불러오지 못했습니다. 화면을 다시 열어 확인해 주세요." : "서버에서 할인권 내역을 확인하고 있습니다."}</p>`;
   const usedIds = new Set(adminDiscountLedger.redemptions.filter((r) => r.status === "applied").map((r) => r.issue_id));
   const events = adminDiscountLedger.issues.flatMap((issue) => {
-    const name = issue.member?.name || (issue.issued_to_user_id ? "회원 정보 없음" : "코치 지급분"), label = adminDiscountPolicyLabel(issue.policy);
+    const name = issue.member?.name || (issue.issued_to_coach_role_id ? "코치 지급분" : "회원 정보 없음"), label = adminDiscountPolicyLabel(issue.policy);
     const entries = [{ id: `issued:${issue.id}`, at: issue.issued_at, text: `${name} · ${label} · 발급 · 현재 ${adminDiscountIssueStatus(issue)} · 사용기한 ${adminDiscountDate(issue.expires_at)}` }];
     if (issue.used_at && !usedIds.has(issue.id)) entries.push({ id: `used:${issue.id}`, at: issue.used_at, text: `${name} · ${label} · 사용 기록` });
     return entries;

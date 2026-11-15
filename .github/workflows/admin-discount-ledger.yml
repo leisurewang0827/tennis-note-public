@@ -67,3 +67,5 @@ jobs:
         run: node release-sources/admin-discount-ledger/publish.mjs
 
 # Preserve reviewed CRLF asset bytes after Git LF normalization.
+
+# Verify actual profile modal ownership and missing-owner labels.
