@@ -16,6 +16,7 @@ const prefix="release-sources/admin-legacy-absence-manual/";
 const branch="codex/tennisnote-r4-ui-finish-dev-20261108";
 const baseParent="260798328d4b8a340323ef79c27710e373098f7e";
 const failedCheckCommit="84e1f2fb7051d9e94e664e8d71533ae1e8deac75";
+const failedWorkdirCommit="11dc7bb0892980509d420d621f189d7c23ef4a00";
 const artifactFolder="r4-branch-finance-admin-source-43391633723";
 const pinFiles=["bundle.json","payload.json","pages-port.mjs","sequence.mjs","manual-approval.mjs","entry.mjs","intent.json"].map(x=>prefix+x);
 const sha=b=>createHash("sha256").update(b).digest("hex");
@@ -36,9 +37,12 @@ function assertReleaseLineage(releaseCommit) {
   assert.equal(git("rev-list","--parents","-n","1",failedCheckCommit),failedCheckCommit+" "+baseParent);
   assert.deepEqual(git("diff-tree","--no-commit-id","--name-status","-r",baseParent,failedCheckCommit).split("\n").sort(),
     originalFiles.map(x=>"A\t"+x).sort());
-  assert.notEqual(releaseCommit,failedCheckCommit,"FAILED_CHECK_COMMIT_IS_NOT_RELEASABLE");
-  assert.equal(git("rev-list","--parents","-n","1",releaseCommit),releaseCommit+" "+failedCheckCommit);
-  assert.equal(git("diff-tree","--no-commit-id","--name-status","-r",failedCheckCommit,releaseCommit),"M\t"+prefix+"entry.mjs");
+  assert.equal(git("rev-list","--parents","-n","1",failedWorkdirCommit),failedWorkdirCommit+" "+failedCheckCommit);
+  assert.equal(git("diff-tree","--no-commit-id","--name-status","-r",failedCheckCommit,failedWorkdirCommit),"M\t"+prefix+"entry.mjs");
+  assert.ok(![failedCheckCommit,failedWorkdirCommit].includes(releaseCommit),"FAILED_CHECK_COMMIT_IS_NOT_RELEASABLE");
+  assert.equal(git("rev-list","--parents","-n","1",releaseCommit),releaseCommit+" "+failedWorkdirCommit);
+  assert.deepEqual(git("diff-tree","--no-commit-id","--name-status","-r",failedWorkdirCommit,releaseCommit).split("\n").sort(),
+    [workflowPath,prefix+"entry.mjs"].map(x=>"M\t"+x).sort());
 }
 assert.equal(env.GITHUB_ACTIONS,"true");assert.equal(env.GITHUB_REPOSITORY,pins.repository);
 assert.equal(env.GITHUB_REF,ref);assert.equal(env.GITHUB_EVENT_NAME,"push");assert.equal(env.GITHUB_RUN_ATTEMPT,"1");
@@ -68,6 +72,7 @@ const get=async path=>{
 const [ci,artifact]=await Promise.all([get("/actions/runs/"+expected.run),get("/actions/artifacts/"+expected.artifact)]);
 assertSource(ci,artifact);
 const work=join(env.RUNNER_TEMP,"tn-absence-manual-"+randomUUID());
+mkdirSync(work);
 const tree=join(work,"admin-web");
 const existing=baselineBuilder(join(env.RUNNER_TEMP,"tn-absence-baseline",artifactFolder),join(work,"baseline"));
 assert.deepEqual(existing.hashes,manifest.recovery);
