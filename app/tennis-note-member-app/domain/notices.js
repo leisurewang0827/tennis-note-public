@@ -53,12 +53,18 @@ function normalizeLiveNotification(row = {}) {
   ].includes(templateKey);
   const isMakeupRequired = templateKey === "lesson_absence_makeup_required";
   const isMakeupBooked = templateKey === "makeup_booking_completed";
-  const title = row.title || (templateKey === "payment_refunded" ? "환불 완료" : isRefund ? "결제취소 완료" : "앱 알림");
-  const body = row.body || (templateKey === "payment_request_cancelled"
-    ? "결제 대기건이 취소되었습니다. 실제 결제가 완료된 건은 아닙니다."
-    : isRefund
-      ? "결제취소와 회원권 환불 처리가 완료되었습니다. 이용권 내역에서 환불완료 상태를 확인할 수 있습니다."
-      : "새 알림이 도착했습니다.");
+  const labels = {
+    payment_verified: ["결제 완료", "결제가 완료되었습니다. 이용권 내역에서 회원권을 확인해 주세요."],
+    bank_transfer_confirmed: ["입금 확인 완료", "입금이 확인되었습니다. 이용권 내역에서 회원권을 확인해 주세요."],
+    payment_refunded: ["환불 완료", "환불 처리가 완료되었습니다. 이용권 내역에서 확인해 주세요."],
+    payment_cancelled: ["결제취소 완료", "결제취소 처리가 완료되었습니다. 이용권 내역에서 확인해 주세요."],
+    payment_request_cancelled: ["결제 요청 취소", "결제 대기건이 취소되었습니다. 실제 결제가 완료된 건은 아닙니다."],
+    payment_refund_pending: ["환불 처리 대기", "환불이 아직 완료되지 않았습니다. 처리 상태를 확인해 주세요."],
+    payment_refund_request_cancelled: ["환불 요청 취소", "환불 요청이 취소되었습니다. 환불 완료 안내가 아닙니다."],
+  };
+  const [defaultTitle, defaultBody] = labels[templateKey] || ["앱 알림", "새 알림이 도착했습니다."];
+  const title = row.title || defaultTitle;
+  const body = row.body || defaultBody;
   return {
     id: row.id || `${templateKey}-${row.created_at || Date.now()}`,
     templateKey,

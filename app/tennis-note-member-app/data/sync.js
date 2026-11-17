@@ -92,11 +92,13 @@ async function syncMemberNotificationsFromServer(profile = null) {
   try {
     const rows = await client.selectRows("tn_notifications", {
       select: "id,user_id,channel,template_key,title,body,payload,scheduled_at,sent_at,status,created_at",
-      filters: { user_id: profileId },
+      filters: { user_id: profileId, channel: "app", status: "sent" },
+      order: "sent_at.desc.nullslast,created_at.desc,id.desc",
       limit: 20,
     });
     const notifications = (rows || [])
-      .filter((row) => row.channel === "app")
+      .filter((row) => row.channel === "app" && row.status === "sent")
+      .filter((row, index, all) => all.findIndex((other) => other.id === row.id) === index)
       .map((row) => normalizeLiveNotification(row))
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     const previousKey = state.lastLiveNotificationKey;

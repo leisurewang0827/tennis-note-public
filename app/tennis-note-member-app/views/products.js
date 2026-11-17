@@ -72,7 +72,7 @@ function renderMemberPaymentAlerts() {
   const target = $("#memberPaymentAlerts");
   if (!target) return;
   const alerts = (state.liveNotifications || [])
-    .filter((item) => ["payment_cancelled", "payment_request_cancelled", "payment_refunded"].includes(item.templateKey))
+    .filter((item) => item.status === "sent" && ["payment_verified", "bank_transfer_confirmed", "payment_cancelled", "payment_request_cancelled", "payment_refunded", "payment_refund_pending", "payment_refund_request_cancelled"].includes(item.templateKey))
     .slice(0, 3);
   if (!alerts.length) {
     target.innerHTML = "";
