@@ -1,0 +1,81 @@
+name: Administrator legacy absence manual OFF release
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/admin-legacy-absence-manual.yml'
+      - 'release-sources/admin-legacy-absence-manual/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  candidate:
+    name: legacy-absence-bundle-check
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      intent: ${{ steps.check.outputs.intent }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 4, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '14021410409'
+          run-id: '43391633723'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/tn-absence-baseline
+      - name: Check only the frozen full administrator artifact
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node release-sources/admin-legacy-absence-manual/entry.mjs check
+  operate:
+    name: legacy-absence-manual-${{ needs.candidate.outputs.intent }}
+    needs: candidate
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1 && (needs.candidate.outputs.intent == 'release' || needs.candidate.outputs.intent == 'recover')
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 4, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '14021410409'
+          run-id: '43391633723'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/tn-absence-baseline
+      - name: Prepare previously pinned one-post Pages client
+        shell: bash
+        run: |
+          set -euo pipefail
+          locked=release-promotions/r4-first-issue-off-only/publisher
+          tool=scripts/r4_internal_registration_prod_promotion.mjs
+          printf '%s  %s\n' f235fcb84bdb03932e0eb942af150feb71190fb8b51674d2e0ec4e119534cd79 "$locked/npm-lock.json" eadb69637534a5837f53a1d23fac02e6586c978034b87f6bc26e48a8895bd159 "$locked/npm-manifest.json" e74e98d70cbfdc33d0d6031589365094d2f8a932d01ac40dfb642a40df7361b4 "$tool" | sha256sum -c --status
+          mkdir "$RUNNER_TEMP/tn-absence-wrangler"
+          cp "$locked/npm-lock.json" "$RUNNER_TEMP/tn-absence-wrangler/package-lock.json"
+          cp "$locked/npm-manifest.json" "$RUNNER_TEMP/tn-absence-wrangler/package.json"
+          npm ci --prefix "$RUNNER_TEMP/tn-absence-wrangler" --ignore-scripts --no-audit --no-fund
+          node --input-type=module -e 'import{readFileSync,writeFileSync}from"node:fs";import{patchProductionWrangler}from"./scripts/r4_internal_registration_prod_promotion.mjs";const p=process.env.RUNNER_TEMP+"/tn-absence-wrangler/node_modules/wrangler/wrangler-dist/";writeFileSync(p+"cli-tn-fixed.cjs",patchProductionWrangler(readFileSync(p+"cli.js")),{flag:"wx"});'
+          printf '%s  %s\n' e35355b3a5cb45fcb47ad016f043649b8ad891dc5781b7c7e3e278c7deccf5c4 "$RUNNER_TEMP/tn-absence-wrangler/node_modules/wrangler/wrangler-dist/cli-tn-fixed.cjs" | sha256sum -c --status
+      - name: Verify official fresh OFF review and operate only on administrator Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+          TN_CLOUDFLARE_ACCOUNT_SHA: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/admin-legacy-absence-manual/entry.mjs protected
