@@ -1,0 +1,60 @@
+name: Administrator absence Cloudflare GET diagnostic
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths: ['.github/workflows/admin-legacy-absence-cloudflare-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  project-get-only:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    environment:
+      name: tennisnote-r4-admin-production
+      deployment: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Admit only an exact diagnostic-only commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-list --parents -1 HEAD)" = "$GITHUB_SHA 30b2cb7b18119be4cab76fcedefa42fbca6daddb"
+          test "$(git diff-tree --no-commit-id --name-status -r HEAD)" = "$(printf 'A\t%s' .github/workflows/admin-legacy-absence-cloudflare-diagnostic.yml)"
+      - name: Record only project GET status and sanitized error codes
+        env:
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCOUNT_SHA: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+          CF_ADMIN_TOKEN: ${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'DIAGNOSTIC_JS'
+          import { createHash } from 'node:crypto';
+          const e=process.env;
+          if (!/^[a-f0-9]{32}$/.test(e.CF_ACCOUNT||'') || !e.CF_ADMIN_TOKEN ||
+              createHash('sha256').update(e.CF_ACCOUNT).digest('hex')!==e.CF_ACCOUNT_SHA) {
+            console.log(JSON.stringify({stage:'CLOUDFLARE_PROJECT_GET',category:'CREDENTIAL_OR_ACCOUNT_BINDING_MISSING'}));
+            process.exitCode=1;
+          } else {
+            const endpoint='https://api.cloudflare.com/client/v4/accounts/'+e.CF_ACCOUNT+'/pages/projects/tennisnote-admin';
+            try {
+              const r=await fetch(endpoint,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(10000),
+                headers:{Authorization:'Bearer '+e.CF_ADMIN_TOKEN,Accept:'application/json'}});
+              let providerCodes=[];
+              if (!r.ok) {
+                try {
+                  const data=await r.json();
+                  if (Array.isArray(data?.errors)) providerCodes=data.errors.map(x=>x?.code)
+                    .filter(x=>Number.isSafeInteger(x)&&x>=0&&x<=9999999).slice(0,8);
+                } catch {}
+              } else { try { await r.body?.cancel(); } catch {} }
+              const category=r.ok?'OK':r.status===401?'AUTHENTICATION_REJECTED':r.status===403?'ACCESS_FORBIDDEN':
+                r.status===404?'NOT_FOUND_OR_NOT_VISIBLE':r.status===429?'RATE_LIMITED':r.status>=500?'PROVIDER_ERROR':'OTHER_HTTP_ERROR';
+              console.log(JSON.stringify({stage:'CLOUDFLARE_PROJECT_GET',http:r.status,category,providerCodes}));
+            } catch {
+              console.log(JSON.stringify({stage:'CLOUDFLARE_PROJECT_GET',category:'NETWORK_OR_REDIRECT'}));
+              process.exitCode=1;
+            }
+          }
+          DIAGNOSTIC_JS
