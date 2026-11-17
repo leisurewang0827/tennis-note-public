@@ -20,6 +20,8 @@ const failedWorkdirCommit="11dc7bb0892980509d420d621f189d7c23ef4a00";
 const authRejectedCommit="30b2cb7b18119be4cab76fcedefa42fbca6daddb";
 const diagnosticCommit="467ebc3c2e27ca77c8dbbd4f63c856417a80c600";
 const excelCommit="f42cfca6cf22bcdbc82bd3ff8b08711ea806a34e";
+const orderRejectedCommit="3d448ca70a712c720b963876faf89f684a93c303";
+const excelReadbackCommit="9d6ab5a2e62362a5c1393c194e92f637b9441fd3";
 const excelPrefix="release-sources/admin-excel-complete/";
 const diagnosticWorkflow=".github/workflows/admin-legacy-absence-cloudflare-diagnostic.yml";
 const artifactFolder="r4-branch-finance-admin-source-43391633723";
@@ -44,7 +46,7 @@ function assertReleaseLineage(releaseCommit) {
     originalFiles.map(x=>"A\t"+x).sort());
   assert.equal(git("rev-list","--parents","-n","1",failedWorkdirCommit),failedWorkdirCommit+" "+failedCheckCommit);
   assert.equal(git("diff-tree","--no-commit-id","--name-status","-r",failedCheckCommit,failedWorkdirCommit),"M\t"+prefix+"entry.mjs");
-  assert.ok(![failedCheckCommit,failedWorkdirCommit,authRejectedCommit,diagnosticCommit,excelCommit].includes(releaseCommit),"NON_RELEASE_PREDECESSOR");
+  assert.ok(![failedCheckCommit,failedWorkdirCommit,authRejectedCommit,diagnosticCommit,excelCommit,orderRejectedCommit,excelReadbackCommit].includes(releaseCommit),"NON_RELEASE_PREDECESSOR");
   const delta=(old,current)=>git("diff-tree","--no-commit-id","--name-status","-r",old,current).split("\n").sort();
   const parentIs=(commit,parent)=>assert.equal(git("rev-list","--parents","-n","1",commit),commit+" "+parent);
   parentIs(authRejectedCommit,failedWorkdirCommit);
@@ -54,9 +56,15 @@ function assertReleaseLineage(releaseCommit) {
   parentIs(excelCommit,diagnosticCommit);
   assert.deepEqual(delta(diagnosticCommit,excelCommit),[".github/workflows/admin-excel-complete.yml",
     ...["check.mjs","compose.mjs","payload.json","publish.mjs","seal.json"].map(n=>excelPrefix+n)].sort().map(x=>"A\t"+x));
-  parentIs(releaseCommit,excelCommit);
-  assert.deepEqual(delta(excelCommit,releaseCommit),[workflowPath,
+  parentIs(orderRejectedCommit,excelCommit);
+  assert.deepEqual(delta(excelCommit,orderRejectedCommit),[workflowPath,
     ...["entry.mjs","bundle.json","payload.json","intent.json","sequence.mjs","pages-port.mjs"].map(n=>prefix+n)].sort().map(x=>"M\t"+x));
+  parentIs(excelReadbackCommit,orderRejectedCommit);
+  assert.deepEqual(delta(orderRejectedCommit,excelReadbackCommit),[".github/workflows/admin-excel-readback.yml",
+    "release-sources/admin-excel-readback/readback.mjs","release-sources/admin-excel-readback/readback.test.mjs"].sort().map(x=>"A\t"+x));
+  parentIs(releaseCommit,excelReadbackCommit);
+  assert.deepEqual(delta(excelReadbackCommit,releaseCommit),[workflowPath,
+    ...["entry.mjs","intent.json","pages-port.mjs"].map(n=>prefix+n)].sort().map(x=>"M\t"+x));
 }
 assert.equal(env.GITHUB_ACTIONS,"true");assert.equal(env.GITHUB_REPOSITORY,pins.repository);
 assert.equal(env.GITHUB_REF,ref);assert.equal(env.GITHUB_EVENT_NAME,"push");assert.equal(env.GITHUB_RUN_ATTEMPT,"1");
@@ -141,7 +149,13 @@ if(process.argv[2]==="check"){
     const before=await pages.readAdmin(plan,"preinstall");
     assert.ok(before?.canonicalId===pins.recovery&&before.canonicalBytes===true,"PAGES_RECOVERY_BASE_MOVED");
     let acknowledgement=false;
-    try{acknowledgement=(await pages.publishAdminOnly(plan,{files:hashes})).confirmed===true;}catch{}
+    try{
+      acknowledgement=(await pages.publishAdminOnly(plan,{files:hashes})).confirmed===true;
+      if(!acknowledgement)console.warn("PAGES_PUBLISH_CLIENT_UNCONFIRMED_NO_RETRY");
+    }catch(e){
+      const codes=["PAGES_CANDIDATE_DRIFT","PAGES_ARTIFACT_DRIFT","PAGES_WRITE_DENIED","PAGES_PUBLISH_PRECONDITION"];
+      console.warn(codes.includes(e?.message)?e.message:"PAGES_PUBLISH_CALL_UNCONFIRMED_NO_RETRY");
+    }
     const after=await pages.readAdmin(plan,"postpublish");
     assert.ok(after?.releaseCommit===plan.releaseCommit&&after?.publishedOperation===plan.operation&&
       after.canonicalBytes===true&&after.immutableBytes===true,"PAGES_PUBLISH_STATE_UNKNOWN_NO_RETRY");

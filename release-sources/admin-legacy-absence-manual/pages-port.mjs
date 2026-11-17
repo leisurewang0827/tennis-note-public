@@ -14,6 +14,9 @@ const allowedReads=new Set(["preinstall","prepublish","postpublish","prerecovery
 const marker=operation=>"TN-LEGACY-ABSENCE-V2 "+operation;
 const fixedOrigin=id=>`https://${id.slice(0,8)}.tennisnote-admin.pages.dev`;
 const ctl=new Set(["_headers","_redirects","_worker.js"]);
+const sameInventory=(actual,expected)=>actual!==null&&typeof actual==="object"&&!Array.isArray(actual)&&
+  Object.keys(actual).length===Object.keys(expected).length&&
+  Object.entries(expected).every(([path,digest])=>Object.hasOwn(actual,path)&&actual[path]===digest);
 function publicPath(file) {
   const parts=file.split("/");
   if(parts.some(p=>!p||p==="."||p===".."||p.includes("\\")))throw Error("PAGES_ROUTE_INVALID");
@@ -108,7 +111,7 @@ export function bindPages({bundle,adminRoot,account,accountFingerprint,token,cli
     },
     async publishAdminOnly(plan,detail) {
       if(plan.intent!=="release" || !detail?.files || digestFile(cli)!==pinnedWrangler ||
-        JSON.stringify(detail.files)!==JSON.stringify(manifest.administrator))throw Error("PAGES_CANDIDATE_DRIFT");
+        !sameInventory(detail.files,manifest.administrator))throw Error("PAGES_CANDIDATE_DRIFT");
       verifyLocal(adminRoot,manifest.administrator);
       await start(plan,"publish");
       if(!isOff(await read(plan,"prepublish")) || !original(await project()) || !await authorization(plan,"publish"))
