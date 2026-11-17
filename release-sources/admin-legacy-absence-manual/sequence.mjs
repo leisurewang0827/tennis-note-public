@@ -2,8 +2,8 @@
 // The live adapter must supply authenticated GitHub/DB/Pages observations and one-use claims.
 import { createHash } from "node:crypto";
 
-const digest="c27e5d2694f3c1fb49d1d18547c9b109001078cb89f0584983d64e9833d14ccf";
-const recovery="963ec286-5a82-464a-8f02-1b84301dadc0";
+const digest="295ae2fe04150c94509e9f8ea30c542d35d1ff7434589a839b056f49fc08b11f";
+const recovery="484c4e49-dbc0-4807-89ea-0a1955f38710";
 const fingerprint="3b5646933760625e785b2bffbb463032add55c53f7ae85a98eb58ba9550e0a9a";
 const verificationCommit="a63e1a315ce9902ff02d8c83c4fcd8478eef29fc";
 const environment="tennisnote-r4-admin-production";

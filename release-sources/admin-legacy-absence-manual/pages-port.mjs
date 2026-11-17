@@ -7,7 +7,7 @@ import { pins } from "./sequence.mjs";
 
 const sha=x=>createHash("sha256").update(x).digest("hex");
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-const originalCommit="260798328d4b8a340323ef79c27710e373098f7e";
+const originalCommit="f42cfca6cf22bcdbc82bd3ff8b08711ea806a34e";
 const adminOrigin="https://tennisnote-admin.pages.dev";
 const pinnedWrangler="e35355b3a5cb45fcb47ad016f043649b8ad891dc5781b7c7e3e278c7deccf5c4";
 const allowedReads=new Set(["preinstall","prepublish","postpublish","prerecovery","before-rollback","postrollback"]);

@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build as baselineBuilder } from "../admin-link-readback/compose.mjs";
+import { build as baselineBuilder } from "../admin-excel-complete/compose.mjs";
 import { expected, assertSource } from "../../release-promotions/r4-branch-finance-admin/protected-finance-admission.mjs";
 import { pins } from "./sequence.mjs";
 import { bindPages } from "./pages-port.mjs";
@@ -17,6 +17,11 @@ const branch="codex/tennisnote-r4-ui-finish-dev-20261108";
 const baseParent="260798328d4b8a340323ef79c27710e373098f7e";
 const failedCheckCommit="84e1f2fb7051d9e94e664e8d71533ae1e8deac75";
 const failedWorkdirCommit="11dc7bb0892980509d420d621f189d7c23ef4a00";
+const authRejectedCommit="30b2cb7b18119be4cab76fcedefa42fbca6daddb";
+const diagnosticCommit="467ebc3c2e27ca77c8dbbd4f63c856417a80c600";
+const excelCommit="f42cfca6cf22bcdbc82bd3ff8b08711ea806a34e";
+const excelPrefix="release-sources/admin-excel-complete/";
+const diagnosticWorkflow=".github/workflows/admin-legacy-absence-cloudflare-diagnostic.yml";
 const artifactFolder="r4-branch-finance-admin-source-43391633723";
 const pinFiles=["bundle.json","payload.json","pages-port.mjs","sequence.mjs","manual-approval.mjs","entry.mjs","intent.json"].map(x=>prefix+x);
 const sha=b=>createHash("sha256").update(b).digest("hex");
@@ -39,10 +44,19 @@ function assertReleaseLineage(releaseCommit) {
     originalFiles.map(x=>"A\t"+x).sort());
   assert.equal(git("rev-list","--parents","-n","1",failedWorkdirCommit),failedWorkdirCommit+" "+failedCheckCommit);
   assert.equal(git("diff-tree","--no-commit-id","--name-status","-r",failedCheckCommit,failedWorkdirCommit),"M\t"+prefix+"entry.mjs");
-  assert.ok(![failedCheckCommit,failedWorkdirCommit].includes(releaseCommit),"FAILED_CHECK_COMMIT_IS_NOT_RELEASABLE");
-  assert.equal(git("rev-list","--parents","-n","1",releaseCommit),releaseCommit+" "+failedWorkdirCommit);
-  assert.deepEqual(git("diff-tree","--no-commit-id","--name-status","-r",failedWorkdirCommit,releaseCommit).split("\n").sort(),
-    [workflowPath,prefix+"entry.mjs"].map(x=>"M\t"+x).sort());
+  assert.ok(![failedCheckCommit,failedWorkdirCommit,authRejectedCommit,diagnosticCommit,excelCommit].includes(releaseCommit),"NON_RELEASE_PREDECESSOR");
+  const delta=(old,current)=>git("diff-tree","--no-commit-id","--name-status","-r",old,current).split("\n").sort();
+  const parentIs=(commit,parent)=>assert.equal(git("rev-list","--parents","-n","1",commit),commit+" "+parent);
+  parentIs(authRejectedCommit,failedWorkdirCommit);
+  assert.deepEqual(delta(failedWorkdirCommit,authRejectedCommit),[workflowPath,prefix+"entry.mjs"].sort().map(x=>"M\t"+x));
+  parentIs(diagnosticCommit,authRejectedCommit);
+  assert.deepEqual(delta(authRejectedCommit,diagnosticCommit),["A\t"+diagnosticWorkflow]);
+  parentIs(excelCommit,diagnosticCommit);
+  assert.deepEqual(delta(diagnosticCommit,excelCommit),[".github/workflows/admin-excel-complete.yml",
+    ...["check.mjs","compose.mjs","payload.json","publish.mjs","seal.json"].map(n=>excelPrefix+n)].sort().map(x=>"A\t"+x));
+  parentIs(releaseCommit,excelCommit);
+  assert.deepEqual(delta(excelCommit,releaseCommit),[workflowPath,
+    ...["entry.mjs","bundle.json","payload.json","intent.json","sequence.mjs","pages-port.mjs"].map(n=>prefix+n)].sort().map(x=>"M\t"+x));
 }
 assert.equal(env.GITHUB_ACTIONS,"true");assert.equal(env.GITHUB_REPOSITORY,pins.repository);
 assert.equal(env.GITHUB_REF,ref);assert.equal(env.GITHUB_EVENT_NAME,"push");assert.equal(env.GITHUB_RUN_ATTEMPT,"1");
