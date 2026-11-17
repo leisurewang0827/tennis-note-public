@@ -15,6 +15,8 @@ const dir=dirname(fileURLToPath(import.meta.url));
 const prefix="release-sources/admin-legacy-absence-manual/";
 const branch="codex/tennisnote-r4-ui-finish-dev-20261108";
 const baseParent="260798328d4b8a340323ef79c27710e373098f7e";
+const failedCheckCommit="84e1f2fb7051d9e94e664e8d71533ae1e8deac75";
+const artifactFolder="r4-branch-finance-admin-source-43391633723";
 const pinFiles=["bundle.json","payload.json","pages-port.mjs","sequence.mjs","manual-approval.mjs","entry.mjs","intent.json"].map(x=>prefix+x);
 const sha=b=>createHash("sha256").update(b).digest("hex");
 const git=(...a)=>execFileSync("git",a,{encoding:"utf8",stdio:["ignore","pipe","ignore"]}).trim();
@@ -29,6 +31,15 @@ const ref="refs/heads/"+branch;
 const originalFiles=[workflowPath,...pinFiles].sort();
 const validUuid=x=>typeof x==="string"&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(x);
 const validCommit=x=>typeof x==="string"&&/^[a-f0-9]{40}$/.test(x);
+function assertReleaseLineage(releaseCommit) {
+  assert.ok(validCommit(releaseCommit));
+  assert.equal(git("rev-list","--parents","-n","1",failedCheckCommit),failedCheckCommit+" "+baseParent);
+  assert.deepEqual(git("diff-tree","--no-commit-id","--name-status","-r",baseParent,failedCheckCommit).split("\n").sort(),
+    originalFiles.map(x=>"A\t"+x).sort());
+  assert.notEqual(releaseCommit,failedCheckCommit,"FAILED_CHECK_COMMIT_IS_NOT_RELEASABLE");
+  assert.equal(git("rev-list","--parents","-n","1",releaseCommit),releaseCommit+" "+failedCheckCommit);
+  assert.equal(git("diff-tree","--no-commit-id","--name-status","-r",failedCheckCommit,releaseCommit),"M\t"+prefix+"entry.mjs");
+}
 assert.equal(env.GITHUB_ACTIONS,"true");assert.equal(env.GITHUB_REPOSITORY,pins.repository);
 assert.equal(env.GITHUB_REF,ref);assert.equal(env.GITHUB_EVENT_NAME,"push");assert.equal(env.GITHUB_RUN_ATTEMPT,"1");
 assert.equal(env.GITHUB_WORKFLOW_REF,`${pins.repository}/${workflowPath}@${ref}`);assert.equal(env.GITHUB_SHA,currentHead);
@@ -36,17 +47,14 @@ assert.ok(validUuid(intent.operation));
 const changed=git("diff-tree","--no-commit-id","--name-status","-r","HEAD^","HEAD").split("\n").sort();
 if(intent.intent==="release"){
   assert.deepEqual(Object.keys(intent).sort(),["intent","operation"]);
-  assert.equal(git("rev-parse","HEAD^"),baseParent);
-  assert.deepEqual(changed,originalFiles.map(x=>"A\t"+x).sort());
+  assertReleaseLineage(currentHead);
 }else{
   assert.equal(intent.intent,"recover");
   assert.deepEqual(Object.keys(intent).sort(),["intent","operation","publishedId","publishedOperation","releaseCommit"]);
   assert.ok(validUuid(intent.publishedId)&&intent.publishedId!==pins.recovery&&validUuid(intent.publishedOperation)&&intent.operation!==intent.publishedOperation&&validCommit(intent.releaseCommit));
   assert.deepEqual(changed,["M\t"+prefix+"intent.json"]);
-  assert.equal(git("rev-parse","HEAD^"),intent.releaseCommit);
-  assert.equal(git("rev-parse",intent.releaseCommit+"^"),baseParent);
-  assert.deepEqual(git("diff-tree","--no-commit-id","--name-status","-r",baseParent,intent.releaseCommit).split("\n").sort(),
-    originalFiles.map(x=>"A\t"+x).sort());
+  assert.equal(git("rev-list","--parents","-n","1",currentHead),currentHead+" "+intent.releaseCommit);
+  assertReleaseLineage(intent.releaseCommit);
   assert.deepEqual(JSON.parse(git("show",intent.releaseCommit+":"+prefix+"intent.json")),{intent:"release",operation:intent.publishedOperation});
 }
 assert.ok(env.GH_TOKEN);
@@ -61,7 +69,7 @@ const [ci,artifact]=await Promise.all([get("/actions/runs/"+expected.run),get("/
 assertSource(ci,artifact);
 const work=join(env.RUNNER_TEMP,"tn-absence-manual-"+randomUUID());
 const tree=join(work,"admin-web");
-const existing=baselineBuilder(join(env.RUNNER_TEMP,"tn-absence-baseline"),join(work,"baseline"));
+const existing=baselineBuilder(join(env.RUNNER_TEMP,"tn-absence-baseline",artifactFolder),join(work,"baseline"));
 assert.deepEqual(existing.hashes,manifest.recovery);
 const payload=JSON.parse(read("payload.json"));
 assert.deepEqual(Object.keys(payload).sort(),["index.html","schedule-v2-admin.js"]);
