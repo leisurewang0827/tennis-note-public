@@ -8,11 +8,12 @@ import {expected,assertSource} from '../../release-promotions/r4-branch-finance-
 import {verifyAssets as readRoutes} from '../admin-excel-readback/readback.mjs';
 const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 const workflow='.github/workflows/admin-excel-schedule-count.yml';
-const parent='1631b43f59c6b2b19f5e96ae3f50955283face30';
+const parent='dda81d82b0b34ed4629fad10802e49ca195a1848';
 const priorSource='1631b43f59c6b2b19f5e96ae3f50955283face30';
 const prior='69400f45-7701-403c-9fa9-b6798737d643';
 const origin='https://tennisnote-admin.pages.dev';
-const files=[".github/workflows/admin-excel-schedule-count.yml","release-sources/admin-excel-schedule-count/compose.mjs","release-sources/admin-excel-schedule-count/payload.json","release-sources/admin-excel-schedule-count/publish.mjs","release-sources/admin-excel-schedule-count/seal.json"];
+const files=[".github/workflows/admin-excel-schedule-count.yml","release-sources/admin-excel-schedule-count/publish.mjs"];
+const sealed={"release-sources/admin-excel-schedule-count/compose.mjs":"71f9a1a38a8d199c112a43de4001566858221ed6cf77fff580ea3573c48beac5","release-sources/admin-excel-schedule-count/payload.json":"f2932f513baab507db3f3fe56163fdf6e7849c0b45ea6fdafe98492613934609","release-sources/admin-excel-schedule-count/seal.json":"b725cad51faea856e851c0e092916b58621df5ebb5e9acf006636957c7f6d61c"};
 const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
 export function preimage(project) {
   assert.equal(project.success,true);const p=project.result,d=p?.canonical_deployment;
@@ -26,25 +27,35 @@ export function review(approvals,commit) {
   assert.deepEqual(a.environments.map(e=>e.id),[26219323796]);
   assert.equal(a.comment,'ADMIN-EXCEL-SCHEDULE-COUNT '+commit+' display-and-cache-reference no-db');
 }
+export function admitRenewal(commit) {
+  assert.equal(git('rev-parse','HEAD'),commit);
+  assert.equal(git('rev-list','--parents','-n','1','HEAD'),commit+' '+parent);
+  assert.deepEqual(git('diff-tree','--no-commit-id','--name-only','-r',parent,'HEAD').split('\n').sort(),files);
+  for(const [name,digest] of Object.entries(sealed)) {
+    assert.equal(sha(execFileSync('git',['show','HEAD:'+name])),digest,'SEALED_PRODUCT_CHANGED');
+  }
+}
 let stage='runtime';
 async function main() {
   const e=process.env;
   assert.equal(e.GITHUB_ACTIONS,'true');assert.equal(e.GITHUB_REPOSITORY,repo);assert.equal(e.GITHUB_REF,'refs/heads/'+branch);
   assert.equal(e.GITHUB_EVENT_NAME,'push');assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
   assert.equal(e.GITHUB_WORKFLOW_REF,`${repo}/${workflow}@refs/heads/${branch}`);
-  assert.equal(git('rev-parse','HEAD'),e.GITHUB_SHA);
-  assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+parent);
-  assert.deepEqual(git('diff-tree','--no-commit-id','--name-only','-r',parent,'HEAD').split('\n').sort(),files);
+  admitRenewal(e.GITHUB_SHA);
   assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);
   assert.equal(sha(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
   assert(e.CLOUDFLARE_API_TOKEN&&e.GH_TOKEN);
   const get=async(url,token)=>{
     const r=await fetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
-    assert.equal(r.status,200,'READ_FAILED');return r.json();
+    if(r.status!==200) throw Error('READ_HTTP_'+r.status); return r.json();
   };
   const api=`https://api.github.com/repos/${repo}`;
   const cf=`https://api.cloudflare.com/client/v4/accounts/${e.CLOUDFLARE_ACCOUNT_ID}/pages/projects/tennisnote-admin`;
   const read=async url=>fetch(url,{method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(15000)});
+  stage='canonical-before-assembly';
+  preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
+  console.log('ADMIN_PROJECT_GET_200_AND_RECOVERY_MATCH');
+  stage='admitted-source';
   const [run,artifact]=await Promise.all([get(`${api}/actions/runs/${expected.run}`,e.GH_TOKEN),get(`${api}/actions/artifacts/${expected.artifact}`,e.GH_TOKEN)]);
   stage='source-artifact';
   assertSource(run,artifact);
@@ -70,6 +81,7 @@ async function main() {
   stage='canonical';
   preimage(await get(cf,e.CLOUDFLARE_API_TOKEN));
   review(await get(`${api}/actions/runs/${e.GITHUB_RUN_ID}/approvals`,e.GH_TOKEN),e.GITHUB_SHA);
+  stage='publish-once';
   const result=await new Promise(done=>{
     let output='',settled=false;
     const child=spawn(process.execPath,[cli,'pages','deploy',out,'--project-name=tennisnote-admin','--branch=main','--commit-hash='+e.GITHUB_SHA,'--commit-dirty=false'],{shell:false,stdio:['ignore','pipe','pipe'],env:{PATH:e.PATH,HOME:e.HOME,TMPDIR:e.TMPDIR,CLOUDFLARE_ACCOUNT_ID:e.CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN:e.CLOUDFLARE_API_TOKEN}});
@@ -80,6 +92,7 @@ async function main() {
   });
   // 불확실한 응답에 재게시하지 않는다. 현재 배포 ID를 보존한 채 HOLD한다.
   assert(result,'PUBLISH_UNKNOWN_NO_RETRY');
+  stage='after-publish-readback';
   const after=await get(cf,e.CLOUDFLARE_API_TOKEN),d=after.result?.canonical_deployment;
   assert.equal(after.success,true);assert.match(d?.id||'',/^[a-f0-9-]{36}$/);assert.notEqual(d.id,prior);
   assert.equal(result,`https://${d.id.slice(0,8)}.tennisnote-admin.pages.dev`);
