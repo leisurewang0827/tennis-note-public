@@ -1,6 +1,8 @@
-const CACHE_NAME = "tennis-note-coach-mode-v572-r4-01f658a88968b11c-entry-4aced5016d566ea1";
+const CACHE_NAME = "tennis-note-coach-mode-v572-r4-01f658a88968b11c-entry-4aced5016d566ea1-ui-7423d1e2d58a3c03";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
+  "./r4-ui-finish.css?v=7423d1e2d58a3c03",
+  "./r4-ui-finish.js?v=7423d1e2d58a3c03",
   "../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1",
   "./data/r4-workflows.js?v=r4-entry-4aced5016d566ea1",
   "./data/r4-scoped-workspace.js?v=r4-entry-4aced5016d566ea1",
