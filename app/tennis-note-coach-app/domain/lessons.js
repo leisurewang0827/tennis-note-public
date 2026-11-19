@@ -216,7 +216,7 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
     if (lesson.historicalReleasedSlot) {
       return `disabled aria-label="${lesson.member || "회원"} 과거 정규 불참 기록"`;
     }
-    return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 정규수업 복원"`;
+    return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 불참 수업 상세"`;
   }
   return `data-edit-lesson-id="${lesson.id}"${segmentAttrs}`;
 }

@@ -86,7 +86,7 @@ async function restoreCoachLessonAbsence(entitlementId) {
   const bookedLabel = [entitlement.bookedDate, entitlement.bookedTime].filter(Boolean).join(" ");
   const confirmation = cancelBookedMakeup
     ? `${entitlement.member} 회원의 ${entitlement.original} 정규수업을 복원할까요?\n\n${bookedLabel || "예약된 보강"} 수업은 취소됩니다.`
-    : `${entitlement.member} 회원의 ${entitlement.original} 정규수업을 다시 살릴까요?\n\n불참 처리와 보강 대기는 취소됩니다.`;
+    : `${entitlement.member} 회원의 ${entitlement.original} 정규수업에 다시 참석으로 바꿀까요?\n\n불참 처리와 보강 대기는 취소됩니다.`;
   if (!window.confirm(confirmation)) return;
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) {

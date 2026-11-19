@@ -336,6 +336,7 @@ function recordProcessingMarkup() {
         const needsStateRefresh = processingState.id === "confirmation_needed";
         const participantResults = completionDraftResultsForLog(log);
         const hasParticipantDrafts = Array.isArray(log.participantResults) && log.participantResults.length > 0;
+        const shareCurriculum = hasParticipantDrafts && !confirmed && coachPairCanShareCurriculum(participantResults);
         const participantDraftsRequirePairs = participantResults.some((result) => result.userId || result.ticketId)
           || state.liveLessons.some((lesson) => (
             lesson.serverLessonId === log.serverLessonId
@@ -348,7 +349,7 @@ function recordProcessingMarkup() {
           && (!participantDraftsRequirePairs || Boolean(result.userId && result.ticketId))
         ));
         const participantDraftMarkup = hasParticipantDrafts
-          ? `<div class="lesson-participant-completion-list lesson-log-participant-list">
+          ? `${shareCurriculum ? coachSharedCurriculumMarkup(log.id, coachSharedCurriculumValue(participantResults.map(p=>p.nextCurriculumId)), "log") : ""}<div class="lesson-participant-completion-list lesson-log-participant-list">
               ${participantResults.map((result) => {
                 const resultNextStep = result.nextCurriculumId ? selectedCurriculum(result.nextCurriculumId) : null;
                 const resultCommentLength = String(result.coachComment || "").trim().length;
@@ -369,7 +370,7 @@ function recordProcessingMarkup() {
                     </div>
                     <small class="lesson-comment-count ${resultCommentLength >= 5 ? "is-ready" : ""}" data-log-participant-comment-count="${escapeHtml(log.id)}">${resultCommentLength}/5자</small>
                   </label>
-                  <label>
+                  ${shareCurriculum ? "" : `<label>
                     <span>다음 커리큘럼 <small>필수</small></span>
                     <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(result.name || "회원")} 다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
                     <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
@@ -378,7 +379,7 @@ function recordProcessingMarkup() {
                       ${curriculumOptions(result.nextCurriculumId || "", "", true)}
                     </select>
                   </label>
-                  <em>${resultNextStep ? `다음 수업: ${escapeHtml(resultNextStep.id)} · ${escapeHtml(resultNextStep.title)}` : "다음 커리큘럼 선택 필요"}</em>
+                  <em>${resultNextStep ? `다음 수업: ${escapeHtml(resultNextStep.id)} · ${escapeHtml(resultNextStep.title)}` : "다음 커리큘럼 선택 필요"}</em>`}
                 </section>`;
               }).join("")}
             </div>`

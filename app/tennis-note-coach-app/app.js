@@ -426,7 +426,7 @@ function captureLessonChartDraft(id) {
     usedSessions: Number(row.dataset.usedSessions) || 0,
     remainingSessions: Number(row.dataset.remainingSessions) || 0,
     coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
-    nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
+    nextCurriculumId: coachCurriculumForRow(row, id, "modal"),
   }));
   const drafts = {};
   participantResults.forEach((result, index) => {

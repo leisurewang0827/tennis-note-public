@@ -36,6 +36,13 @@ function bindDelegatedEvents() {
     const curriculumSelect = event.target.closest("[data-next-curriculum]");
     if (curriculumSelect) updateLogDraft(curriculumSelect.dataset.nextCurriculum);
 
+    const sharedCurriculum = event.target.closest("[data-coach-common-curriculum]");
+    if (sharedCurriculum) {
+      const id = sharedCurriculum.dataset.coachCommonLesson;
+      if (sharedCurriculum.dataset.coachCommonCurriculum === "log") updateLogDraft(id);
+      else updateLessonCompletionUi(id);
+      return;
+    }
     const participantCurriculumSelect = event.target.closest("[data-log-participant-curriculum]");
     if (participantCurriculumSelect) updateLogDraft(participantCurriculumSelect.dataset.logParticipantCurriculum);
 
@@ -388,7 +395,7 @@ function bindDelegatedEvents() {
 
     const restoreAbsenceButton = event.target.closest("[data-restore-absence-id]");
     if (restoreAbsenceButton) {
-      restoreCoachLessonAbsence(restoreAbsenceButton.dataset.restoreAbsenceId);
+      openCoachReleasedAbsenceActions(restoreAbsenceButton.dataset.restoreAbsenceId, restoreAbsenceButton);
       return;
     }
 

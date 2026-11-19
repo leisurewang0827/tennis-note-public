@@ -9,7 +9,7 @@ function updateLessonCompletionUi(id) {
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
   const rowsReady = participantRows.length > 0 && participantRows.every((row) => {
     const comment = row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
-    const curriculumId = row.querySelector("[data-modal-next-curriculum]")?.value || "";
+    const curriculumId = coachCurriculumForRow(row, id, "modal");
     const count = row.querySelector("[data-modal-comment-count]");
     if (count) {
       count.textContent = `${comment.length}/5자`;
@@ -133,7 +133,7 @@ function updateLogDraft(id) {
       const ticketId = row.dataset.ticketId || "";
       const existing = existingByPair.get(`${userId}:${ticketId}`) || {};
       const coachComment = row.querySelector("[data-log-participant-comment]")?.value.trim() || "";
-      const nextCurriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
+      const nextCurriculumId = coachCurriculumForRow(row, log.id, "log");
       return {
         ...existing,
         userId,
@@ -171,7 +171,7 @@ function updateLogCompletionUi(log) {
   if (participantRows.length) {
     const ready = participantRows.every((row) => {
       const length = String(row.querySelector("[data-log-participant-comment]")?.value || "").trim().length;
-      const curriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
+      const curriculumId = coachCurriculumForRow(row, log.id, "log");
       const count = row.querySelector("[data-log-participant-comment-count]");
       if (count) {
         count.textContent = `${length}/5자`;
@@ -318,11 +318,14 @@ async function confirmLog(id, options = {}) {
           `${result.userId}:${result.ticketId}`,
           result,
         ]));
+        const resolvedCurriculumRefs = new Map();
         const serverParticipantResults = await Promise.all(scheduleV2Participants.map(async (participant) => {
           const draft = draftByTicketAndUser.get(`${participant.userId}:${participant.ticketId}`);
           if (!draft) throw new Error("schedule_v2_participant_input_missing");
           const participantNextStep = selectedCurriculum(draft.nextCurriculumId);
-          const participantCurriculumRefId = await liveCurriculumRefId(participantNextStep);
+          const key = String(participantNextStep?.id || draft.nextCurriculumId || "");
+          if (!resolvedCurriculumRefs.has(key)) resolvedCurriculumRefs.set(key, liveCurriculumRefId(participantNextStep));
+          const participantCurriculumRefId = await resolvedCurriculumRefs.get(key);
           return {
             userId: participant.userId,
             ticketId: participant.ticketId,

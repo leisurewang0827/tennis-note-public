@@ -4,6 +4,34 @@
 // 일어나므로 이름은 호출 시점에 해석된다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+function coachPairCanShareCurriculum(results) {
+  return results.length === 2 && new Set(results.map(r=>String(r.userId || ""))).size === 2
+    && results.every(r=>r.userId && r.ticketId && !r.sameDayAbsence?.status);
+}
+
+function coachSharedCurriculumValue(results) {
+  return results[0] && results[0] === results[1] ? results[0] : "";
+}
+
+function coachSharedCurriculumMarkup(id, value, context) {
+  return `<label class="lesson-required-field wide">
+    <span>공통 다음 커리큘럼</span>
+    <input data-curriculum-option-search type="search" aria-label="공통 다음 커리큘럼 검색" placeholder="동작·목표·코드 검색" />
+    <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
+    <select data-coach-common-curriculum="${escapeHtml(context)}" data-coach-common-lesson="${escapeHtml(id)}" aria-label="공통 다음 커리큘럼 선택">
+      <option value="">검색·선택</option>${curriculumOptions(value)}
+    </select></label>`;
+}
+
+function coachCurriculumForRow(row, id, context) {
+  const selector = context === "log" ? "[data-log-participant-curriculum]" : "[data-modal-next-curriculum]";
+  const own = row.querySelector(selector);
+  if (own) return own.value || "";
+  const parent = row.closest(context === "log" ? "[data-log-card]" : "[data-lesson-tab-panel=feedback]");
+  const field = parent?.querySelector(`[data-coach-common-curriculum="${context}"]`);
+  return field?.dataset.coachCommonLesson === String(id) ? field.value : "";
+}
+
 function renderScheduleEditPanel() {
   const lesson = ensureCoachLessonRecord(state.editingLessonId);
   if (!lesson) {
@@ -16,6 +44,9 @@ function renderScheduleEditPanel() {
   const processingState = coachLessonCardState(lesson);
   const needsStateRefresh = processingState.id === "confirmation_needed";
   const completionParticipants = completionParticipantsForLesson(lesson);
+  const shareCurriculum = canProcess && !finalized && coachPairCanShareCurriculum(completionParticipants)
+    && completionParticipants.every(p => !p.sameDayAbsence?.status);
+  const sharedValue = shareCurriculum ? coachSharedCurriculumValue(completionParticipants.map((p,i)=>lessonChartParticipantDefaults(lesson,p,i).nextCurriculumId)) : "";
   const participantTabs = completionParticipants.length > 1
     ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
     : "";
@@ -98,7 +129,7 @@ function renderScheduleEditPanel() {
           </details>
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
-        <label class="lesson-required-field">
+        ${shareCurriculum ? "" : `<label class="lesson-required-field">
           <span>다음 목표 <small>${canFinalize ? "필수" : "미리 선택 가능"}</small></span>
           <input data-curriculum-option-search type="search" placeholder="동작·증상·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 목표 검색" ${canProcess ? "" : "disabled"} />
           <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
@@ -106,7 +137,7 @@ function renderScheduleEditPanel() {
             <option value="">검색·선택</option>
             ${curriculumOptions(defaults.nextCurriculumId)}
           </select>
-        </label>
+        </label>`}
       </section>`;
   }).join("");
   const scheduleEditDraft = lesson.scheduleEditDraft || {};
@@ -150,6 +181,7 @@ function renderScheduleEditPanel() {
       <fieldset class="lesson-detail-tab-panel wide" data-lesson-tab-panel="feedback" ${activeLessonTab === "feedback" ? "" : "hidden disabled"}>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
+      ${shareCurriculum ? coachSharedCurriculumMarkup(lesson.id, sharedValue, "modal") : ""}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
       </fieldset>

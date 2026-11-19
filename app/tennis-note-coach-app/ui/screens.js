@@ -219,6 +219,64 @@ function requestCloseLessonEditor() {
   return true;
 }
 
+function coachReleasedAbsenceStatus(entitlementId, now = Date.now()) {
+  const slot = state.releasedMakeupSlots.find(s => s.entitlementId === entitlementId);
+  const entitlement = state.makeupEntitlements.find(e => e.id === entitlementId);
+  if (!slot || !entitlement || !["open","booked"].includes(entitlement.status) || !canProcessLesson(slot)) {
+    return { message:"불참 수업의 최신 상태와 담당 코치를 확인해 주세요." };
+  }
+  const date = String(slot.lessonDate || "");
+  const time = String(slot.time || "").slice(0,5);
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+  if (slot.historicalReleasedSlot || !Number.isFinite(start) || start <= now) return { message:"이미 시작했거나 지난 수업입니다." };
+  const a = minutesFromTime(time), duration = Number(slot.durationMinutes);
+  if (!Number.isFinite(a) || !Number.isSafeInteger(duration) || duration <= 0) return { message:"원래 수업 시간을 확인할 수 없습니다." };
+  const occupied = state.liveLessons.some(other => {
+    if (other.lessonDate !== date || other.coachRoleId !== slot.coachRoleId) return false;
+    const b = minutesFromTime(other.time);
+    return a < b + lessonDuration(other) && b < a + duration;
+  });
+  if (occupied) return { message:"같은 시간에 이미 다른 수업이 있습니다." };
+  const policy = loadCoachSchedulePolicy();
+  const coach = policy.coaches.find(c => String(c.roleId || c.id) === String(slot.coachRoleId));
+  const canAdd = coach && coachSlotAccess(coach, slot.day, time, duration, policy).allowed;
+  return { slot, entitlement, canAdd, date, time, duration };
+}
+
+function openCoachReleasedAbsenceActions(id, trigger) {
+  const start = coachReleasedAbsenceStatus(id);
+  if (start.message) { showToast(start.message); return; }
+  if (document.querySelector("#coachReleasedAbsenceActions")?.open) return;
+  const dialog = document.createElement("dialog");
+  if (typeof dialog.showModal !== "function") { showToast("이 앱에서 불참 상세를 열 수 없습니다."); return; }
+  dialog.id = "coachReleasedAbsenceActions";
+  dialog.setAttribute("aria-label", "불참 수업 상세");
+  dialog.style.cssText = "width:min(100%,28rem);border:1px solid GrayText;box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:CanvasText;background:Canvas;color-scheme:inherit;max-height:85vh";
+  dialog.innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>불참 수업</strong><button type="button" data-absence-close style="min-height:44px">닫기</button></header>
+    <p>${escapeHtml(start.slot.member || "회원")} · ${escapeHtml(start.time)} · 불참</p>
+    ${start.canAdd ? '<button type="button" class="approve-button" data-absence-new style="min-height:44px;width:100%">새 수업 등록</button>' : ""}
+    <details><summary style="min-height:44px;align-content:center">원래 수업 변경</summary>
+      <button type="button" data-absence-restore style="min-height:44px;width:100%">다시 참석</button></details><p data-absence-status role="status"></p>`;
+  const message = dialog.querySelector("[data-absence-status]");
+  dialog.addEventListener("close",()=>{dialog.remove();if (trigger?.isConnected) trigger.focus();},{once:true});
+  dialog.querySelector("[data-absence-close]").onclick=()=>dialog.close();
+  dialog.querySelector("[data-absence-restore]").onclick=()=>{
+    const current=coachReleasedAbsenceStatus(id);
+    if (current.message) { message.textContent=current.message; return; }
+    dialog.close();
+    void restoreCoachLessonAbsence(id);
+  };
+  const add=dialog.querySelector("[data-absence-new]");
+  if (add) add.onclick=()=>{
+    const current=coachReleasedAbsenceStatus(id);
+    if (current.message || !current.canAdd) { message.textContent=current.message || "이 시간에는 수업을 등록할 수 없습니다."; return; }
+    dialog.close();
+    openCoachQuickAdd({dataset:{date:current.date,day:current.slot.day,time:current.time,coachRoleId:current.slot.coachRoleId}});
+  };
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
