@@ -2,7 +2,7 @@
   "kind": "ABSENCE_SIMPLE_DEV_PREVIEW_V41",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
-  "parent": "42c356e90e45824c770015b04400802b6068857f",
+  "parent": "2b2440747e8649588d6df715efcdbc1e05319f11",
   "previewBranch": "r4-absence-group-qa",
   "coach": {
     "project": "tennisnote-app-dev",

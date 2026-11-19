@@ -1,4 +1,5 @@
 name: Absence simple DEV previews
+# Correction: unchanged DEV assets are read from the matching sealed DEV source.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
