@@ -2,11 +2,11 @@
   "kind": "ABSENCE_SIMPLE_DEV_PREVIEW_V41",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
-  "parent": "42f40f0bc6c996f9d158073975b61bb64783762c",
+  "parent": "8dface9a19a726b52631751ee0da3182cc7e293f",
   "previewBranch": "r4-absence-group-qa",
   "coach": {
     "project": "tennisnote-app-dev",
-    "previous": "01a05341-2d4d-4e85-a629-09397f966072",
+    "previous": "d73c747e-3dee-4d37-941d-3a50f164f597",
     "canonical": "035ade34-d322-42f0-8b17-5c66b57dd59d",
     "baselineDeployment": "a037622b-ce3b-4159-9b5f-a7e2b069c9f7",
     "baseline": {
@@ -270,16 +270,16 @@
       "tennis-note-coach-app/data/sync.js": "d9b53c5e3aa1af82ab0756c827ebb35d129e1c99d3236516b2a66cbf5e777d62",
       "tennis-note-coach-app/domain/lessons.js": "1ae3d9b6116dbdf00bad5a40489da9500f5303103bd6c1219d009f5b86b79f31",
       "tennis-note-coach-app/events/delegated.js": "d1cc477882966a1d7d05281fe81bb94b266106ae79923cfe7085092eb4385f2a",
-      "tennis-note-coach-app/index.html": "c1525131ce3883cba14680d9f96ad36e29927eec8acab35672dde25568ea88da",
-      "tennis-note-coach-app/service-worker.js": "38235e08cc86aa10a5faec9921533ab451fd28cd8732b46b322e276cd5aebad1",
-      "tennis-note-coach-app/styles.css": "e0b0d6fd8ceea5dae0f7d69ce42b3f818f642921fca958159e4ca6f6a0058500",
-      "tennis-note-coach-app/ui/screens.js": "b724754067708bb073ab1bb8e0dee0317f9028933e5f4252eb1c13107395f5a0",
+      "tennis-note-coach-app/index.html": "c16cf6ef5767555a20d4378b055e786a6b1a3866e5ffa9658c8953a408f39078",
+      "tennis-note-coach-app/service-worker.js": "7b7d2368050cc73ff3422aa691a989157542cc2eb1dce089e57fc541ef08625c",
+      "tennis-note-coach-app/styles.css": "2198ff83c514dbf39ec91c418537e7c94bf35c8df5945139e79ed9dbb3866d0c",
+      "tennis-note-coach-app/ui/screens.js": "eb7a27bb29bbaa61bc905a898933e25ab94ac8a8a63a3dcdeefb1ad972315042",
       "tennis-note-coach-app/views/schedule.js": "c02d9388f7c96528e541c5a7759b3f52e7a09063e29277633fdd3ff6651ccd11"
     }
   },
   "admin": {
     "project": "tennisnote-admin-dev",
-    "previous": "804c4690-dad5-4dde-ae9a-2edf78c80cfd",
+    "previous": "22c83f98-f8fd-4a8d-adf0-9a888ad5c9a8",
     "canonical": "6053d5a1-fe01-4867-a933-8f6dea4aedda",
     "baselineDeployment": "804c4690-dad5-4dde-ae9a-2edf78c80cfd",
     "baseline": {
@@ -458,9 +458,9 @@
       "views/tickets.js": "2c496d5ddab4c5cdacbbd0259abfb53755449279839179f20a8da0f0c0f3ef32"
     },
     "changed": {
-      "index.html": "a155410e86e7d5d505c9d3c90b95cf9cea50cf314e9ac587df05403728d9f538",
-      "schedule-v2-admin.js": "e1288c9168f3e00a4ba0e478237065cc11663a5900d8bed63e3a2a4853a5116d",
-      "styles.css": "385091f52e9410a8a221a07acfbeda40fbedba15beee7de9e2d23378347d8734",
+      "index.html": "2f70a87d493da8af1b61781eb7339af83af0e0aeea9d01d01f568dec59522c94",
+      "schedule-v2-admin.js": "1610598907ece02365f1c32093bbf075d60056e4485424d049b01d1ee77046ef",
+      "styles.css": "b1aff78d965de2554d00112bbf11a92659ddbcb4eff29dd3e8faa5f9a2c1954e",
       "views/schedule.js": "c2b501dded5913971a98ec8283831110638c967133cc9b606115005cb45f1b31"
     }
   }

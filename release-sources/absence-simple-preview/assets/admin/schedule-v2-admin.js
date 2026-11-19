@@ -1746,7 +1746,7 @@
     }
     dialog.id = "scheduleV2AbsenceDetail";
     dialog.setAttribute("aria-labelledby", "scheduleV2AbsenceDetailTitle");
-    dialog.style.cssText = "width:min(30rem,calc(100% - 2rem));max-width:none;max-height:85vh;overflow:auto;box-sizing:border-box;color-scheme:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:16px;padding:20px;";
+    dialog.style.cssText = "width:min(30rem,calc(100% - 2rem));max-width:none;max-height:85vh;overflow:auto;box-sizing:border-box;color-scheme:inherit;color:var(--ink,CanvasText);background:var(--paper,Canvas);border:1px solid var(--line,GrayText);border-radius:16px;padding:20px;";
     const units = absenceHistoryUnits(lesson);
     const context = lessonCancellationContext(lesson);
     const deduction = units === null ? "차감 확인 필요" : units === 0 ? "차감 없음" : `${units}회 차감`;
@@ -1773,13 +1773,12 @@
         <summary>원래 수업 변경</summary>
         ${canRestore ? `<button type="button" data-absence-restore${availability ? ' disabled aria-describedby="scheduleV2AbsenceSlotMessage"' : ""}>다시 참석</button>` : ""}
         <p data-absence-restore-message role="status"></p>
-      <details class="tn-absence-correction">
-        <summary>차감 정정</summary>
+      <div class="tn-absence-correction">
         <div data-absence-correction-panel>
           <p class="tn-absence-status"><span>회원권: <strong data-absence-deduction-label>${escapeHtml(deduction)}</strong></span><span>보강: <strong data-absence-makeup-label>${escapeHtml(makeup)}</strong></span></p>
           <p data-absence-correction-note>${escapeHtml(correction)}</p>
         </div>
-      </details>
+      </div>
       </details>
       <details class="tn-absence-more"><summary>더보기</summary><button type="button" data-absence-legacy>기존 취소 관리 화면 열기</button></details>`;
     const latest = () => timetableLessons().find((item) => String(item.id) === String(lesson.id));
@@ -1835,7 +1834,7 @@
       dialog.close();
       openEditor({ date: current.lessonDate, time: current.startTime, coachRoleId: current.coachRoleId, lesson: current });
     });
-    document.body.append(dialog);
+    (trigger?.closest?.("#adminAppShell") || document.body).append(dialog);
     dialog.showModal();
     wireLegacyAbsenceDeduction(dialog, lesson);
     return true;

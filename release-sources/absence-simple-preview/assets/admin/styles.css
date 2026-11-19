@@ -16613,9 +16613,9 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 
 #scheduleV2AbsenceDetail {
   --absence-brand: #116047;
-  --absence-outline: color-mix(in srgb, CanvasText 23%, Canvas);
-  --absence-muted: color-mix(in srgb, CanvasText 75%, Canvas);
-  --absence-soft: color-mix(in srgb, CanvasText 6%, Canvas);
+  --absence-outline: color-mix(in srgb, var(--ink, CanvasText) 23%, var(--paper, Canvas));
+  --absence-muted: color-mix(in srgb, var(--ink, CanvasText) 75%, var(--paper, Canvas));
+  --absence-soft: color-mix(in srgb, var(--ink, CanvasText) 6%, var(--paper, Canvas));
 }
 #scheduleV2AbsenceDetail .tn-absence-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 #scheduleV2AbsenceDetail .tn-absence-head h2 { margin:0; font-size:1.2rem; }
@@ -16624,12 +16624,11 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 #scheduleV2AbsenceDetail [data-absence-slot-message] { color:var(--absence-muted); margin:0; font-size:.875rem; }
 #scheduleV2AbsenceDetail button,
 #scheduleV2AbsenceDetail summary { min-height:44px; }
-#scheduleV2AbsenceDetail button { padding:8px 12px; border:1px solid var(--absence-outline); border-radius:10px; color:CanvasText; background:Canvas; }
+#scheduleV2AbsenceDetail button { padding:8px 12px; border:1px solid var(--absence-outline); border-radius:10px; color:var(--ink,CanvasText); background:var(--paper,Canvas); }
 #scheduleV2AbsenceDetail .tn-absence-slot { display:grid; gap:6px; }
 #scheduleV2AbsenceDetail [data-absence-add]:not(:disabled) { background:var(--absence-brand); border-color:var(--absence-brand); color:white; font-weight:700; }
-#scheduleV2AbsenceDetail:has(.tn-absence-correction[open]) [data-absence-add]:not(:disabled) { color:CanvasText; background:Canvas; border-color:var(--absence-outline); }
 #scheduleV2AbsenceDetail [data-absence-add]:disabled { color:var(--absence-muted); background:var(--absence-soft); opacity:1; }
-#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:14px; border:1px solid var(--absence-outline); border-radius:10px; }
+#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:14px; }
 #scheduleV2AbsenceDetail summary { box-sizing:border-box; padding:11px 10px; }
 #scheduleV2AbsenceDetail .tn-absence-correction summary { font-weight:700; }
 #scheduleV2AbsenceDetail [data-absence-correction-panel] { padding:0 12px 12px; }
@@ -16648,7 +16647,7 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 #scheduleV2AbsenceDetail .tn-absence-restore-help { margin:6px 0; }
 #scheduleV2AbsenceDetail .tn-absence-manage > summary { font-weight:700; }
 #scheduleV2AbsenceDetail .tn-absence-correction { margin-top:6px; }
-#scheduleV2AbsenceDetail:has(.tn-absence-manage[open]) [data-absence-add]:not(:disabled) { background:Canvas;color:CanvasText;border-color:var(--absence-outline); }
+#scheduleV2AbsenceDetail:has(.tn-absence-manage[open]) [data-absence-add]:not(:disabled) { background:var(--paper,Canvas);color:var(--ink,CanvasText);border-color:var(--absence-outline); }
 #scheduleV2OutcomeList > [data-v2-common-field] { grid-column:1/-1;margin:0 0 6px;padding:12px;border:1px solid currentColor;border-radius:10px; }
 #scheduleV2OutcomeList [data-v2-common-field] label { display:grid;gap:4px;min-width:0; }
 #scheduleV2OutcomeList [data-v2-common-field] input { font-size:16px;min-height:44px;min-width:0;max-width:100%; }
@@ -16656,4 +16655,4 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 #scheduleV2AbsenceDetail .tn-absence-manage > summary { min-height:44px; box-sizing:border-box; font-size:16px; cursor:pointer; }
 #scheduleV2AbsenceDetail [data-absence-close] { font:inherit; font-size:16px; min-width:44px; min-height:44px; border-radius:10px; }
 #scheduleV2AbsenceDetail [data-absence-close]:focus-visible { outline:2px solid Highlight; outline-offset:2px; }
-@media (prefers-color-scheme: dark) { #scheduleV2AbsenceDetail { color-scheme:dark !important; } }
+#scheduleV2AbsenceDetail [data-absence-correction-panel] input { color:var(--ink,CanvasText); background:var(--paper,Canvas); border:1px solid var(--absence-outline); border-radius:8px; }

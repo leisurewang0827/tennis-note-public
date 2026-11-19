@@ -6337,6 +6337,5 @@ body.modal-open {
 #coachReleasedAbsenceActions .coach-absence-manage > button,
 #coachPastAbsenceDetail .coach-absence-manage > p { margin: 8px 12px 12px; }
 #coachReleasedAbsenceActions .coach-absence-manage > button { width: calc(100% - 24px) !important; }
-#coachReleasedAbsenceActions [data-absence-close], #coachPastAbsenceDetail [data-coach-past-absence-close] { font: inherit; font-size:16px; min-width:44px; min-height:44px; padding:8px 12px; border:1px solid GrayText; border-radius:10px; background:Canvas; color:CanvasText; }
+#coachReleasedAbsenceActions [data-absence-close], #coachPastAbsenceDetail [data-coach-past-absence-close] { font: inherit; font-size:16px; min-width:44px; min-height:44px; padding:8px 12px; border:1px solid var(--line,GrayText); border-radius:10px; background:var(--paper,Canvas); color:var(--ink,CanvasText); }
 #coachReleasedAbsenceActions [data-absence-close]:focus-visible, #coachPastAbsenceDetail [data-coach-past-absence-close]:focus-visible { outline:2px solid Highlight; outline-offset:2px; }
-@media (prefers-color-scheme: dark) { #coachReleasedAbsenceActions, #coachPastAbsenceDetail { color-scheme:dark !important; --line:#455e4e; } }

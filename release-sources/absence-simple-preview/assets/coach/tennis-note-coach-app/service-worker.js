@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-v584-r4-01f658a88968b11c-entry-4aced5016d566ea1-ui-7423d1e2d58a3c03-group-2727766cd3c5b148-past-scope-f888b98ccbf4-local-ui-v3-v4-focus";
+const CACHE_NAME = "tennis-note-coach-mode-v584-r4-01f658a88968b11c-entry-4aced5016d566ea1-ui-7423d1e2d58a3c03-group-2727766cd3c5b148-past-scope-f888b98ccbf4-local-ui-v3-v4-focus-v5-inline";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./r4-ui-finish.css?v=7423d1e2d58a3c03",
@@ -9,7 +9,7 @@ const APP_SHELL = [
   "./r4-scoped-workspace.css?v=01f658a88968b11c",
   "./",
   "./index.html",
-  "./styles.css?v=local-v4-e0b0d6fd8ceea5da",
+  "./styles.css?v=local-v5-2198ff83c514dbf3",
   "../shared/tennisnote-app-common.js?v=1.0.578",
   "./settings.js?v=1.0.578",
   "./catalog.js?v=1.0.578",
@@ -41,7 +41,7 @@ const APP_SHELL = [
   "./data/push.js?v=1.0.578",
   "./data/records.js?v=group-412f4162d9809089",
   "./ui/sheet.js?v=1.0.578",
-  "./ui/screens.js?v=local-v41-b724754067708bb0",
+  "./ui/screens.js?v=local-v51-eb7a27bb29bbaa61",
   "./actions/records.js?v=group-c253c985210fffb4",
   "./actions/schedule.js?v=local-ui-91723e4d45976b6d",
   "./actions/profile.js?v=1.0.578",

@@ -251,7 +251,7 @@ function openCoachReleasedAbsenceActions(id, trigger) {
   if (typeof dialog.showModal !== "function") { showToast("이 앱에서 불참 상세를 열 수 없습니다."); return; }
   dialog.id = "coachReleasedAbsenceActions";
   dialog.setAttribute("aria-labelledby", "coachReleasedAbsenceTitle");
-  dialog.style.cssText = "width:min(100%,28rem);border:1px solid GrayText;box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:CanvasText;background:Canvas;color-scheme:inherit;max-height:85vh";
+  dialog.style.cssText = "width:min(100%,28rem);border:1px solid var(--line,GrayText);box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:var(--ink,CanvasText);background:var(--paper,Canvas);color-scheme:inherit;max-height:85vh";
   dialog.innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 id="coachReleasedAbsenceTitle" style="margin:0;font-size:1.2rem">불참 수업 상세</h2><button type="button" data-absence-close>닫기</button></header>
     <p><strong>${escapeHtml(start.slot.member || "회원")}</strong><br>${escapeHtml(start.date)} · ${escapeHtml(start.time)} · 불참</p>
     ${start.canAdd ? '<button type="button" class="approve-button" data-absence-new aria-describedby="coachReleasedAbsenceReason" style="min-height:44px;width:100%">다른 회원 수업 등록</button>' : '<p id="coachReleasedAbsenceReason" role="status">이 시간에는 다른 회원의 수업을 등록할 수 없습니다.</p>'}
@@ -274,7 +274,7 @@ function openCoachReleasedAbsenceActions(id, trigger) {
     dialog.close();
     openCoachQuickAdd({dataset:{date:current.date,day:current.slot.day,time:current.time,coachRoleId:current.slot.coachRoleId}});
   };
-  document.body.append(dialog);
+  (trigger?.closest?.("#r4ScopedCoachApp, .coach-shell") || document.body).append(dialog);
   dialog.showModal();
 }
 
@@ -287,12 +287,12 @@ function openCoachPastAbsenceDetail(id, trigger) {
   dialog.id = "coachPastAbsenceDetail";
   dialog.setAttribute("aria-labelledby", "coachPastAbsenceDetailTitle");
   dialog.setAttribute("aria-describedby", "coachPastAbsenceReason");
-  dialog.style.cssText = "width:min(calc(100% - 24px),28rem);border:1px solid GrayText;box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:CanvasText;background:Canvas;color-scheme:inherit;max-height:85vh;overflow:auto";
+  dialog.style.cssText = "width:min(calc(100% - 24px),28rem);border:1px solid var(--line,GrayText);box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:var(--ink,CanvasText);background:var(--paper,Canvas);color-scheme:inherit;max-height:85vh;overflow:auto";
   const makeup = context.entitlement.status === "booked" ? "보강 예약됨" : "보강 대기";
   dialog.innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 id="coachPastAbsenceDetailTitle" style="margin:0;font-size:1.2rem">불참 수업 상세</h2><button type="button" data-coach-past-absence-close style="min-height:44px;min-width:44px">닫기</button></header>
     <p><strong>${escapeHtml(context.slot.member || "회원")}</strong><br>${escapeHtml(context.date)} · ${escapeHtml(context.time)} · 불참</p>
     <p id="coachPastAbsenceReason">이미 시작했거나 지난 수업입니다.</p>
-    <details class="coach-absence-manage"><summary>원래 수업 변경</summary><p>보강: ${escapeHtml(makeup)}</p></details>`;
+    <p>보강: ${escapeHtml(makeup)}</p>`;
   const closeButton = dialog.querySelector("[data-coach-past-absence-close]");
   dialog.addEventListener("close", () => {
     dialog.remove();
@@ -302,7 +302,7 @@ function openCoachPastAbsenceDetail(id, trigger) {
     target?.focus();
   }, { once: true });
   closeButton.onclick = () => dialog.close();
-  document.body.append(dialog);
+  (trigger?.closest?.("#r4ScopedCoachApp, .coach-shell") || document.body).append(dialog);
   dialog.showModal();
   closeButton.focus();
 }
