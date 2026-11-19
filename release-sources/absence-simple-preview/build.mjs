@@ -1,3 +1,4 @@
+// DEV canonical pin corrected independently of sealed baseline asset selection.
 import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';import {dirname,join} from 'node:path';
 const root='release-sources/absence-simple-preview',m=JSON.parse(readFileSync(join(root,'manifest.json'))),hash=b=>createHash('sha256').update(b).digest('hex'),git=(...a)=>execFileSync('git',a,{encoding:'utf8'}).trim();
 assert.equal(process.env.GITHUB_REPOSITORY,m.repo);assert.equal(process.env.GITHUB_REF,'refs/heads/'+m.branch);assert.equal(process.env.GITHUB_EVENT_NAME,'push');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);assert.equal(git('rev-list','--parents','-n','1','HEAD'),`${process.env.GITHUB_SHA} ${m.parent}`);

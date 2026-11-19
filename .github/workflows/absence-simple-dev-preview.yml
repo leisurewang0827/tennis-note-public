@@ -1,5 +1,6 @@
 name: Absence simple DEV previews
 # Correction: unchanged DEV assets are read from the matching sealed DEV source.
+# Correction: pin the observed DEV administrator canonical deployment.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
