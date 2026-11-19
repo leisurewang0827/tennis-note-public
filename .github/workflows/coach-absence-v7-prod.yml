@@ -1,4 +1,5 @@
 name: Coach absence v7 production
+# Readiness v2: exact previous fingerprints are pending, never accepted as success.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]

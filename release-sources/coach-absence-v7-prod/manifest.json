@@ -2,7 +2,7 @@
   "kind": "COACH_ABSENCE_V7_PROD_V1",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
-  "parent": "35398a872fcf642fb6683b157255501ba3bd57d6",
+  "parent": "0de42920a8b0e610ff37c0ff2c3361509296ea78",
   "productSource": "35398a872fcf642fb6683b157255501ba3bd57d6",
   "prior": "bf0a885a-e26e-4ff6-90dc-a13d7c44e7ba",
   "priorSource": "deae63d254235a5ff8d837ce7e502654b6d50c7b",
@@ -286,7 +286,7 @@
     "tennis-note-coach-app/ui/screens.js": "bfce9eabc2fe3dd1e68ae90b77b6f3f840b7c6b789cd1c70e1da7382d46ddb51",
     "tennis-note-coach-app/views/schedule.js": "c02d9388f7c96528e541c5a7759b3f52e7a09063e29277633fdd3ff6651ccd11"
   },
-  "readinessHash": "fddb3c81a009c05baf3caf8829247110440639a815f88e3e167a50036d99c618",
+  "readinessHash": "dd71a6c6371e29716e7b46ee24ccc3db5cc22538591f0f46959db40b304a6348",
   "devEvidence": {
     "run": 44509453623,
     "job": 135509548909,
@@ -296,5 +296,6 @@
     "deployment": "6797541e-464b-4b8a-b9fc-f72065e54874",
     "hosted": "v7/HOSTED-CLOSURE.md",
     "independentSource": "v7/SOURCE-INDEPENDENT-REVIEW.md"
-  }
+  },
+  "readinessPolicy": "known-exact-previous-is-pending-only-60s-6-rounds"
 }
