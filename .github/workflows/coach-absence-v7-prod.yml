@@ -1,5 +1,5 @@
 name: Coach absence v7 production
-# Readiness v2: exact previous fingerprints are pending, never accepted as success.
+# 완료 파일을 필수 검증·보관한다. 이 후보는 승인 없이 운영에 실행하지 않는다.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
@@ -9,7 +9,7 @@ concurrency: {group: cloudflare-pages, cancel-in-progress: false}
 jobs:
   verify-source:
     name: verify-source
-    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    if: ${{ false }} # 검사 전용 후보: 기존 조립·기능 검사를 재실행하지 않는다.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '24'}
       - name: Verify new production connection only
-        run: node release-sources/coach-absence-v7-prod/readiness.test.mjs
+        run: node release-sources/coach-absence-v7-prod/completion.test.mjs
       - name: Assemble exact verified coach bodies on production baseline
         env: {GH_TOKEN: '${{ github.token }}'}
         run: node release-sources/coach-absence-v7-prod/runner.mjs build
@@ -30,6 +30,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   publish:
+    if: ${{ false }} # 검사 전용 후보: 보호 환경·비밀값·게시 작업에 진입하지 않는다.
     needs: verify-source
     environment: {name: tennisnote-r4-admin-production, deployment: false}
     runs-on: ubuntu-latest
@@ -57,4 +58,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'
           CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
           EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
-        run: node release-sources/coach-absence-v7-prod/runner.mjs publish
+        run: |
+          set -euo pipefail
+          test ! -e "$RUNNER_TEMP/coach-absence-v7-completion/result.json"
+          node release-sources/coach-absence-v7-prod/runner.mjs publish
+      - name: Require exact completed evidence even after premature exit
+        if: always()
+        run: node release-sources/coach-absence-v7-prod/completion.mjs verify
+      - name: Retain completed evidence independently of console logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 'coach-completion-${{ github.run_id }}-${{ github.run_attempt }}'
+          path: '${{ runner.temp }}/coach-absence-v7-completion/result.json'
+          if-no-files-found: error
+          retention-days: 7

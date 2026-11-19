@@ -1,0 +1,26 @@
+name: Coach completion evidence inspection only
+on:
+  push:
+    branches: [codex/tennisnote-r4-admin-prod-candidate]
+    paths: ['.github/workflows/coach-completion-guard-ci.yml']
+permissions: {contents: read}
+jobs:
+  verify-missing-evidence:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 1, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Require missing completion evidence to be rejected
+        run: node release-sources/coach-absence-v7-prod/completion-ci.mjs
+      - name: Retain actual checker exit and inspection identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 'coach-completion-inspection-${{ github.run_id }}-${{ github.run_attempt }}'
+          path: '${{ runner.temp }}/coach-completion-ci/inspection.json'
+          if-no-files-found: error
+          retention-days: 7
