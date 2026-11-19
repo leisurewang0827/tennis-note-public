@@ -44,6 +44,68 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
   return workspace;
 }
 
+function coachPastLegacyEntitlements(workspace, rows, scope) {
+  if (!scope || !scope.sameIdentity() || workspace?.branchId !== scope.branch || !Array.isArray(rows)) return [];
+  const lessons = Array.isArray(workspace.lessons) ? workspace.lessons : [];
+  const existing = Array.isArray(workspace.makeupEntitlements) ? workspace.makeupEntitlements : [];
+  const value = x => String(x || "");
+  return rows.flatMap((row) => {
+    const id = value(row.id), source = value(row.source_lesson_id), ticket = value(row.ticket_id);
+    if (!id || !source || !ticket || value(row.branch_id) !== scope.branch || value(row.coach_role_id) !== scope.role
+      || !["open", "booked"].includes(row.status)) return [];
+    if (rows.filter(x => value(x.id) === id || (value(x.source_lesson_id) === source && value(x.ticket_id) === ticket)).length !== 1
+      || existing.some(x => value(x.id) === id || (value(x.sourceLessonId) === source && value(x.ticketId) === ticket))) return [];
+    const matches = lessons.filter(x => value(x.id) === source);
+    if (matches.length !== 1) return [];
+    const lesson = matches[0], date = value(lesson.lessonDate), time = value(lesson.startTime).slice(0, 5);
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+    if (lesson.status !== "cancelled" || value(lesson.coachRoleId) !== scope.role || !Number.isFinite(start) || start >= Date.now()) return [];
+    const sourceParticipants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    if (sourceParticipants.some(x => !value(x?.userId) || !value(x?.ticketId))) return [];
+    const participants = sourceParticipants.filter(x => value(x.ticketId) === ticket);
+    if (participants.length !== 1 || !value(participants[0].userId) || !value(participants[0].name)) return [];
+    return [{ id, sourceLessonId: source, ticketId: ticket, userId: value(participants[0].userId),
+      memberName: value(participants[0].name), coachRoleId: scope.role, branchId: scope.branch,
+      durationMinutes: Number(row.duration_minutes) || 20, status: row.status,
+      reason: row.reason || "회원 사전 불참", bookedLessonId: row.booked_lesson_id || "", pastAbsenceOnly: true }];
+  });
+}
+
+function coachFutureLegacyEntitlements(workspace, rows, scope, now = Date.now()) {
+  if (!scope || !scope.sameIdentity() || workspace?.branchId !== scope.branch
+    || String(workspace.actor?.coachRoleId || "") !== scope.role
+    || String(workspace.actor?.userId || "") !== scope.profile || !Array.isArray(rows)) return [];
+  const lessons = Array.isArray(workspace.lessons) ? workspace.lessons : [];
+  const existing = Array.isArray(workspace.makeupEntitlements) ? workspace.makeupEntitlements : [];
+  const value = x => String(x || "");
+  return rows.flatMap(row => {
+    const id = value(row?.id), source = value(row?.source_lesson_id), ticket = value(row?.ticket_id);
+    if (!id || !source || !ticket || value(row.branch_id) !== scope.branch || value(row.coach_role_id) !== scope.role
+      || !["open", "booked"].includes(row.status)) return [];
+    if (rows.filter(x => value(x?.id) === id || (value(x?.source_lesson_id) === source && value(x?.ticket_id) === ticket)).length !== 1
+      || existing.some(x => value(x.id) === id || (value(x.sourceLessonId) === source && value(x.ticketId) === ticket))) return [];
+    const matches = lessons.filter(x => value(x.id) === source);
+    if (matches.length !== 1) return [];
+    const lesson = matches[0], date = value(lesson.lessonDate), time = value(lesson.startTime).slice(0, 5);
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+    const duration = Number(row.duration_minutes);
+    if (lesson.status !== "cancelled" || value(lesson.coachRoleId) !== scope.role || !Number.isFinite(start) || start <= now
+      || new Date(start + 9 * 60 * 60 * 1000).toISOString().slice(0, 16) !== `${date}T${time}`
+      || !Number.isSafeInteger(duration) || duration <= 0 || duration !== Number(lesson.durationMinutes)) return [];
+    const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    if (participants.some(x => !value(x?.userId) || !value(x?.ticketId))) return [];
+    const matching = participants.filter(x => value(x.ticketId) === ticket);
+    if (matching.length !== 1 || !value(matching[0].userId) || !value(matching[0].name)) return [];
+    const proof = coachPastAbsenceProof(scope, workspace.branchId, source, scope.role,
+      value(matching[0].userId), ticket, lessons, participants, value(matching[0].name));
+    if (!proof) return [];
+    return [{ id, sourceLessonId: source, ticketId: ticket, userId: proof.userId,
+      memberName: proof.memberName, coachRoleId: scope.role, branchId: scope.branch,
+      durationMinutes: duration, status: row.status, reason: row.reason || "회원 사전 불참",
+      bookedLessonId: row.booked_lesson_id || "", futureLegacyAbsence: true }];
+  });
+}
+
 async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = ++coachScheduleV2RequestSequence;
@@ -92,6 +154,19 @@ async function syncCoachScheduleV2(options = {}) {
     await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     const verifiedPastScope = activateCoachPastAbsenceScope(pastAbsenceScope, workspace.branchId);
+    if (verifiedPastScope) {
+      const pastIds = (workspace.lessons || []).filter(lesson => lesson.status === "cancelled"
+        && String(lesson.coachRoleId || "") === pastAbsenceScope.role && lesson.id).map(lesson => lesson.id);
+      if (pastIds.length) {
+        const legacyRows = await client.selectRows("tn_makeup_entitlements", {
+          select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,booked_lesson_id",
+          filters: { branch_id: branchId, source_lesson_id: { in: pastIds } }, limit: 300,
+        }).catch(() => null);
+        if (requestId !== coachScheduleV2RequestSequence) return false;
+        workspace.pastLegacyAbsences = coachPastLegacyEntitlements(workspace, legacyRows, pastAbsenceScope);
+        workspace.futureLegacyAbsenceRows = Array.isArray(legacyRows) ? legacyRows : [];
+      }
+    }
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,

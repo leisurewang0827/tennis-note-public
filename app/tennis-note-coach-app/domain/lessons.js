@@ -251,7 +251,8 @@ function coachPastAbsenceDetailContext(entitlementId, expectedSlot) {
   const id = String(entitlementId || "");
   if (!id) return null;
   const slots = (state.releasedMakeupSlots || []).filter((item) => String(item.entitlementId || "") === id);
-  const entitlements = (state.makeupEntitlements || []).filter((item) => String(item.id || "") === id);
+  const entitlements = [...(state.makeupEntitlements || []), ...(state.pastLegacyAbsenceEntitlements || [])]
+    .filter((item) => String(item.id || "") === id);
   if (slots.length !== 1 || entitlements.length !== 1) return null;
   const slot = slots[0], entitlement = entitlements[0];
   const proof = entitlement.pastAbsenceProof;

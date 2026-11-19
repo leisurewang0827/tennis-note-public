@@ -6330,3 +6330,19 @@ body.modal-open {
   background: var(--green);
   font-weight: 900;
 }
+#coachReleasedAbsenceActions .coach-absence-manage,
+#coachPastAbsenceDetail .coach-absence-manage { margin-top: 14px; border: 1px solid var(--line, GrayText); border-radius: 10px; }
+#coachReleasedAbsenceActions .coach-absence-manage > summary,
+#coachPastAbsenceDetail .coach-absence-manage > summary { min-height: 44px; box-sizing: border-box; padding: 11px 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
+#coachReleasedAbsenceActions .coach-absence-manage > button,
+#coachPastAbsenceDetail .coach-absence-manage > p { margin: 8px 12px 12px; }
+#coachReleasedAbsenceActions .coach-absence-manage > button { width: calc(100% - 24px) !important; }
+#coachReleasedAbsenceActions [data-absence-close], #coachPastAbsenceDetail [data-coach-past-absence-close] { font: inherit; font-size:16px; min-width:44px; min-height:44px; padding:8px 12px; border:1px solid var(--line,GrayText); border-radius:10px; background:var(--paper,Canvas); color:var(--ink,CanvasText); }
+#coachReleasedAbsenceActions [data-absence-close]:focus-visible, #coachPastAbsenceDetail [data-coach-past-absence-close]:focus-visible { outline:2px solid Highlight; outline-offset:2px; }
+#coachReleasedAbsenceActions .coach-absence-manage { width:100%; padding:0; border:0; margin-top:12px; }
+#coachReleasedAbsenceActions [data-absence-new], #coachReleasedAbsenceActions .coach-absence-manage > summary { box-sizing:border-box; display:flex; align-items:center; width:100%; height:48px; min-height:48px; padding:11px 12px; border:1px solid var(--line,GrayText); border-radius:10px; font-family:inherit; font-size:16px; line-height:24px; font-weight:600; }
+#coachReleasedAbsenceActions [data-absence-new] { justify-content:center; }
+#coachReleasedAbsenceActions .coach-absence-manage > summary { justify-content:space-between; list-style:none; cursor:pointer; }
+#coachReleasedAbsenceActions .coach-absence-manage > summary::-webkit-details-marker { display:none; }
+#coachReleasedAbsenceActions .coach-absence-manage > summary::after { content:'⌄'; }
+#coachReleasedAbsenceActions .coach-absence-manage[open] > summary::after { content:'⌃'; }

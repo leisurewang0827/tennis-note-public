@@ -318,7 +318,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                   ? `${memberName} 불참으로 발생`
                   : coachScheduleRoundLabel(lesson);
                 const cardNote = lesson.releasedMakeupSlot
-                  ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
+                  ? (lesson.historicalReleasedSlot ? (lesson.pastAbsenceOnly ? "" : "차감 없음") : "보강·원데이 가능")
                   : note;
                 return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml([lesson.displayTimeRange, roundOrState].filter(Boolean).join(" · "))}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
@@ -356,10 +356,29 @@ function renderCoachMineEmptyState(policy, scheduleLessons) {
     </section>`;
 }
 
+function renderCoachMobileOutsideLessons(day, segments, scheduleLessons, policy) {
+  const outside = scheduleLessons.filter((lesson) => lesson.day === day
+    && (!lesson.releasedMakeupSlot || lesson.historicalReleasedSlot)
+    && (lessonBelongsToCurrentCoach(lesson) || lessonAssignedToCurrentCoachForTasks(lesson))
+    && !segments.some((segment) => (
+    makeCoachStartTimes(segment.start, segment.end).includes(String(lesson.time || ""))
+  )));
+  if (!outside.length) return "";
+  return `<section class="coach-mobile-outside-lessons" aria-label="운영시간 밖 기존 수업">
+    <strong>기존 수업</strong>${outside.map((lesson) => {
+      const member = String(lesson.member || "회원").trim() || "회원";
+      const label = lesson.releasedMakeupSlot ? (lesson.historicalReleasedSlot ? `${member} · 불참` : "예약 가능한 빈자리") : member;
+      const detail = lesson.releasedMakeupSlot ? (lesson.historicalReleasedSlot ? "" : `${member} 불참으로 발생`) : coachScheduleRoundLabel(lesson);
+      const note = lesson.releasedMakeupSlot ? (lesson.historicalReleasedSlot ? "" : "보강·원데이 가능") : coachScheduleExceptionLabel(lesson);
+      return `<button class="coach-outside-lesson" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="display:block;width:100%;min-height:44px;margin:8px 0;padding:10px 12px;text-align:left;white-space:normal;word-break:keep-all;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink)"><strong>${escapeHtml(label)}</strong><span style="display:block;margin-top:4px;color:var(--muted)">${escapeHtml([lesson.time, detail, note].filter(Boolean).join(" · "))}</span></button>`;
+    }).join("")}</section>`;
+}
+
 function renderCoachMobileSchedule(policy, scheduleLessons) {
   const selectedDay = selectedCoachScheduleDay();
   const mineEmptyState = renderCoachMineEmptyState(policy, scheduleLessons);
   const segments = coachMobileScheduleSegments(selectedDay, policy, scheduleLessons);
+  const outsideLessons = renderCoachMobileOutsideLessons(selectedDay, segments, scheduleLessons, policy);
   return `
     <div class="coach-mobile-schedule">
       <div class="coach-mobile-day-strip" aria-label="날짜 선택">
@@ -369,7 +388,8 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
       ${renderCoachMobileLockedTimeControl(selectedDay, policy)}
       ${mineEmptyState || (segments.length
         ? segments.map((segment, index) => `${index > 0 ? `<div class="coach-mobile-break"><strong>${segments[index - 1].end}~${segment.start}</strong><span>수업 없음</span></div>` : ""}${renderCoachMobileSegment(selectedDay, segment, policy, scheduleLessons)}`).join("")
-        : `<p class="coach-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`)}
+        : outsideLessons ? "" : `<p class="coach-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`)}
+      ${outsideLessons}
     </div>`;
 }
 

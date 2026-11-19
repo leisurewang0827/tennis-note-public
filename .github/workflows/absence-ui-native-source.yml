@@ -1,0 +1,16 @@
+name: Freeze verified coach UI for native builds
+on:
+  push:
+    branches: [codex/tennisnote-r4-admin-prod-candidate]
+    paths: ['.github/workflows/absence-ui-native-source.yml']
+permissions: {contents: read}
+jobs:
+  verify-native-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - run: node release-promotions/absence-ui-native-v7/check.mjs

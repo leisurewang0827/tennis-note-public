@@ -132,7 +132,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
 
   const rawLessonsById = new Map((workspace.lessons || []).map((lesson) => [lesson.id, lesson]));
   const coachesByRoleId = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
-  state.makeupEntitlements = (workspace.makeupEntitlements || []).map((entitlement) => {
+  const futureLegacyAbsences = coachFutureLegacyEntitlements(workspace, workspace.futureLegacyAbsenceRows, pastAbsenceScope);
+  state.makeupEntitlements = [...(workspace.makeupEntitlements || []), ...futureLegacyAbsences].map((entitlement) => {
     const sourceLesson = rawLessonsById.get(entitlement.sourceLessonId) || {};
     const bookedLesson = rawLessonsById.get(entitlement.bookedLessonId) || {};
     const proof = coachPastAbsenceProof(pastAbsenceScope, workspace.branchId, entitlement.sourceLessonId,
@@ -145,6 +146,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       userId: entitlement.userId || "",
       branchId: proof?.branch || "",
       pastAbsenceProof: proof,
+      ...(entitlement.futureLegacyAbsence === true ? { futureLegacyAbsence: true } : {}),
       coachRoleId: entitlement.coachRoleId,
       coach: coachesByRoleId.get(entitlement.coachRoleId)?.name || "담당 코치",
       member: entitlement.memberName || "회원",
@@ -191,6 +193,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       userId: entitlement.userId,
       ticketId: entitlement.ticketId,
       pastAbsenceProof: entitlement.pastAbsenceProof,
+      ...(entitlement.futureLegacyAbsence === true ? { futureLegacyAbsence: true, branchId: entitlement.branchId } : {}),
       type: historicalReleasedSlot
         ? `정규 · 불참 · 차감 없음 ${entitlement.durationMinutes}분`
         : `정규 · 불참 · 보강·원데이 가능 ${entitlement.durationMinutes}분`,
@@ -200,6 +203,27 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       task: "보강 가능",
     }];
   });
+
+  // Legacy 과거 불참은 조회 전용 상태로 분리해 기존 보강 예약 목록을 바꾸지 않는다.
+  state.pastLegacyAbsenceEntitlements = (workspace.pastLegacyAbsences || []).flatMap((entitlement) => {
+    const sourceLesson = rawLessonsById.get(entitlement.sourceLessonId) || {};
+    const proof = coachPastAbsenceProof(pastAbsenceScope, workspace.branchId, entitlement.sourceLessonId,
+      entitlement.coachRoleId, entitlement.userId, entitlement.ticketId, workspace.lessons, sourceLesson.participants, entitlement.memberName);
+    if (!proof) return [];
+    return [{ ...entitlement, pastAbsenceProof: proof, branchId: proof.branch,
+      originalDate: sourceLesson.lessonDate || "", originalTime: String(sourceLesson.startTime || "").slice(0, 5),
+      coach: coachesByRoleId.get(entitlement.coachRoleId)?.name || "담당 코치", member: proof.memberName }];
+  });
+  state.releasedMakeupSlots.push(...state.pastLegacyAbsenceEntitlements.map((entitlement) => {
+    const dayIndex = new Date(`${entitlement.originalDate}T00:00:00`).getDay();
+    return { id: `released-${entitlement.id}`, releasedMakeupSlot: true, historicalReleasedSlot: true,
+      lessonDate: entitlement.originalDate, day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
+      time: entitlement.originalTime, coach: entitlement.coach, coachRoleId: entitlement.coachRoleId,
+      member: entitlement.member, releasedOriginalMember: entitlement.member, entitlementId: entitlement.id,
+      sourceLessonId: entitlement.sourceLessonId, userId: entitlement.userId, ticketId: entitlement.ticketId,
+      pastAbsenceProof: entitlement.pastAbsenceProof, pastAbsenceOnly: true, type: `정규 · 불참 ${entitlement.durationMinutes}분`,
+      lessonSource: "makeup", durationMinutes: entitlement.durationMinutes, status: "available", task: "보강 가능" };
+  }));
 
   const latestLessonByUserId = new Map();
   [...mappedLessons]
