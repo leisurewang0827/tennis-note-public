@@ -1779,8 +1779,7 @@
           <p data-absence-correction-note>${escapeHtml(correction)}</p>
         </div>
       </div>
-      </details>
-      <details class="tn-absence-more"><summary>더보기</summary><button type="button" data-absence-legacy>기존 취소 관리 화면 열기</button></details>`;
+      </details>`;
     const latest = () => timetableLessons().find((item) => String(item.id) === String(lesson.id));
     let movingToEditor = false;
     dialog.addEventListener("close", () => {
@@ -1823,16 +1822,6 @@
       dialog.close();
       openEditor({ date: current.lessonDate, time: current.startTime, coachRoleId: current.coachRoleId,
         kind: current.scheduleKind, absenceReplacementDuration: Number(current.durationMinutes) });
-    });
-    dialog.querySelector("[data-absence-legacy]").addEventListener("click", () => {
-      const current = latest();
-      if (!isAbsenceHistory(current)) {
-        dialog.querySelector("[data-absence-slot-message]").textContent = "원래 불참 기록이 바뀌었습니다. 다시 열어 주세요.";
-        return;
-      }
-      movingToEditor = true;
-      dialog.close();
-      openEditor({ date: current.lessonDate, time: current.startTime, coachRoleId: current.coachRoleId, lesson: current });
     });
     (trigger?.closest?.("#adminAppShell") || document.body).append(dialog);
     dialog.showModal();

@@ -16656,3 +16656,10 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 #scheduleV2AbsenceDetail [data-absence-close] { font:inherit; font-size:16px; min-width:44px; min-height:44px; border-radius:10px; }
 #scheduleV2AbsenceDetail [data-absence-close]:focus-visible { outline:2px solid Highlight; outline-offset:2px; }
 #scheduleV2AbsenceDetail [data-absence-correction-panel] input { color:var(--ink,CanvasText); background:var(--paper,Canvas); border:1px solid var(--absence-outline); border-radius:8px; }
+#scheduleV2AbsenceDetail .tn-absence-manage { width:100%; padding:0; border:0; margin-top:12px; }
+#scheduleV2AbsenceDetail [data-absence-add], #scheduleV2AbsenceDetail .tn-absence-manage > summary { box-sizing:border-box; display:flex; align-items:center; width:100%; height:48px; min-height:48px; padding:11px 12px; border:1px solid var(--absence-outline); border-radius:10px; font-family:inherit; font-size:16px; line-height:24px; font-weight:600; }
+#scheduleV2AbsenceDetail [data-absence-add] { justify-content:center; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary { justify-content:space-between; list-style:none; cursor:pointer; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary::-webkit-details-marker { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary::after { content:'⌄'; }
+#scheduleV2AbsenceDetail .tn-absence-manage[open] > summary::after { content:'⌃'; }

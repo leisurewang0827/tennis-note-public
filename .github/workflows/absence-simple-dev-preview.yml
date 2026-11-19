@@ -2,6 +2,7 @@ name: Absence simple DEV previews
 # Correction: unchanged DEV assets are read from the matching sealed DEV source.
 # Correction: pin the observed DEV administrator canonical deployment.
 # DEV-only v5.1: consistent surface and single disclosure.
+# DEV-only v6: equal action boxes and remove duplicate shortcut.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
