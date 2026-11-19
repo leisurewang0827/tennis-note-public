@@ -18,11 +18,11 @@ jobs:
         with: {node-version: '24'}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: r4-branch-finance-admin-source-43391633723
-          run-id: 43391633723
+          name: admin-absence-group-44433060159
+          run-id: 44433060159
           github-token: '${{ github.token }}'
-          path: '${{ runner.temp }}/admin-absence-group-base'
-      - name: Verify sealed administrator overlay
+          path: '${{ runner.temp }}/admin-absence-group-previous'
+      - name: Verify and rebind previously sealed administrator artifact
         env: {GH_TOKEN: '${{ github.token }}'}
         run: node release-sources/admin-absence-group/runner.mjs build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
