@@ -2,11 +2,11 @@
   "kind": "ABSENCE_SIMPLE_DEV_PREVIEW_V41",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
-  "parent": "0893558530dc6e83338eee11913ede083d46f5a0",
+  "parent": "f614ba302dd0293cdf845ce6683777eabc039da8",
   "previewBranch": "r4-absence-group-qa",
   "coach": {
     "project": "tennisnote-app-dev",
-    "previous": "3534ce1d-ddfc-4466-9bcc-05ec36f8b763",
+    "previous": "7fef3278-ad8d-4119-83f0-5d1eeb6a6165",
     "canonical": "035ade34-d322-42f0-8b17-5c66b57dd59d",
     "baselineDeployment": "a037622b-ce3b-4159-9b5f-a7e2b069c9f7",
     "baseline": {
@@ -266,20 +266,20 @@
       "tennis-note-coach-app/r4-ui-finish.js": "5508d19c7c573d6a4809b751e9b54a3af948e4d3ecab27ed5b41b45d7412a3f2"
     },
     "changed": {
-      "tennis-note-coach-app/actions/schedule.js": "91723e4d45976b6de42fa24a499c6e2c63cb2e6d795ec5c074f753dd86ee080b",
-      "tennis-note-coach-app/data/sync.js": "d9b53c5e3aa1af82ab0756c827ebb35d129e1c99d3236516b2a66cbf5e777d62",
+      "tennis-note-coach-app/actions/schedule.js": "1a9da4069b304366d3c1c7af283ecc4b782747ca9fb7d94680eb474518e07ce6",
+      "tennis-note-coach-app/data/sync.js": "a5b9153643fa8e653b15a6ea684c469006866a0e3098f13f55ad8d673db9f67e",
       "tennis-note-coach-app/domain/lessons.js": "1ae3d9b6116dbdf00bad5a40489da9500f5303103bd6c1219d009f5b86b79f31",
       "tennis-note-coach-app/events/delegated.js": "d1cc477882966a1d7d05281fe81bb94b266106ae79923cfe7085092eb4385f2a",
-      "tennis-note-coach-app/index.html": "2f39f302c19a27670b3970f3f25c60a28d51d9733847d3b68c32f3e53e37691f",
-      "tennis-note-coach-app/service-worker.js": "f379bfad4362237dd3ab6d471ee2494413f977ed4ddaf17821436d19a805407f",
+      "tennis-note-coach-app/index.html": "98312577e85f6349cf916acebcec3838cb033a5a4a1f418f6a8d66cafb9f24ac",
+      "tennis-note-coach-app/service-worker.js": "8c2d8fc505a5a9443cd582eb5e8ff388951d8cd0365078572351dd84181fee4b",
       "tennis-note-coach-app/styles.css": "a8056c98ddfa9fc23046b6a2221b0413464c58b9fb38103cb618752f38b5122e",
-      "tennis-note-coach-app/ui/screens.js": "eb7a27bb29bbaa61bc905a898933e25ab94ac8a8a63a3dcdeefb1ad972315042",
+      "tennis-note-coach-app/ui/screens.js": "bfce9eabc2fe3dd1e68ae90b77b6f3f840b7c6b789cd1c70e1da7382d46ddb51",
       "tennis-note-coach-app/views/schedule.js": "c02d9388f7c96528e541c5a7759b3f52e7a09063e29277633fdd3ff6651ccd11"
     }
   },
   "admin": {
     "project": "tennisnote-admin-dev",
-    "previous": "3522c517-7fd2-4f29-a573-f79db5ec4116",
+    "previous": "6d340d5a-08fe-40c2-96e4-412d98d999a9",
     "canonical": "6053d5a1-fe01-4867-a933-8f6dea4aedda",
     "baselineDeployment": "804c4690-dad5-4dde-ae9a-2edf78c80cfd",
     "baseline": {

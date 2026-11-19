@@ -71,6 +71,41 @@ function coachPastLegacyEntitlements(workspace, rows, scope) {
   });
 }
 
+function coachFutureLegacyEntitlements(workspace, rows, scope, now = Date.now()) {
+  if (!scope || !scope.sameIdentity() || workspace?.branchId !== scope.branch
+    || String(workspace.actor?.coachRoleId || "") !== scope.role
+    || String(workspace.actor?.userId || "") !== scope.profile || !Array.isArray(rows)) return [];
+  const lessons = Array.isArray(workspace.lessons) ? workspace.lessons : [];
+  const existing = Array.isArray(workspace.makeupEntitlements) ? workspace.makeupEntitlements : [];
+  const value = x => String(x || "");
+  return rows.flatMap(row => {
+    const id = value(row?.id), source = value(row?.source_lesson_id), ticket = value(row?.ticket_id);
+    if (!id || !source || !ticket || value(row.branch_id) !== scope.branch || value(row.coach_role_id) !== scope.role
+      || !["open", "booked"].includes(row.status)) return [];
+    if (rows.filter(x => value(x?.id) === id || (value(x?.source_lesson_id) === source && value(x?.ticket_id) === ticket)).length !== 1
+      || existing.some(x => value(x.id) === id || (value(x.sourceLessonId) === source && value(x.ticketId) === ticket))) return [];
+    const matches = lessons.filter(x => value(x.id) === source);
+    if (matches.length !== 1) return [];
+    const lesson = matches[0], date = value(lesson.lessonDate), time = value(lesson.startTime).slice(0, 5);
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+    const duration = Number(row.duration_minutes);
+    if (lesson.status !== "cancelled" || value(lesson.coachRoleId) !== scope.role || !Number.isFinite(start) || start <= now
+      || new Date(start + 9 * 60 * 60 * 1000).toISOString().slice(0, 16) !== `${date}T${time}`
+      || !Number.isSafeInteger(duration) || duration <= 0 || duration !== Number(lesson.durationMinutes)) return [];
+    const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    if (participants.some(x => !value(x?.userId) || !value(x?.ticketId))) return [];
+    const matching = participants.filter(x => value(x.ticketId) === ticket);
+    if (matching.length !== 1 || !value(matching[0].userId) || !value(matching[0].name)) return [];
+    const proof = coachPastAbsenceProof(scope, workspace.branchId, source, scope.role,
+      value(matching[0].userId), ticket, lessons, participants, value(matching[0].name));
+    if (!proof) return [];
+    return [{ id, sourceLessonId: source, ticketId: ticket, userId: proof.userId,
+      memberName: proof.memberName, coachRoleId: scope.role, branchId: scope.branch,
+      durationMinutes: duration, status: row.status, reason: row.reason || "회원 사전 불참",
+      bookedLessonId: row.booked_lesson_id || "", futureLegacyAbsence: true }];
+  });
+}
+
 async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = ++coachScheduleV2RequestSequence;
@@ -129,6 +164,7 @@ async function syncCoachScheduleV2(options = {}) {
         }).catch(() => null);
         if (requestId !== coachScheduleV2RequestSequence) return false;
         workspace.pastLegacyAbsences = coachPastLegacyEntitlements(workspace, legacyRows, pastAbsenceScope);
+        workspace.futureLegacyAbsenceRows = Array.isArray(legacyRows) ? legacyRows : [];
       }
     }
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];

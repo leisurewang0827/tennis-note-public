@@ -3,6 +3,7 @@ name: Absence simple DEV previews
 # Correction: pin the observed DEV administrator canonical deployment.
 # DEV-only v5.1: consistent surface and single disclosure.
 # DEV-only v6: equal action boxes and remove duplicate shortcut.
+# DEV-only v7: current-identity future absence read adapter only.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]

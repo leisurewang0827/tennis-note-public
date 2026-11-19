@@ -225,6 +225,13 @@ function coachReleasedAbsenceStatus(entitlementId, now = Date.now()) {
   if (!slot || !entitlement || !["open","booked"].includes(entitlement.status) || !canProcessLesson(slot)) {
     return { message:"불참 수업의 최신 상태와 담당 코치를 확인해 주세요." };
   }
+  if (entitlement.futureLegacyAbsence === true && (slot.futureLegacyAbsence !== true
+    || !coachPastAbsenceProofCurrent(entitlement.pastAbsenceProof, entitlement, slot)
+    || slot.branchId !== entitlement.branchId || slot.sourceLessonId !== entitlement.sourceLessonId
+    || slot.coachRoleId !== entitlement.coachRoleId || slot.lessonDate !== entitlement.originalDate
+    || slot.time !== entitlement.originalTime || slot.durationMinutes !== entitlement.durationMinutes)) {
+    return { message:"불참 수업의 최신 상태와 담당 코치를 확인해 주세요." };
+  }
   const date = String(slot.lessonDate || "");
   const time = String(slot.time || "").slice(0,5);
   const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
