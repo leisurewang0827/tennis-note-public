@@ -48,13 +48,16 @@ async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = ++coachScheduleV2RequestSequence;
   const branchId = state.coach?.branchId || "";
+  const pastAbsenceScope = beginCoachPastAbsenceScope(client);
   if (!client?.rpc || !client.getSession?.()?.access_token || !branchId) return false;
   const week = activeScheduleWeek();
   const syncRange = coachScheduleV2SyncRange(week);
   const cacheKey = `${branchId}:${syncRange.startDate}:${syncRange.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
+    const verified = cached.pastAbsenceScope?.sameIdentity?.() && activateCoachPastAbsenceScope(pastAbsenceScope, cached.workspace?.branchId);
+    cached.pastAbsenceScope = verified ? pastAbsenceScope : null;
+    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests, cached.pastAbsenceScope);
   }
   try {
     const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests] = await Promise.all([
@@ -88,6 +91,7 @@ async function syncCoachScheduleV2(options = {}) {
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
     await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
     if (requestId !== coachScheduleV2RequestSequence) return false;
+    const verifiedPastScope = activateCoachPastAbsenceScope(pastAbsenceScope, workspace.branchId);
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,
@@ -96,12 +100,14 @@ async function syncCoachScheduleV2(options = {}) {
       oneDayRows: Array.isArray(oneDayRows) ? oneDayRows : [],
       roster,
       legacyChangeRequests: Array.isArray(legacyChangeRequests) ? legacyChangeRequests : [],
+      pastAbsenceScope: verifiedPastScope ? pastAbsenceScope : null,
     };
     return applyScheduleV2CoachWorkspace(
       workspace,
       coachScheduleV2WorkspaceCache.oneDayRows,
       roster,
       coachScheduleV2WorkspaceCache.legacyChangeRequests,
+      coachScheduleV2WorkspaceCache.pastAbsenceScope,
     );
   } catch (error) {
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
@@ -197,6 +203,7 @@ async function syncLegacyCoachLessonsFromServer() {
       ? await client.selectCurrentProfile().catch(() => null)
       : null;
     if (state.coach?.branchId && await syncCoachScheduleV2()) return true;
+    const legacyPastScope = beginCoachPastAbsenceScope(client);
     const scheduleRangeStart = new Date();
     scheduleRangeStart.setDate(scheduleRangeStart.getDate() - 31);
     const scheduleRangeEnd = new Date();
@@ -401,17 +408,27 @@ async function syncLegacyCoachLessonsFromServer() {
     state.liveLessons = [...mappedLessons, ...oneDayLessons];
 
     const lessonRowsById = new Map((lessonRows || []).map((lesson) => [lesson.id, lesson]));
+    activateCoachPastAbsenceScope(legacyPastScope, state.coach?.branchId);
     state.makeupEntitlements = (makeupEntitlementRows || []).map((entitlement) => {
       const sourceLesson = lessonRowsById.get(entitlement.source_lesson_id) || {};
       const participantIds = participantIdsByLesson.get(entitlement.source_lesson_id) || [];
       const memberNames = participantIds.map((userId) => usersById.get(userId)).filter(Boolean);
       const coach = coachesById.get(entitlement.coach_role_id) || {};
       const bookedLesson = lessonRowsById.get(entitlement.booked_lesson_id) || {};
+      const pairs = (participantRows || []).filter((p) => String(p.lesson_id || "") === String(entitlement.source_lesson_id || "")
+        && String(p.ticket_id || "") === String(entitlement.ticket_id || "") && p.user_id);
+      const matchedUser = pairs.length === 1 ? String(pairs[0].user_id) : "";
+      const proof = String(sourceLesson.branch_id || "") === String(entitlement.branch_id || "")
+        ? coachPastAbsenceProof(legacyPastScope, entitlement.branch_id, entitlement.source_lesson_id,
+          entitlement.coach_role_id, matchedUser, entitlement.ticket_id, lessonRows, pairs, usersById.get(matchedUser)) : null;
       return {
         id: entitlement.id,
         sourceLessonId: entitlement.source_lesson_id,
         bookedLessonId: entitlement.booked_lesson_id || "",
         ticketId: entitlement.ticket_id,
+        userId: proof?.userId || "",
+        branchId: entitlement.branch_id || "",
+        pastAbsenceProof: proof,
         coachRoleId: entitlement.coach_role_id,
         coach: coach.display_name || "담당 코치",
         member: memberNames.join("&") || "회원",
@@ -458,6 +475,9 @@ async function syncLegacyCoachLessonsFromServer() {
           releasedOriginalMember: entitlement.member,
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
+          userId: entitlement.userId,
+          ticketId: entitlement.ticketId,
+          pastAbsenceProof: entitlement.pastAbsenceProof,
           type: historicalReleasedSlot
             ? `정규 · 불참 · 차감 없음 ${entitlement.durationMinutes}분`
             : `정규 · 불참 · 보강·원데이 가능 ${entitlement.durationMinutes}분`,

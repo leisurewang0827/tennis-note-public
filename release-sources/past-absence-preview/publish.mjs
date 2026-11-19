@@ -1,0 +1,35 @@
+// Protected DEV preview-only publication; never production or canonical DEV.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {execFileSync,spawn} from 'node:child_process';
+import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {join} from 'node:path';
+const hash=b=>createHash('sha256').update(b).digest('hex'),e=process.env;
+const bytes=readFileSync('release-sources/past-absence-preview/manifest.json');
+assert.equal(hash(bytes),'1afa8bd2787ddd23d3b71620fdd7e5381afe1f852992b852d24aa4a8edbe17cd');
+const m=JSON.parse(bytes),project='tennisnote-app-dev',alias='r4-absence-group-qa';
+assert.equal(m.project,project);assert.equal(m.previewBranch,alias);assert.equal(e.GITHUB_REPOSITORY,m.repo);assert.equal(e.GITHUB_REF,'refs/heads/'+m.branch);assert.equal(e.GITHUB_EVENT_NAME,'push');assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
+assert.match(e.CLOUDFLARE_ACCOUNT_ID||'',/^[a-f0-9]{32}$/);assert.ok(e.CLOUDFLARE_API_TOKEN);assert.equal(hash(e.CLOUDFLARE_ACCOUNT_ID),e.EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT);
+const gh=e.GH_TOKEN,account=e.CLOUDFLARE_ACCOUNT_ID,token=e.CLOUDFLARE_API_TOKEN;
+const get=async(url,t)=>{const r=await fetch(url,{headers:{Authorization:'Bearer '+t,Accept:'application/json'},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});assert.equal(r.status,200,'READ_FAILED');return r.json();};
+const cf=`https://api.cloudflare.com/client/v4/accounts/${account}/pages/projects/${project}`;
+const list=async()=>{let all=[],page=1,total=1;do{const x=await get(`${cf}/deployments?page=${page}`,token);assert.equal(x.success,true);assert.equal(x.result_info.page,page);if(page>1)assert.equal(x.result_info.total_pages,total);total=x.result_info.total_pages;assert.ok(total>=1&&total<=100);all.push(...x.result);page++;}while(page<=total);return all;};
+const state=async()=>{const p=await get(cf,token);assert.equal(p.success,true);assert.equal(p.result.name,project);assert.equal(p.result.production_branch,'dev');assert.equal(p.result.canonical_deployment.id,m.devCanonical);assert.equal(p.result.canonical_deployment.latest_stage.status,'success');const matches=(await list()).filter(d=>(d.aliases||[]).includes(`https://${alias}.${project}.pages.dev`));assert.equal(matches.length,1);return matches[0];};
+const before=await state();assert.equal(before.id,m.previous);assert.equal(before.latest_stage.status,'success');assert.equal(before.deployment_trigger.metadata.branch,alias);
+const checkBranch=async()=>{const ref=await get(`https://api.github.com/repos/${m.repo}/git/ref/heads/${m.branch}`,gh);assert.equal(ref.object.sha,e.GITHUB_SHA,'BRANCH_MOVED');};
+await checkBranch();
+const jobs=await get(`https://api.github.com/repos/${m.repo}/actions/runs/${e.GITHUB_RUN_ID}/attempts/1/jobs?per_page=100`,gh);assert.equal(jobs.total_count,jobs.jobs.length);assert.equal(jobs.jobs.filter(x=>x.name==='verify-source'&&x.conclusion==='success').length,1);
+const dir=join(e.RUNNER_TEMP,'past-absence-preview'),seal=JSON.parse(readFileSync(join(dir,'seal.json')));assert.equal(seal.source,e.GITHUB_SHA);assert.equal(seal.manifest,hash(bytes));
+const expected={...m.baseline};for(const [p,h] of Object.entries(m.product))expected[p.slice(4)]=h;Object.assign(expected,m.devLinks);
+assert.deepEqual(seal.files,expected,'ARTIFACT_SEAL_DRIFT');
+const walk=(dir,p='')=>Object.fromEntries(readdirSync(dir,{withFileTypes:true}).flatMap(x=>{assert.ok(x.isFile()||x.isDirectory());const n=p+x.name;return x.isDirectory()?Object.entries(walk(join(dir,x.name),n+'/')):[[n,hash(readFileSync(join(dir,x.name)))]];}));
+assert.deepEqual(walk(join(dir,'site')),seal.files);
+const raw=execFileSync('git',['show','b0920a7798b878eaf972ae28870371b89d29b9ed:scripts/r4_internal_registration_dev.mjs']);assert.equal(hash(raw),'6a01f04e7fdb73d917943d0c98b0560dd13d7bbf49ffd947cf14c7e5135e3677');
+const text=raw.toString(),a=text.indexOf('export function patchWrangler('),b=text.indexOf('export const requestPath=',a);assert.ok(a>=0&&b>a);
+const patch=Function('assert','hash','wranglerSha256',text.slice(a,b).replace('export function','function')+';return patchWrangler;')(assert,hash,'ee0efb7ee6b32ddcd8cfba64be8b42d536ac69f27395920a69e3abbad11ed87e');
+const root=join(e.RUNNER_TEMP,'r4-wrangler/node_modules/wrangler');assert.equal(JSON.parse(readFileSync(join(root,'package.json'))).version,'3.90.0');let tool=patch(readFileSync(join(root,'wrangler-dist/cli.js')));assert.equal(tool.split('tennisnote-admin-dev').length,3);tool=tool.replaceAll('tennisnote-admin-dev',project);const executable=join(root,'wrangler-dist/cli-preview-single.cjs');writeFileSync(executable,tool,{flag:'wx'});
+assert.equal((await state()).id,m.previous);await checkBranch();
+const url=await new Promise(resolve=>{let output='',done=false;const finish=x=>{if(!done){done=true;clearTimeout(timer);resolve(x);}};const child=spawn(process.execPath,[executable,'pages','deploy',join(dir,'site'),'--project-name='+project,'--branch='+alias,'--commit-hash='+e.GITHUB_SHA,'--commit-dirty=false'],{shell:false,stdio:['ignore','pipe','pipe'],env:{PATH:e.PATH,HOME:e.HOME,TMPDIR:e.TMPDIR,CLOUDFLARE_ACCOUNT_ID:account,CLOUDFLARE_API_TOKEN:token}});const timer=setTimeout(()=>{child.kill();finish(null);},120000);child.stdout.on('data',x=>{output+=x;if(output.length>1048576)child.kill();});child.stderr.resume();child.on('error',()=>finish(null));child.on('close',code=>{const found=[...new Set(output.match(/https:\/\/[a-f0-9]{8}\.tennisnote-app-dev\.pages\.dev/g)||[])];finish(code===0&&found.length===1?found[0]:null);});});
+assert.ok(url,'PUBLISH_UNKNOWN_NO_RETRY');const after=await state();assert.notEqual(after.id,m.previous);assert.equal(after.url,url);assert.equal(after.deployment_trigger.metadata.branch,alias);assert.equal(after.deployment_trigger.metadata.commit_hash,e.GITHUB_SHA);assert.equal(after.latest_stage.status,'success');
+for(const p of Object.keys(m.devLinks).concat(Object.keys(m.product).filter(p=>p.endsWith('.js')).map(p=>p.slice(4))))for(const host of [url,`https://${alias}.${project}.pages.dev`]){const path='/'+(p.endsWith('index.html')?p.slice(0,-10):p);const r=await fetch(host+path,{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});assert.equal(r.status,200);assert.equal(hash(Buffer.from(await r.arrayBuffer())),seal.files[p],'READBACK_DRIFT');}
+assert.equal((await state()).id,after.id);await checkBranch();console.log(JSON.stringify({status:'DEV_PREVIEW_READBACK_PASS',deploymentId:after.id,source:e.GITHUB_SHA,dbWrites:0}));

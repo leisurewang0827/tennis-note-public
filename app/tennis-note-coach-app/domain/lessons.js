@@ -204,6 +204,79 @@ function coachLessonVisualKind(lesson = {}) {
   return "regular";
 }
 
+let coachPastAbsenceScopeEpoch = 0;
+let coachPastAbsenceCurrentScope = null;
+function beginCoachPastAbsenceScope(client) {
+  coachPastAbsenceCurrentScope = null;
+  const epoch = ++coachPastAbsenceScopeEpoch;
+  const branch = String(state.coach?.branchId || ""), profile = String(state.liveProfileId || ""), role = String(currentCoachRoleId() || "");
+  const token = client?.getSession?.()?.access_token || "";
+  if (!branch || !profile || !role || !token || state.dataMode !== "live") return null;
+  const sameIdentity = () => {
+    try {
+      return state.dataMode === "live" && String(state.coach?.branchId || "") === branch
+        && String(state.liveProfileId || "") === profile && String(currentCoachRoleId() || "") === role
+        && client?.getSession?.()?.access_token === token;
+    } catch { return false; }
+  };
+  return { branch, profile, role, epoch, sameIdentity };
+}
+function activateCoachPastAbsenceScope(scope, responseBranch) {
+  if (!scope || scope.epoch !== coachPastAbsenceScopeEpoch || !scope.sameIdentity()
+    || String(responseBranch || "") !== scope.branch) return false;
+  coachPastAbsenceCurrentScope = scope;
+  return true;
+}
+function coachPastAbsenceProof(scope, branch, lessonId, coachRoleId, userId, ticketId, lessonRows, participantPairs, memberName) {
+  const value = x => String(x || "");
+  if (!scope || coachPastAbsenceCurrentScope !== scope || scope.epoch !== coachPastAbsenceScopeEpoch || !scope.sameIdentity()
+    || value(branch) !== scope.branch || !value(lessonId) || !value(coachRoleId) || value(coachRoleId) !== scope.role
+    || !value(userId) || !value(ticketId) || !value(memberName)) return null;
+  const lessons = (Array.isArray(lessonRows) ? lessonRows : []).filter(x => value(x.id) === value(lessonId));
+  if (lessons.length !== 1 || value(lessons[0].coachRoleId || lessons[0].coach_role_id) !== value(coachRoleId)) return null;
+  const pairs = (Array.isArray(participantPairs) ? participantPairs : []).filter(x => value(x.userId || x.user_id) === value(userId) && value(x.ticketId || x.ticket_id) === value(ticketId));
+  if (pairs.length !== 1) return null;
+  return { scope, branch: value(branch), lessonId: value(lessonId), coachRoleId: value(coachRoleId), userId: value(userId), ticketId: value(ticketId), memberName: value(memberName) };
+}
+function coachPastAbsenceProofCurrent(proof, entitlement, slot) {
+  return !!proof && !!proof.scope && coachPastAbsenceCurrentScope === proof.scope
+    && proof.scope.epoch === coachPastAbsenceScopeEpoch && proof.scope.sameIdentity()
+    && proof.branch === proof.scope.branch && proof.lessonId === String(entitlement.sourceLessonId || "")
+    && proof.coachRoleId === String(entitlement.coachRoleId || "")
+    && proof.userId === String(entitlement.userId || "") && proof.ticketId === String(entitlement.ticketId || "")
+    && slot.pastAbsenceProof === proof && slot.userId === proof.userId && slot.ticketId === proof.ticketId;
+}
+
+function coachPastAbsenceDetailContext(entitlementId, expectedSlot) {
+  const id = String(entitlementId || "");
+  if (!id) return null;
+  const slots = (state.releasedMakeupSlots || []).filter((item) => String(item.entitlementId || "") === id);
+  const entitlements = (state.makeupEntitlements || []).filter((item) => String(item.id || "") === id);
+  if (slots.length !== 1 || entitlements.length !== 1) return null;
+  const slot = slots[0], entitlement = entitlements[0];
+  const proof = entitlement.pastAbsenceProof;
+  if (!coachPastAbsenceProofCurrent(proof, entitlement, slot)) return null;
+  if (slot.releasedMakeupSlot !== true || slot.historicalReleasedSlot !== true
+    || !["open", "booked"].includes(entitlement.status)
+    || (!canProcessLesson(slot) && !canRescheduleLesson(slot))) return null;
+  const date = String(slot.lessonDate || ""), time = String(slot.time || "").slice(0, 5);
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time)
+    ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+  if (!Number.isFinite(start) || start >= Date.now()
+    || new Date(start + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) !== date) return null;
+  if (!slot.sourceLessonId || String(slot.sourceLessonId) !== String(entitlement.sourceLessonId || "")
+    || !slot.coachRoleId || String(slot.coachRoleId) !== String(entitlement.coachRoleId || "")
+    || date !== String(entitlement.originalDate || "")
+    || time !== String(entitlement.originalTime || "").slice(0, 5)) return null;
+  const branchId = String(state.coach?.branchId || "");
+  if ((branchId && String(entitlement.branchId || "") !== branchId)
+    || (slot.branchId && String(slot.branchId) !== branchId)
+    || ((state.dataMode === "live" || state.liveProfileId) && !branchId)) return null;
+  if (expectedSlot && (expectedSlot.releasedMakeupSlot !== true || expectedSlot.historicalReleasedSlot !== true
+    || ["entitlementId", "sourceLessonId", "coachRoleId", "lessonDate", "time"].some((key) => String(expectedSlot[key] || "") !== String(slot[key] || "")))) return null;
+  return { slot: { ...slot, member: proof.memberName }, entitlement, date, time };
+}
+
 function coachScheduleLessonActionAttrs(lesson = {}) {
   const segmentAttrs = coachDisplaySegmentAttrs(lesson);
   if (lesson.oneDayBooking) {
@@ -214,7 +287,9 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
   }
   if (lesson.releasedMakeupSlot) {
     if (lesson.historicalReleasedSlot) {
-      return `disabled aria-label="${lesson.member || "회원"} 과거 정규 불참 기록"`;
+      return coachPastAbsenceDetailContext(lesson.entitlementId, lesson)
+        ? `data-coach-past-absence-id="${escapeHtml(lesson.entitlementId)}" aria-label="${escapeHtml(lesson.member || "회원")} 과거 불참 수업 상세"`
+        : 'disabled aria-label="불참 수업의 최신 상태와 담당 코치를 확인해 주세요."';
     }
     return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 불참 수업 상세"`;
   }

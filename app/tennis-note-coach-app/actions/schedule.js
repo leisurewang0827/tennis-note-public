@@ -84,7 +84,7 @@ function reconcileCoachPendingCacheAfterServerReadback(workspace = {}, mappedLes
   return true;
 }
 
-function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
+function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = [], pastAbsenceScope = null) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
   const previousLiveLessonsById = new Map((state.liveLessons || []).map((lesson) => [String(lesson.serverLessonId || ""), lesson]));
   const cancelledLessonIds = new Set(
@@ -135,11 +135,16 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   state.makeupEntitlements = (workspace.makeupEntitlements || []).map((entitlement) => {
     const sourceLesson = rawLessonsById.get(entitlement.sourceLessonId) || {};
     const bookedLesson = rawLessonsById.get(entitlement.bookedLessonId) || {};
+    const proof = coachPastAbsenceProof(pastAbsenceScope, workspace.branchId, entitlement.sourceLessonId,
+      entitlement.coachRoleId, entitlement.userId, entitlement.ticketId, workspace.lessons, sourceLesson.participants, entitlement.memberName);
     return {
       id: entitlement.id,
       sourceLessonId: entitlement.sourceLessonId,
       bookedLessonId: entitlement.bookedLessonId || "",
       ticketId: entitlement.ticketId,
+      userId: entitlement.userId || "",
+      branchId: proof?.branch || "",
+      pastAbsenceProof: proof,
       coachRoleId: entitlement.coachRoleId,
       coach: coachesByRoleId.get(entitlement.coachRoleId)?.name || "담당 코치",
       member: entitlement.memberName || "회원",
@@ -183,6 +188,9 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       releasedOriginalMember: entitlement.member,
       entitlementId: entitlement.id,
       sourceLessonId: entitlement.sourceLessonId,
+      userId: entitlement.userId,
+      ticketId: entitlement.ticketId,
+      pastAbsenceProof: entitlement.pastAbsenceProof,
       type: historicalReleasedSlot
         ? `정규 · 불참 · 차감 없음 ${entitlement.durationMinutes}분`
         : `정규 · 불참 · 보강·원데이 가능 ${entitlement.durationMinutes}분`,

@@ -277,6 +277,29 @@ function openCoachReleasedAbsenceActions(id, trigger) {
   dialog.showModal();
 }
 
+function openCoachPastAbsenceDetail(id, trigger) {
+  const context = coachPastAbsenceDetailContext(id);
+  if (!context) { showToast("불참 수업의 최신 상태와 담당 코치를 확인해 주세요."); return; }
+  if (document.querySelector("#coachPastAbsenceDetail")?.open) return;
+  const dialog = document.createElement("dialog");
+  if (typeof dialog.showModal !== "function") { showToast("이 앱에서 불참 상세를 열 수 없습니다."); return; }
+  dialog.id = "coachPastAbsenceDetail";
+  dialog.setAttribute("aria-labelledby", "coachPastAbsenceDetailTitle");
+  dialog.style.cssText = "width:min(calc(100% - 24px),28rem);border:1px solid GrayText;box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:CanvasText;background:Canvas;color-scheme:inherit;max-height:85vh;overflow:auto";
+  const makeup = context.entitlement.status === "booked" ? "보강 예약됨" : "보강 대기";
+  dialog.innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 id="coachPastAbsenceDetailTitle" style="margin:0;font-size:1.2rem">불참 수업 상세</h2><button type="button" data-coach-past-absence-close style="min-height:44px;min-width:44px">닫기</button></header>
+    <p><strong>${escapeHtml(context.slot.member || "회원")}</strong><br>${escapeHtml(context.date)} · ${escapeHtml(context.time)} · 불참</p>
+    <button type="button" disabled style="min-height:44px;width:100%" aria-describedby="coachPastAbsenceReason">새 수업 등록</button>
+    <p id="coachPastAbsenceReason">이미 시작했거나 지난 수업입니다.</p>
+    <details><summary style="min-height:44px;align-content:center">원래 수업 변경</summary><p>이미 시작했거나 지난 수업입니다.</p><p>보강: ${escapeHtml(makeup)}</p></details>`;
+  const closeButton = dialog.querySelector("[data-coach-past-absence-close]");
+  dialog.addEventListener("close", () => { dialog.remove(); if (trigger?.isConnected) trigger.focus(); }, { once: true });
+  closeButton.onclick = () => dialog.close();
+  document.body.append(dialog);
+  dialog.showModal();
+  closeButton.focus();
+}
+
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));

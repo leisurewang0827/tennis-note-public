@@ -393,6 +393,12 @@ function bindDelegatedEvents() {
       return;
     }
 
+    const pastAbsenceButton = event.target.closest("[data-coach-past-absence-id]");
+    if (pastAbsenceButton) {
+      openCoachPastAbsenceDetail(pastAbsenceButton.dataset.coachPastAbsenceId, pastAbsenceButton);
+      return;
+    }
+
     const restoreAbsenceButton = event.target.closest("[data-restore-absence-id]");
     if (restoreAbsenceButton) {
       openCoachReleasedAbsenceActions(restoreAbsenceButton.dataset.restoreAbsenceId, restoreAbsenceButton);
