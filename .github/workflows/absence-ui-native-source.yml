@@ -1,4 +1,5 @@
 name: Exact absence V8 source only
+# Repair only the raw-byte admission for three unchanged legacy CRLF artifacts.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
@@ -11,7 +12,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
+        with: {ref: '${{ github.sha }}', fetch-depth: 3, persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '24'}
       - name: Verify only new V8 source, cache, exact delta and native fingerprint

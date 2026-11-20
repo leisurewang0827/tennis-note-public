@@ -1,6 +1,6 @@
 {
   "kind": "ABSENCE_UI_NATIVE_V8",
-  "parent": "d4a025560b434e069639d281df421178674a3ac8",
+  "parent": "30dabe299cfbbc70be94d32560aee78564720bfb",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
   "baselineProduct": "64a045e676aa4816f0d974a1a3f63eeb57c4fdae",
@@ -17,5 +17,11 @@
   "dbWrites": 0,
   "conditionsChanged": 0,
   "actualDeduction": 0,
-  "publicRelease": false
+  "publicRelease": false,
+  "baseParent": "d4a025560b434e069639d281df421178674a3ac8",
+  "executionDelta": [
+    ".github/workflows/absence-ui-native-source.yml",
+    "release-promotions/absence-ui-native-v8/check.mjs",
+    "release-promotions/absence-ui-native-v8/manifest.json"
+  ]
 }
