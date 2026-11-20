@@ -267,7 +267,7 @@ function openCoachReleasedAbsenceActions(id, trigger) {
       <p class="coach-absence-restore-note">수업 시작 전입니다.</p>
       <button type="button" class="approve-button" data-absence-restore style="min-height:44px;width:100%">다시 참석으로 변경</button></details><p data-absence-status role="status"></p>`;
   const message = dialog.querySelector("[data-absence-status]");
-  dialog.addEventListener("close",()=>{dialog.remove();if (trigger?.isConnected) trigger.focus();},{once:true});
+  dialog.addEventListener("close",()=>{dialog.remove();refreshCoachModalState();if (trigger?.isConnected) trigger.focus();},{once:true});
   dialog.querySelector("[data-absence-close]").onclick=()=>dialog.close();
   dialog.querySelector("[data-absence-restore]").onclick=()=>{
     const current=coachReleasedAbsenceStatus(id);
@@ -284,6 +284,7 @@ function openCoachReleasedAbsenceActions(id, trigger) {
   };
   (trigger?.closest?.("#r4ScopedCoachApp, .coach-shell") || document.body).append(dialog);
   dialog.showModal();
+  refreshCoachModalState();
 }
 
 function openCoachPastAbsenceDetail(id, trigger) {
@@ -304,6 +305,7 @@ function openCoachPastAbsenceDetail(id, trigger) {
   const closeButton = dialog.querySelector("[data-coach-past-absence-close]");
   dialog.addEventListener("close", () => {
     dialog.remove();
+    refreshCoachModalState();
     const replacement = trigger?.isConnected ? trigger : [...document.querySelectorAll("[data-coach-past-absence-id]")]
       .find(element => element.dataset.coachPastAbsenceId === String(id) && !element.matches(":disabled") && element.getClientRects().length);
     const target = replacement || document.querySelector('button[data-view="fullScheduleView"]');
@@ -312,6 +314,7 @@ function openCoachPastAbsenceDetail(id, trigger) {
   closeButton.onclick = () => dialog.close();
   (trigger?.closest?.("#r4ScopedCoachApp, .coach-shell") || document.body).append(dialog);
   dialog.showModal();
+  refreshCoachModalState();
   closeButton.focus();
 }
 

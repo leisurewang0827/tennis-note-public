@@ -19,7 +19,8 @@ function hideCoachBrandSplash() {
 }
 
 function refreshCoachModalState() {
-  const modalOpen = Boolean(activeCoachModalId);
+  const absenceDialogOpen = Boolean(document.querySelector("#coachReleasedAbsenceActions[open], #coachPastAbsenceDetail[open]"));
+  const modalOpen = Boolean(activeCoachModalId || absenceDialogOpen);
   document.body.classList.toggle("modal-open", modalOpen);
   const tabbar = $(".tabbar");
   if (tabbar) {

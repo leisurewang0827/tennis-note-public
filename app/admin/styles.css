@@ -286,7 +286,7 @@ small {
 .brand .release-version {
   display: block;
   margin-top: 5px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -353,7 +353,7 @@ small {
 
 .sidebar-footer .release-version {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -397,7 +397,7 @@ small {
   border-radius: 999px;
   color: var(--red);
   background: var(--soft-red);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 950;
 }
 
@@ -688,7 +688,7 @@ h2 {
 
 #billingActualPaidSummary {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -729,7 +729,7 @@ h2 {
 .payment-source-details {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .payment-source-details summary {
@@ -740,7 +740,7 @@ h2 {
 .payment-row-detail {
   margin-top: 7px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .payment-row-detail > summary {
@@ -872,7 +872,7 @@ h2 {
 
 .payment-row-more {
   margin-top: 7px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .payment-row-more > summary {
@@ -894,7 +894,7 @@ h2 {
 .billing-settlement-cell small,
 .billing-settlement-pending {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.4;
 }
@@ -1531,7 +1531,7 @@ h2 {
   padding: 0 9px;
   color: var(--green);
   background: var(--soft-green);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .admin-layout-editor-grid {
@@ -1614,7 +1614,7 @@ h2 {
   display: grid;
   gap: 3px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -2159,7 +2159,7 @@ h2 {
   width: 30px;
   height: 30px;
   flex-basis: 30px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .profile-avatar.large {
@@ -2241,7 +2241,7 @@ h2 {
   border-radius: 999px;
   color: var(--text);
   background: var(--surface-muted, #eef3f8);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   text-align: center;
 }
@@ -2262,7 +2262,7 @@ h2 {
 .member-filter-reset {
   height: 30px;
   padding: 0 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .segmented-control {
@@ -2821,7 +2821,7 @@ tr.is-selected td {
   align-items: center;
   margin: 0 0 8px;
   color: #60776f;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-inline-profile-hint strong {
@@ -2873,7 +2873,7 @@ tr.is-selected td {
 
 .member-inline-compact-grid label > span {
   color: #60776f;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -2904,7 +2904,7 @@ tr.is-selected td {
   border-radius: 6px;
   color: #526b62;
   background: #f4f8f6;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   cursor: pointer;
 }
@@ -2929,7 +2929,7 @@ tr.is-selected td {
   border-radius: 999px;
   color: #526b62;
   background: #f4f8f6;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   cursor: pointer;
 }
@@ -3088,7 +3088,7 @@ tr.is-selected td {
 }
 
 .member-add-ticket-button {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-row-ticket-delete {
@@ -3169,7 +3169,7 @@ tr.is-selected td {
 
 .member-payment-amount-summary small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -3258,7 +3258,7 @@ tr.is-selected td {
   display: block;
   max-width: 118px;
   color: #9a5a08;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -3275,7 +3275,7 @@ tr.is-selected td {
 
 .member-inline-scope small {
   color: #6a7f77;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.3;
 }
 
@@ -3292,7 +3292,7 @@ tr.is-selected td {
 
 .member-ticket-row-summary small {
   color: var(--green);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -3303,7 +3303,7 @@ tr.is-selected td {
 
 .member-ticket-row-summary span {
   color: #64786f;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-inline-ticket-context {
@@ -3410,7 +3410,7 @@ tr.is-selected td {
   min-height: 28px;
   margin-left: auto;
   padding: 4px 9px;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -3421,7 +3421,7 @@ tr.is-selected td {
 
 .member-inline-schedule-heading span {
   color: #667c74;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-inline-schedule-row {
@@ -3433,7 +3433,7 @@ tr.is-selected td {
 
 .member-inline-schedule-index {
   color: #4e685f;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -3485,7 +3485,7 @@ tr.is-selected td {
   min-height: 0;
   margin: 0;
   color: #b23b32;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -3692,7 +3692,7 @@ tr.is-selected td {
   padding: 4px 8px;
   color: #815d12;
   background: #fff5d9;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -3714,7 +3714,7 @@ tr.is-selected td {
 
 .schedule-change-path small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -3750,7 +3750,7 @@ tr.is-selected td {
 .schedule-change-approval-actions small {
   max-width: 132px;
   color: #8b6216;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -3911,7 +3911,7 @@ tr.is-selected td {
 
 .member-inline-editor-grid label > span {
   color: #60776f;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -3965,7 +3965,7 @@ tr.is-selected td {
   display: block;
   margin-top: 4px;
   color: var(--red);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -4048,7 +4048,7 @@ tr.is-selected td {
 .member-db-grid dt {
   margin-bottom: 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -4095,7 +4095,7 @@ tr.is-selected td {
 
 .member-coach-assignment small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -4125,7 +4125,7 @@ tr.is-selected td {
 .member-ticket-lesson-setup-heading span,
 .member-ticket-lesson-setup small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -4151,7 +4151,7 @@ tr.is-selected td {
 
 .member-ticket-lesson-setup-fields label > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -4218,7 +4218,7 @@ tr.is-selected td {
 .member-management-policy-panel small,
 .member-management-pin-help {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
 }
@@ -4288,7 +4288,7 @@ tr.is-selected td {
   border-radius: 999px;
   color: #27604f;
   background: #e6f4ef;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -4307,7 +4307,7 @@ tr.is-selected td {
 
 .member-ticket-no-action {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -4399,7 +4399,7 @@ tr.is-selected td {
 
 .member-ticket-context-label {
   color: #8a5a00;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1.3;
 }
@@ -4431,7 +4431,7 @@ tr.is-selected td {
 
 .member-ticket-management-group h4 small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-ticket-summary-line + .member-ticket-summary-line,
@@ -4454,7 +4454,7 @@ tr.is-selected td {
 .member-ticket-summary-more,
 .member-table-muted {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -4469,7 +4469,7 @@ tr.is-selected td {
 .member-table-secondary {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -4479,7 +4479,7 @@ tr.is-selected td {
   min-height: 24px;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -4513,7 +4513,7 @@ tr.is-selected td {
 
 .member-payment-status small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .member-payment-status.is-success strong {
@@ -4557,7 +4557,7 @@ tr.is-selected td {
 }
 
 .member-auth-link-action small {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
 }
@@ -5131,7 +5131,7 @@ tr.is-selected td {
   border: 0;
   color: var(--green);
   background: rgba(233, 247, 241, 0.9);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1.15;
 }
@@ -5183,14 +5183,14 @@ tr.is-selected td {
 .overlap-lesson strong {
   display: block;
   color: var(--coach-accent, var(--amber));
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
 .overlap-lesson span,
 .overlap-strip small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
@@ -5203,13 +5203,13 @@ tr.is-selected td {
 }
 
 .overlap-note strong {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
 .overlap-note small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
@@ -5247,7 +5247,7 @@ tr.is-selected td {
 .multi-lesson span,
 .multi-lesson small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
@@ -5302,13 +5302,13 @@ tr.is-selected td {
 
 .coach-lane-card strong {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-lane-card span,
 .coach-lane-card small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .coach-lane-card.empty {
@@ -5506,12 +5506,12 @@ tr.is-selected td {
 }
 
 .coach-lane-stack .coach-lane-card strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-lane-stack .coach-lane-card span,
 .coach-lane-stack .coach-lane-card small {
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .schedule-stack-cell {
@@ -5570,7 +5570,7 @@ tr.is-selected td {
   border-radius: 4px;
   background: #fff8e7;
   color: #8a5a00;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -5691,19 +5691,19 @@ tr.is-selected td {
 
 .schedule-stack-line .stack-time {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .schedule-stack-line strong {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-stack-line .stack-coach,
 .schedule-stack-line small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -5719,7 +5719,7 @@ tr.is-selected td {
   border-radius: 6px;
   color: var(--green);
   background: #fbfffd;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1.15;
   white-space: normal;
@@ -5734,7 +5734,7 @@ tr.is-selected td {
   min-width: 0;
   height: 100%;
   min-height: 0;
-  font-size: 10px;
+  font-size: 12px;
   writing-mode: horizontal-tb;
 }
 
@@ -5765,12 +5765,12 @@ tr.is-selected td {
 }
 
 .schedule-break-cell strong {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink);
 }
 
 .schedule-break-cell small {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -5825,21 +5825,21 @@ tr.is-selected td {
 }
 
 .split-segment strong {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
 .split-segment span,
 .split-segment small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.15;
 }
 
 .split-segment .duration-pill {
   min-width: 34px;
   padding: 3px 6px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .split-segment.coach-tone-green,
@@ -6453,7 +6453,7 @@ tr.is-selected td {
 
 .notification-delivery-metrics span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .notification-delivery-metrics strong {
@@ -6948,7 +6948,7 @@ tr.is-selected td {
 
 .break-favorite-chip small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .break-favorite-chip .break-favorite-remove,
@@ -7224,7 +7224,7 @@ tr.is-selected td {
 
 .lesson-past-correction-mode label small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -7665,7 +7665,7 @@ tr.is-selected td {
 
 .discount-policy-card dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -7691,7 +7691,7 @@ tr.is-selected td {
 
 .discount-create-grid small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -7794,7 +7794,7 @@ tr.is-selected td {
 
 .refund-policy-grid small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -7975,7 +7975,7 @@ tr.is-selected td {
 
 .product-setting-fields small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -8270,7 +8270,7 @@ tr.is-selected td {
 .bank-device-actions .ghost-button {
   min-height: 30px;
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bank-notification-status-grid li small {
@@ -8340,7 +8340,7 @@ tr.is-selected td {
   padding: 6px 8px;
   border-radius: 999px;
   background: #fff;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .branch-sales-effective-status li.is-ready {
@@ -8824,7 +8824,7 @@ tr.is-selected td {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: white;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -8909,7 +8909,7 @@ tr.is-selected td {
 
 .coach-day-grid.compact label {
   min-height: 26px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .coach-block-add-grid {
@@ -8927,7 +8927,7 @@ tr.is-selected td {
   gap: 6px;
   align-items: center;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -9436,7 +9436,7 @@ tr.is-selected td {
 .member-list-toolbar span,
 .member-filter-summary {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -9703,7 +9703,7 @@ tr.is-selected td {
 
 #adminScheduleMemberSearchResult > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -9714,7 +9714,7 @@ tr.is-selected td {
   border-radius: 6px;
   color: #245a94;
   background: #eef6ff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -9797,7 +9797,7 @@ tr.is-selected td {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9810,13 +9810,13 @@ tr.is-selected td {
   place-items: center;
   color: var(--ink);
   background: #f8fafc;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .coach-day-time.is-minor {
   color: #8b98a7;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .coach-day-cell {
@@ -9825,7 +9825,7 @@ tr.is-selected td {
   place-items: center;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -9858,7 +9858,7 @@ tr.is-selected td {
   border: 0;
   color: var(--green);
   background: transparent;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -9910,7 +9910,7 @@ tr.is-selected td {
 .coach-day-lesson span,
 .coach-day-lesson small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -9969,7 +9969,7 @@ button .schedule-member-lines > span {
   border-radius: 6px;
   background: #e8eef8;
   color: var(--blue);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 950;
   line-height: 1.35;
 }
@@ -10157,7 +10157,7 @@ button .schedule-member-lines > span {
 
 .coach-auth-cell small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-status-summary {
@@ -10208,7 +10208,7 @@ button .schedule-member-lines > span {
   margin-left: 4px;
   border-radius: 999px;
   background: var(--soft-green);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-lane-order-panel {
@@ -10993,7 +10993,7 @@ button .schedule-member-lines > span {
 
 .lesson-participant-row small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .lesson-participant-row strong {
@@ -11103,7 +11103,7 @@ button .schedule-member-lines > span {
 
 .lesson-save-result-item span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -11497,7 +11497,7 @@ button .schedule-member-lines > span {
 
 .member-profile-optional > summary small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-profile-optional[open] > summary {
@@ -11543,7 +11543,7 @@ button .schedule-member-lines > span {
   flex: 0 0 auto;
   padding: 2px 5px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 900;
   line-height: 1.2;
@@ -11759,7 +11759,7 @@ button .schedule-member-lines > span {
 .member-pair-slot > span,
 .member-pair-slot > small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -11797,7 +11797,7 @@ button .schedule-member-lines > span {
 .member-link-status span,
 .member-management-form .form-field small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
 }
@@ -11891,7 +11891,7 @@ button .schedule-member-lines > span {
   display: grid;
   gap: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -11979,7 +11979,7 @@ button .schedule-member-lines > span {
 
 .member-ticket-close-preview dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -12328,7 +12328,7 @@ button .schedule-member-lines > span {
 
 .member-auth-link-card small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -12403,7 +12403,7 @@ button .schedule-member-lines > span {
 
 .auth-provider-empty {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -12421,7 +12421,7 @@ button .schedule-member-lines > span {
 
 .auth-switch-form label > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -12463,7 +12463,7 @@ button .schedule-member-lines > span {
 
 .auth-switch-pending span {
   color: #715d3c;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -12475,7 +12475,7 @@ button .schedule-member-lines > span {
 .auth-link-technical-tools summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -12494,7 +12494,7 @@ button .schedule-member-lines > span {
 .coach-permission-actions button {
   min-height: 30px;
   padding: 5px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-row > .auth-provider-manager.compact {
@@ -12772,7 +12772,7 @@ button .schedule-member-lines > span {
 
 .coach-staff-block-add > label span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -12816,7 +12816,7 @@ button .schedule-member-lines > span {
 .coach-staff-settlement-status > span,
 .coach-staff-settlement-change-summary > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -12977,7 +12977,7 @@ button .schedule-member-lines > span {
 .member-approval-card small,
 .admin-pending-row label small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -13088,7 +13088,7 @@ button .schedule-member-lines > span {
 
 .admin-secondary-title small {
   color: var(--green);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 950;
   text-transform: uppercase;
 }
@@ -13578,7 +13578,7 @@ button .schedule-member-lines > span {
   border: 1px solid #d9e2ea;
   background: #fff;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1;
   text-align: center;
@@ -13672,7 +13672,7 @@ button .schedule-member-lines > span {
   border: 1px dashed rgba(21, 122, 91, 0.28);
   color: var(--green);
   background: #fbfffd;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1.1;
   text-align: center;
@@ -13767,7 +13767,7 @@ button .schedule-member-lines > span {
   min-width: 0;
   overflow: hidden;
   color: inherit;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13775,7 +13775,7 @@ button .schedule-member-lines > span {
 
 .admin-duration-lesson span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -13789,19 +13789,19 @@ button .schedule-member-lines > span {
 }
 
 .admin-duration-lesson .schedule-lesson-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .admin-duration-lesson .schedule-lesson-round,
 .admin-duration-lesson .schedule-lesson-coach {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
 }
 
 .admin-duration-lesson .schedule-lesson-note {
   color: #9a3412;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -14291,7 +14291,7 @@ button .schedule-member-lines > span {
   color: #fff;
   background: #047857;
   content: "✓";
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -14452,7 +14452,7 @@ button .schedule-member-lines > span {
   place-items: center;
   min-width: 0;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14474,7 +14474,7 @@ button .schedule-member-lines > span {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
   line-height: 1;
   text-align: center;
@@ -14543,7 +14543,7 @@ button .schedule-member-lines > span {
 }
 
 .schedule-day-button span {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -14568,7 +14568,7 @@ button .schedule-member-lines > span {
   padding: 8px 10px;
   color: #8f2f27;
   background: #fff2ef;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-closed-band span {
@@ -14690,7 +14690,7 @@ button .schedule-member-lines > span {
   border-bottom: 1px solid var(--line);
   background: #f3f7f5;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -14886,7 +14886,7 @@ button .schedule-member-lines > span {
 
 .schedule-assignment-bar span {
   color: #496a5f;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -14987,7 +14987,7 @@ button .schedule-member-lines > span {
   padding: 0 10px 5px !important;
   border-left: 0 !important;
   color: #8d6812;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-align: right;
 }
@@ -15235,7 +15235,7 @@ button .schedule-member-lines > span {
 .policy-version-editor-grid small,
 .policy-section-editor small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -15447,7 +15447,7 @@ body {
 
 .sidebar .brand-mark {
   color: transparent;
-  background: #ffffff url("../tennis-note-member-app/assets/brand/app-icon-192.png") center / cover no-repeat;
+  background: #ffffff url("./assets/brand/app-icon-192.png") center / cover no-repeat;
 }
 
 .sidebar .nav-item {
@@ -15557,7 +15557,7 @@ body {
   border-radius: 6px;
   color: var(--green);
   background: var(--soft-green);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -15637,7 +15637,7 @@ body {
   align-items: center;
   padding: 0 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -15653,7 +15653,7 @@ body {
   border-radius: 6px;
   color: #33443e;
   background: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -15844,7 +15844,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     min-height: 34px;
     flex: 0 0 auto;
     padding: 5px 9px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .workspace {
@@ -15868,7 +15868,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     min-height: 30px;
     max-width: 132px;
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .admin-pending-compact,
@@ -15942,7 +15942,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     min-width: 0;
     padding: 0;
     overflow: hidden;
-    font-size: 10px;
+    font-size: 12px;
     text-overflow: ellipsis;
   }
 
@@ -16051,7 +16051,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
 
   .week-switcher .schedule-period-summary > span {
     overflow: hidden;
-    font-size: 10px;
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -16172,7 +16172,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   .admin-save-state {
     margin: 0 0 8px;
     padding: 7px 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .admin-save-state:not([data-tone]) {
@@ -16229,7 +16229,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   .metric-card small,
   .record-action-grid .billing-action-card small {
     overflow: hidden;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -16251,7 +16251,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   }
 
   #billingView > .billing-action-grid .billing-action-card span {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   #billingView > .billing-action-grid .billing-action-card strong {
@@ -16298,7 +16298,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     min-width: 0;
     min-height: 40px;
     padding-inline: 5px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   #membersView > .toolbar .toolbar-actions {
@@ -16315,7 +16315,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   .member-editor-mode-bar p {
     grid-column: 1 / -1;
     grid-row: 2;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.35;
   }
 
@@ -16439,7 +16439,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     min-width: 0;
     min-height: 38px;
     padding: 4px;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.25;
   }
 
@@ -16515,7 +16515,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   }
 
   .settings-tab {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -16578,3 +16578,165 @@ html[data-theme="dark"] #singleSheetPreviewModal {
 .admin-settlement-history dl[hidden] { display: none; }
 .admin-settlement-history dd { margin: 0; }
 @media (max-width: 600px) { .admin-settlement-history-controls { grid-template-columns: minmax(0, 1fr); } }
+
+.dashboard-task-group { display: block; padding-block: 0; }
+.dashboard-task-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.dashboard-task-group > summary::-webkit-details-marker { display: none; }
+.dashboard-task-group[open] > summary span { text-decoration: underline; }
+.dashboard-task-action { min-height: 44px; }
+.dashboard-task-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+#scheduleV2AbsenceDetail {
+  --absence-brand: #116047;
+  --absence-outline: color-mix(in srgb, CanvasText 23%, Canvas);
+  --absence-muted: color-mix(in srgb, CanvasText 75%, Canvas);
+  --absence-soft: color-mix(in srgb, CanvasText 6%, Canvas);
+}
+#scheduleV2AbsenceDetail .tn-absence-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+#scheduleV2AbsenceDetail .tn-absence-head h2 { margin:0; font-size:1.2rem; }
+#scheduleV2AbsenceDetail .tn-absence-original { display:grid; gap:3px; margin:12px 0 18px; }
+#scheduleV2AbsenceDetail .tn-absence-original span,
+#scheduleV2AbsenceDetail [data-absence-slot-message] { color:var(--absence-muted); margin:0; font-size:.875rem; }
+#scheduleV2AbsenceDetail button,
+#scheduleV2AbsenceDetail summary { min-height:44px; }
+#scheduleV2AbsenceDetail button { padding:8px 12px; border:1px solid var(--absence-outline); border-radius:10px; color:CanvasText; background:Canvas; }
+#scheduleV2AbsenceDetail .tn-absence-slot { display:grid; gap:6px; }
+#scheduleV2AbsenceDetail [data-absence-add]:not(:disabled) { background:var(--absence-brand); border-color:var(--absence-brand); color:white; font-weight:700; }
+#scheduleV2AbsenceDetail:has(.tn-absence-correction[open]) [data-absence-add]:not(:disabled) { color:CanvasText; background:Canvas; border-color:var(--absence-outline); }
+#scheduleV2AbsenceDetail [data-absence-add]:disabled { color:var(--absence-muted); background:var(--absence-soft); opacity:1; }
+#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:14px; border:1px solid var(--absence-outline); border-radius:10px; }
+#scheduleV2AbsenceDetail summary { box-sizing:border-box; padding:11px 10px; }
+#scheduleV2AbsenceDetail .tn-absence-correction summary { font-weight:700; }
+#scheduleV2AbsenceDetail [data-absence-correction-panel] { padding:0 12px 12px; }
+#scheduleV2AbsenceDetail .tn-absence-status { display:flex; flex-wrap:wrap; gap:4px 14px; margin:0 0 8px; }
+#scheduleV2AbsenceDetail [data-absence-correction-note] { margin:0 0 10px; }
+#scheduleV2AbsenceDetail [data-result] { margin:8px 0; font-weight:600; }
+#scheduleV2AbsenceDetail [data-result]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-more { margin-top:4px; font-size:.875rem; }
+
+#scheduleV2AbsenceDetail [data-absence-slot-message]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-more > summary { color:var(--absence-muted); }
+#scheduleV2AbsenceDetail [data-preview]:disabled { display:none; }
+
+#scheduleV2AbsenceDetail .tn-absence-manage { margin-top:14px;border:1px solid var(--absence-outline);border-radius:10px;padding:0 10px 8px; }
+#scheduleV2AbsenceDetail [data-absence-restore-message]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-restore-help { margin:6px 0; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary { font-weight:700; }
+#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:6px; }
+#scheduleV2AbsenceDetail:has(.tn-absence-manage[open]) [data-absence-add]:not(:disabled) { background:Canvas;color:CanvasText;border-color:var(--absence-outline); }
+#scheduleV2OutcomeList > [data-v2-common-field] { grid-column:1/-1;margin:0 0 6px;padding:12px;border:1px solid currentColor;border-radius:10px; }
+#scheduleV2OutcomeList [data-v2-common-field] label { display:grid;gap:4px;min-width:0; }
+#scheduleV2OutcomeList [data-v2-common-field] input { font-size:16px;min-height:44px;min-width:0;max-width:100%; }
+#scheduleV2OutcomeList .tn-pair-curriculum-note { font-size:.875rem; }
+
+/* Approved absence detail v6 scoped presentation. */
+#scheduleV2AbsenceDetail {
+  --absence-brand: #116047;
+  --absence-outline: color-mix(in srgb, var(--ink, CanvasText) 23%, var(--paper, Canvas));
+  --absence-muted: color-mix(in srgb, var(--ink, CanvasText) 75%, var(--paper, Canvas));
+  --absence-soft: color-mix(in srgb, var(--ink, CanvasText) 6%, var(--paper, Canvas));
+}
+#scheduleV2AbsenceDetail .tn-absence-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+#scheduleV2AbsenceDetail .tn-absence-head h2 { margin:0; font-size:1.2rem; }
+#scheduleV2AbsenceDetail .tn-absence-original { display:grid; gap:3px; margin:12px 0 18px; }
+#scheduleV2AbsenceDetail .tn-absence-original span,
+#scheduleV2AbsenceDetail [data-absence-slot-message] { color:var(--absence-muted); margin:0; font-size:.875rem; }
+#scheduleV2AbsenceDetail button,
+#scheduleV2AbsenceDetail summary { min-height:44px; }
+#scheduleV2AbsenceDetail button { padding:8px 12px; border:1px solid var(--absence-outline); border-radius:10px; color:var(--ink,CanvasText); background:var(--paper,Canvas); }
+#scheduleV2AbsenceDetail .tn-absence-slot { display:grid; gap:6px; }
+#scheduleV2AbsenceDetail [data-absence-add]:not(:disabled) { background:var(--absence-brand); border-color:var(--absence-brand); color:white; font-weight:700; }
+#scheduleV2AbsenceDetail [data-absence-add]:disabled { color:var(--absence-muted); background:var(--absence-soft); opacity:1; }
+#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:14px; }
+#scheduleV2AbsenceDetail summary { box-sizing:border-box; padding:11px 10px; }
+#scheduleV2AbsenceDetail .tn-absence-correction summary { font-weight:700; }
+#scheduleV2AbsenceDetail [data-absence-correction-panel] { padding:0 12px 12px; }
+#scheduleV2AbsenceDetail .tn-absence-status { display:flex; flex-wrap:wrap; gap:4px 14px; margin:0 0 8px; }
+#scheduleV2AbsenceDetail [data-absence-correction-note] { margin:0 0 10px; }
+#scheduleV2AbsenceDetail [data-result] { margin:8px 0; font-weight:600; }
+#scheduleV2AbsenceDetail [data-result]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-more { margin-top:4px; font-size:.875rem; }
+
+#scheduleV2AbsenceDetail [data-absence-slot-message]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-more > summary { color:var(--absence-muted); }
+#scheduleV2AbsenceDetail [data-preview]:disabled { display:none; }
+
+#scheduleV2AbsenceDetail .tn-absence-manage { margin-top:14px;border:1px solid var(--absence-outline);border-radius:10px;padding:0 10px 8px; }
+#scheduleV2AbsenceDetail [data-absence-restore-message]:empty { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-restore-help { margin:6px 0; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary { font-weight:700; }
+#scheduleV2AbsenceDetail .tn-absence-correction { margin-top:6px; }
+#scheduleV2AbsenceDetail:has(.tn-absence-manage[open]) [data-absence-add]:not(:disabled) { background:var(--paper,Canvas);color:var(--ink,CanvasText);border-color:var(--absence-outline); }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary { min-height:44px; box-sizing:border-box; font-size:16px; cursor:pointer; }
+#scheduleV2AbsenceDetail [data-absence-close] { font:inherit; font-size:16px; min-width:44px; min-height:44px; border-radius:10px; }
+#scheduleV2AbsenceDetail [data-absence-close]:focus-visible { outline:2px solid Highlight; outline-offset:2px; }
+#scheduleV2AbsenceDetail [data-absence-correction-panel] input { color:var(--ink,CanvasText); background:var(--paper,Canvas); border:1px solid var(--absence-outline); border-radius:8px; }
+#scheduleV2AbsenceDetail .tn-absence-manage { width:100%; padding:0; border:0; margin-top:12px; }
+#scheduleV2AbsenceDetail [data-absence-add], #scheduleV2AbsenceDetail .tn-absence-manage > summary { box-sizing:border-box; display:flex; align-items:center; width:100%; height:48px; min-height:48px; padding:11px 12px; border:1px solid var(--absence-outline); border-radius:10px; font-family:inherit; font-size:16px; line-height:24px; font-weight:600; }
+#scheduleV2AbsenceDetail [data-absence-add] { justify-content:center; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary { justify-content:space-between; list-style:none; cursor:pointer; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary::-webkit-details-marker { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-manage > summary::after { content:'⌄'; }
+#scheduleV2AbsenceDetail .tn-absence-manage[open] > summary::after { content:'⌃'; }
+
+/* Absence mockup v8: a single primary action in the expanded original lesson. */
+#scheduleV2AbsenceDetail:has(.tn-absence-manage[open]) [data-absence-add] { display:none; }
+#scheduleV2AbsenceDetail .tn-absence-manage[open] { border:1px solid var(--absence-outline); border-radius:10px; }
+#scheduleV2AbsenceDetail .tn-absence-manage[open] > summary { border:0; }
+#scheduleV2AbsenceDetail .tn-absence-restore-help { margin:8px 12px; color:var(--absence-muted); font-size:14px; line-height:1.5; }
+#scheduleV2AbsenceDetail [data-absence-restore]:not(:disabled) { box-sizing:border-box; display:block; width:calc(100% - 24px); min-height:48px; margin:0 12px 12px; background:var(--absence-brand); border-color:var(--absence-brand); color:white; font-family:inherit; font-size:16px; line-height:24px; font-weight:600; }
+#scheduleV2AbsenceDetail .tn-absence-manage:has([data-absence-restore]) .tn-absence-correction { display:none; }
+
+/* 주요 버튼은 14px 이상·44px 터치 영역, 작은 보조 문구는 CSS 최소 크기로 보정한다. */
+#adminAppShell :is(.primary-button, .secondary-button, .ghost-button, .small-button, .segment, .settings-tab, .nav-item, .admin-menu-button, #scheduleV2RefreshButton, #scheduleV2TodayButton, #scheduleV2FeedbackFilter, #scheduleV2ClosureButton) {
+  font-size: max(14px, .875rem);
+  line-height: 1.35;
+  min-height: 44px;
+}
+#adminAppShell .segment :is(span, strong) { font-size: inherit; }
+#adminAppShell .member-primary-filters .segment {
+  height: auto;
+  flex-wrap: wrap;
+  white-space: normal;
+  row-gap: 4px;
+}
+#adminAppShell .member-primary-filters .segment :is(span, strong) {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#adminAppShell #adminMoreMenu .nav-item {
+  font-size: max(14px, .875rem);
+  min-height: 44px;
+}
+#adminAppShell :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  font-size: max(16px, 1rem);
+}
+/* 독립 불참 상세도 배경 시간표의 스크롤을 잠근다. */
+html:has(#scheduleV2AbsenceDetail[open]),
+body:has(#scheduleV2AbsenceDetail[open]) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+#scheduleV2AbsenceDetail { overscroll-behavior: contain; }
+@media (max-width: 1024px) {
+  #adminAppShell :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+}

@@ -412,7 +412,7 @@ a {
 .coach-settlement-summary span,
 .coach-settlement-summary small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -470,7 +470,7 @@ a {
 .coach-settlement-rows span,
 .coach-settlement-rows small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1166,7 +1166,7 @@ a {
 .board-lesson.lesson-continues strong::after {
   content: " 수업중";
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1555,7 +1555,7 @@ a {
 .lesson-chart-readonly span,
 .lesson-chart-result-line span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -1640,13 +1640,13 @@ a {
 
 .lesson-required-field > span small {
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .lesson-comment-count {
   justify-self: end;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .lesson-comment-count.is-ready {
@@ -1985,7 +1985,7 @@ a {
 .compact-lesson > span,
 .compact-lesson small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -2074,7 +2074,7 @@ a {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
   line-height: 1;
   text-align: center;
@@ -2099,7 +2099,7 @@ a {
 
 .coach-duration-head small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -2167,7 +2167,7 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .coach-slot-bg.coach-add-slot {
@@ -2184,7 +2184,7 @@ a {
 
 .coach-slot-bg.coach-add-slot > small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .coach-slot-bg.coach-add-slot.locked-override {
@@ -2265,12 +2265,12 @@ a {
 
 .coach-duration-lesson strong {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-duration-lesson > span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -2562,7 +2562,7 @@ a {
 
 .member-scope-note small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -2760,7 +2760,7 @@ a {
 
 .member-name small {
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -2799,7 +2799,7 @@ a {
 .member-ticket b {
   flex: 0 0 auto;
   padding: 4px 7px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-ticket.is-private b {
@@ -3094,7 +3094,7 @@ a {
 
 .member-chart-focus span {
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 950;
 }
 
@@ -3151,7 +3151,7 @@ a {
   padding: 3px 7px;
   color: var(--muted);
   background: #eef2f6;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -3506,7 +3506,7 @@ body.notice-open {
   padding: 5px 8px;
   color: var(--green);
   background: var(--soft-green);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .record-lesson-meta {
@@ -3537,7 +3537,7 @@ body.notice-open {
   grid-column: 1 / -1;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3569,7 +3569,7 @@ body.notice-open {
 
 .coach-confirm-panel label > span small {
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .coach-confirm-panel .approve-button {
@@ -3784,7 +3784,7 @@ body.notice-open {
   padding: 4px 8px;
   color: var(--blue);
   background: var(--soft-blue);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -4065,7 +4065,7 @@ select:disabled {
 
 .release-version {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -4168,7 +4168,7 @@ select:disabled {
   padding: 2px 5px;
   background: #edf2f7;
   color: #52606d;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -4257,7 +4257,7 @@ select {
   }
 
   .summary-grid span {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.2;
   }
 
@@ -4284,14 +4284,14 @@ select {
     min-height: 44px;
     gap: 4px;
     padding: 5px 3px;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.15;
   }
 
   .today-task-tab b {
     min-width: 22px;
     padding: 2px 5px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .view > .section-title > span {
@@ -4301,7 +4301,7 @@ select {
   .record-required-note {
     margin-bottom: 8px;
     padding: 8px 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .curriculum-card > p {
@@ -4327,7 +4327,7 @@ select {
     min-width: 0;
     min-height: 52px;
     padding: 5px 3px;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.15;
     word-break: keep-all;
   }
@@ -4386,7 +4386,7 @@ select {
   }
 
   .tab {
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 
@@ -4472,7 +4472,7 @@ select {
   padding: 5px 8px;
   color: var(--blue);
   background: var(--soft-blue);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -4550,7 +4550,7 @@ select {
   padding: 5px 8px;
   color: var(--red);
   background: var(--soft-red);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -4740,7 +4740,7 @@ select {
     min-width: 0;
     min-height: 50px;
     padding: 5px 2px;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.15;
     white-space: normal;
     word-break: keep-all;
@@ -4827,7 +4827,7 @@ select {
   }
 
   .coach-mobile-day span {
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 850;
   }
 
@@ -4858,7 +4858,7 @@ select {
     gap: 3px;
     min-width: 0;
     color: #6b4d0b;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -4905,7 +4905,7 @@ select {
 
   .coach-mobile-segment-title span {
     color: var(--muted);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 800;
   }
 
@@ -4931,7 +4931,7 @@ select {
     border-radius: 6px;
     color: var(--ink);
     background: white;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -4962,7 +4962,7 @@ select {
     border-radius: 0;
     color: var(--green);
     background: var(--soft-green);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -5024,7 +5024,7 @@ select {
     display: grid;
     place-items: center;
     color: #9aa8b8;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -5052,7 +5052,7 @@ select {
   .coach-mobile-slot.coach-add-slot small {
     align-self: center;
     color: #8a6413;
-    font-size: 8px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -5083,12 +5083,12 @@ select {
 
   .coach-mobile-lesson strong {
     color: var(--ink);
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .coach-mobile-lesson span {
     color: var(--muted);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 800;
   }
 
@@ -5123,7 +5123,7 @@ select {
     border-radius: 6px;
     color: #8f2f27;
     background: #fff2ef;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .coach-mobile-empty {
@@ -5290,7 +5290,7 @@ body {
 
   .coach-mobile-lesson small {
     color: #9a3412;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 900;
   }
 }
@@ -5413,7 +5413,7 @@ body {
 
 .compact-app-heading p {
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -5613,6 +5613,17 @@ body.modal-open {
   overscroll-behavior: none;
 }
 
+/* 불참 상세의 빈 영역을 밀어도 뒤 시간표로 스크롤이 이어지지 않는다. */
+html:has(#coachReleasedAbsenceActions[open], #coachPastAbsenceDetail[open]) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#coachReleasedAbsenceActions,
+#coachPastAbsenceDetail {
+  overscroll-behavior: contain;
+}
+
 .lesson-edit-modal {
   z-index: 180;
   isolation: isolate;
@@ -5775,7 +5786,7 @@ body.modal-open {
   }
 
   .week-switcher span {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .tabbar {
@@ -5793,7 +5804,7 @@ body.modal-open {
   .tabbar .tab {
     min-height: 46px;
     padding-inline: 1px;
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 
@@ -5865,7 +5876,7 @@ body.modal-open {
 .coach-settlement-compact small {
   grid-column: 1;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -6009,7 +6020,7 @@ body.modal-open {
 
 .member-row-summary small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -6054,7 +6065,7 @@ body.modal-open {
 
 .member-detail-settlement small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .member-detail-settlement > strong {
@@ -6096,7 +6107,7 @@ body.modal-open {
 
 .coach-settlement-modal-head span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -6351,3 +6362,40 @@ body.modal-open {
 #coachReleasedAbsenceActions .coach-absence-manage[open] > summary { border:0; }
 #coachReleasedAbsenceActions .coach-absence-restore-note { margin:8px 12px; color:var(--muted,var(--ink)); font-size:14px; line-height:1.5; }
 #coachReleasedAbsenceActions [data-absence-restore] { box-sizing:border-box; min-height:48px !important; font-family:inherit; font-size:16px; line-height:24px; }
+
+/* 주요 이동과 행동은 읽을 수 있게, 제목·본문·보조 글자의 위계는 유지한다. */
+.coach-shell .tabbar .tab,
+.coach-shell .today-task-tab,
+.coach-shell .coach-profile-shortcut,
+.coach-shell :is(.primary-button, .secondary-button, .ghost-button, .small-button) {
+  font-size: max(14px, .875rem);
+  line-height: 1.35;
+  min-height: 44px;
+}
+.coach-shell .tabbar .tab {
+  height: auto;
+  padding-inline: 3px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.coach-shell .today-task-tab span { font-size: inherit; }
+.coach-shell .today-task-tab b { font-size: max(12px, .75rem); }
+.coach-shell :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  font-size: max(16px, 1rem);
+}
+.coach-shell .tn-empty-state button[data-view] {
+  min-height: 44px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: max(14px, .875rem);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--green);
+  background: var(--paper);
+}
+@media (max-width: 1024px) {
+  .coach-shell :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+}

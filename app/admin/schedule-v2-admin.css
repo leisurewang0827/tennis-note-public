@@ -57,7 +57,7 @@
 .schedule-v2-queue-head small {
   display: block;
   color: #08795a;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -311,12 +311,12 @@
 .schedule-v2-advanced-tools > summary small {
   margin-top: 2px;
   color: #6b7c76;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-advanced-tools > summary b {
   color: #08795a;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-advanced-tools > summary b::after {
@@ -376,7 +376,7 @@
 .schedule-v2-day-tabs button span {
   margin-top: 2px;
   color: #73827d;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-day-tabs button.is-active {
@@ -443,7 +443,7 @@
 .schedule-v2-editor-sheet label > span:first-child,
 .schedule-v2-policy-panel label > span {
   color: #526761;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -501,7 +501,7 @@
 
 .schedule-v2-slot-adjustments > summary span {
   color: #526761;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -515,7 +515,7 @@
   margin-left: 6px;
   color: #08795a;
   content: "변경";
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .schedule-v2-slot-adjustments[open] > summary {
@@ -694,7 +694,7 @@
 .schedule-v2-member-change-policy > header small,
 .schedule-v2-member-change-policy > header span {
   color: #60756e;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-member-change-policy-fields {
@@ -771,7 +771,7 @@
   min-height: 28px;
   align-items: center;
   color: #52645e;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-legend span::before {
@@ -839,7 +839,7 @@
 
 .schedule-v2-period-title span {
   color: #667872;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-period-scroll {
@@ -876,7 +876,7 @@
 
 .schedule-v2-week-title span {
   color: #667872;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-week-scroll {
@@ -922,7 +922,7 @@
   border-bottom: 1px solid #cbd8d4;
   background: #f7faf9;
   color: #23453b;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-align: center;
 }
@@ -961,7 +961,7 @@
 
 .schedule-v2-week-day-head span {
   color: #81531a;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .schedule-v2-week-coach-head {
@@ -973,13 +973,13 @@
 }
 
 .schedule-v2-week-coach-head strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-week-coach-head span {
   margin-top: 1px;
   color: #6a7974;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1160,7 +1160,7 @@
   margin-top: 2px;
   overflow: hidden;
   color: #943f2f;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1301,7 +1301,7 @@
 
 .schedule-v2-lesson span {
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .schedule-v2-ticket-counts {
@@ -1309,7 +1309,7 @@
   margin-top: 2px;
   overflow: hidden;
   color: #315d52;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1320,7 +1320,7 @@
   margin-top: 2px;
   overflow: hidden;
   color: #697a74;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1335,7 +1335,7 @@
   padding: 2px 5px;
   background: #edf2f7;
   color: #52606d;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
   line-height: 1.15;
 }
@@ -1376,12 +1376,12 @@
 }
 
 .schedule-v2-history-open strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-history-open span {
   margin-top: 1px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .schedule-v2-history-actions {
@@ -1396,7 +1396,7 @@
   border: 0;
   background: transparent;
   color: #08795a;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   text-align: center;
   cursor: pointer;
@@ -1527,7 +1527,7 @@
   margin-left: 6px;
   color: #547068;
   content: "펼치기";
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1543,7 +1543,7 @@
 
 .schedule-v2-queue-head small {
   display: inline;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .schedule-v2-queue-head > span {
@@ -1562,7 +1562,7 @@
   margin: 0;
   padding: 7px 10px 0;
   color: #65756f;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-queue-list {
@@ -1593,7 +1593,7 @@
 .schedule-v2-queue-item span {
   margin-top: 2px;
   color: #687872;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .schedule-v2-editor {
@@ -1701,7 +1701,7 @@
 .schedule-v2-lesson-summary span {
   margin-bottom: 4px;
   color: #667872;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1761,7 +1761,7 @@
 .schedule-v2-editor-sheet legend {
   margin-bottom: 5px;
   color: #526761;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1955,7 +1955,7 @@
 .schedule-v2-member-result span,
 .schedule-v2-member-result small {
   color: #687a74;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .schedule-v2-member-result .schedule-v2-member-identity {
@@ -1966,7 +1966,7 @@
 .schedule-v2-selected-members > span small {
   margin-left: 5px;
   color: #687a74;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .schedule-v2-member-result.is-selected {
@@ -2003,7 +2003,7 @@
 .schedule-v2-balance-warning {
   margin: 5px 0 0;
   color: #7a5100;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -2018,7 +2018,7 @@
 .schedule-v2-selected-head span {
   overflow: hidden;
   color: #687a74;
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2208,7 +2208,7 @@
 
 .schedule-v2-session-snapshot span {
   color: #62756e;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2304,7 +2304,7 @@
   padding-top: 7px;
   border-top: 1px solid #c9d7d2;
   color: #51635d;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2334,7 +2334,7 @@
   gap: 8px;
   align-items: center;
   color: #51635d;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2443,7 +2443,7 @@
 .schedule-v2-audit-panel article small,
 .schedule-v2-history-empty {
   color: #61736d;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .schedule-v2-audit-panel article small {
@@ -2690,7 +2690,7 @@ body.schedule-v2-editor-open {
 
 @media (max-width: 420px) {
   .schedule-v2-head-actions #scheduleV2RefreshButton {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .schedule-v2-kind-picker,

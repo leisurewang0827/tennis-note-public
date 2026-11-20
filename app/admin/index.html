@@ -15,18 +15,20 @@
         window.location.replace(target.toString());
       }
     </script>
-    <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
-    <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.566" />
-    <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-18" />
+    <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
+    <link rel="stylesheet" href="./styles.css?v=readability-060385175914ba61" />
+    <link rel="stylesheet" href="./schedule-v2-admin.css?v=readability-0182450edee7c07f" />
     <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.566" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
-  </head>
+    <link rel="stylesheet" href="./r4-ui-finish.css?v=7423d1e2d58a3c03">
+  <script defer src="./r4-ui-finish.js?v=7423d1e2d58a3c03"></script>
+</head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
       <div class="operations-login-panel">
         <div class="operations-login-brand">
-          <img src="../tennis-note-member-app/assets/brand/app-icon-192.png" alt="" />
+          <img src="./assets/brand/app-icon-192.png" alt="" />
           <div>
             <p>Tennis Note</p>
             <h1 id="operationsLoginTitle">운영 화면 로그인</h1>
@@ -541,10 +543,10 @@
                 </details>
                 <details id="scheduleV2ArchivedHistoryPanel" class="schedule-v2-archived-history">
                   <summary>
-                    <span>자동 정리 기록</span>
+                    <span>불참·자동 정리 기록</span>
                     <strong id="scheduleV2ArchivedHistoryCount">0건</strong>
                   </summary>
-                  <p>삭제회원과 회원권 상태·기간·횟수 때문에 자동 제외된 수업입니다. 기록은 보존하되 기본 시간표에서는 숨깁니다.</p>
+                  <p>원래 불참 수업은 새 수업과 별도로 여기서 확인할 수 있습니다. 자동 정리 수업은 기본 시간표에서 숨깁니다.</p>
                   <button id="scheduleV2ArchivedHistoryToggle" class="ghost-button" type="button" aria-pressed="false">시간표에 표시</button>
                   <div id="scheduleV2ArchivedHistoryList" class="schedule-v2-archived-history-list"></div>
                 </details>
@@ -2303,13 +2305,13 @@
     <script src="../shared/tennisnote-ui-language.js?v=1.0.566"></script>
     <script src="../shared/tennisnote-ticket-state.js?v=1.0.566"></script>
     <script src="../shared/tennisnote-settlement-adjustment.js?v=1.0.566"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.566"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=be01c5d237d12374"></script>
     <script src="../shared/tennisnote-input-guard.js?v=1.0.566"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script src="../shared/tennisnote-single-sheet-snapshot.js?v=1.0.566"></script>
+    <script src="../shared/tennisnote-single-sheet-snapshot.js?v=99f6652a643cc3e2"></script>
     <script src="../shared/tennisnote-single-sheet-batch.js?v=1.0.566"></script>
-    <script src="../shared/tennisnote-single-sheet-transport.js?v=1.0.566"></script>
-    <script src="../shared/tennisnote-single-sheet-preview-ui.js?v=1.0.566"></script>
+    <script src="../shared/tennisnote-single-sheet-transport.js?v=a2b3eab929e368e7"></script>
+    <script src="../shared/tennisnote-single-sheet-preview-ui.js?v=c3dba6c355614153"></script>
     <script src="./catalog.js?v=1.0.566"></script>
     <script src="./settings.js?v=1.0.566"></script>
     <script src="./domain/values.js?v=1.0.566"></script>
@@ -2322,7 +2324,7 @@
     <script src="./domain/policy.js?v=1.0.566"></script>
     <script src="./domain/record.js?v=1.0.566"></script>
     <script src="./domain/members.js?v=1.0.566"></script>
-    <script src="./domain/common.js?v=1.0.566"></script>
+    <script src="./domain/common.js?v=1.0.566&fix=link-readback-20261115"></script>
     <script src="./events/billing.js?v=1.0.566"></script>
     <script src="./events/common.js?v=1.0.566"></script>
     <script src="./events/data.js?v=1.0.566"></script>
@@ -2333,11 +2335,12 @@
     <script src="./events/schedule.js?v=1.0.566"></script>
     <script src="./events/settings.js?v=1.0.566"></script>
     <script src="./views/billing.js?v=1.0.566"></script>
-    <script src="./views/common.js?v=1.0.566"></script>
+    <script src="./views/common.js?v=630047831f89d2e1"></script>
     <script src="./views/dashboard.js?v=1.0.566"></script>
     <script src="./views/data.js?v=1.0.566"></script>
     <script src="./views/makeup.js?v=1.0.566"></script>
-    <script src="./views/members.js?v=1.0.566"></script>
+    <script src="./r4-zero-personal-issue.js?v=38499606709b80bc"></script>
+    <script src="./views/members.js?v=5b76ab063e4a5b2c"></script>
     <script src="./views/notes.js?v=1.0.566"></script>
     <script src="./views/reports.js?v=1.0.566"></script>
     <script src="./views/schedule.js?v=1.0.566"></script>
@@ -2345,21 +2348,29 @@
     <script src="./r4-branch-admin-writes.js?v=r4-ops-d75f6a0c54a0"></script>
     <script src="./r4-selfserve-client.js?v=r4-prod-workspace-a000a3108920"></script>
     <script src="./r4-phone-verification.js?v=r4-phone-51bfdbd44c9d"></script>
-    <script src="./r4-onboarding.js?v=r4-prod-workspace-a000a3108920"></script>
+    <script src="./r4-onboarding.js?v=r4-prod-workspace-a000a3108920-8af6fdcbd5f48273"></script>
     <script src="./r4-branch-operations.js?v=r4-ops-d75f6a0c54a0"></script>
-    <script src="./views/settings.js?v=r4-prod-modules-d40a0cf0752e"></script>
-    <script src="./data/billing.js?v=1.0.566"></script>
-    <script src="./data/common.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./r4-branch-finance-settlement.js?v=a19dd649730297ec"></script>
+    <script src="./r4-branch-finance-paid.js?v=2b70ead2878f0249"></script>
+    <link rel="stylesheet" href="./r4-product-draft-candidate.css?v=775152337b2ce116">
+    <script src="./r4-internal-product-registration.js?v=775152337b2ce116"></script>
+    <script src="./r4-product-draft-candidate.js?v=775152337b2ce116"></script>
+    <script src="./r4-production-draft-host.js?v=775152337b2ce116"></script>
+    <script src="./r4-prod-private-catalog-host.js?v=8af6fdcbd5f48273"></script>
+    <script src="./r4-scoped-member-catalog.js?v=47d2c63bed5a9d97"></script>
+    <script src="./views/settings.js?v=4e9ac1f03dad9643"></script>
+    <script src="./data/billing.js?v=8ecc4d0cf8cc4374"></script>
+    <script src="./data/common.js?v=3cb7cf3595e33e31"></script>
     <script src="./data/member.js?v=1.0.566"></script>
     <script src="./data/schedule.js?v=1.0.566"></script>
     <script src="./data/settings.js?v=1.0.566"></script>
     <script src="./forms/coach.js?v=1.0.566"></script>
     <script src="./forms/common.js?v=1.0.566"></script>
-    <script src="./forms/member.js?v=1.0.566"></script>
+    <script src="./forms/member.js?v=bda12655031417a4"></script>
     <script src="./forms/schedule.js?v=1.0.566"></script>
     <script src="./actions/billing.js?v=1.0.566"></script>
     <script src="./actions/coach.js?v=1.0.566"></script>
-    <script src="./actions/common.js?v=r4-first-workspace-97054ce0860a"></script>
+    <script src="./actions/common.js?v=d7bb47a6e5c28a69"></script>
     <script src="./actions/member.js?v=1.0.566"></script>
     <script src="./actions/notice.js?v=1.0.566"></script>
     <script src="./actions/report.js?v=1.0.566"></script>
@@ -2375,8 +2386,10 @@
     <script src="./forms/policy.js?v=1.0.566"></script>
     <script src="./forms/tickets.js?v=1.0.566"></script>
     <script src="./app.js?v=1.0.566"></script>
-    <script src="./schedule-v2-admin.js?v=schedule-v2-21"></script>
+    <script src="./schedule-v2-admin.js?v=8f327fd54f5cd9d7"></script>
     <script defer src="./r4-scoped-coach-workflows.js?v=88207f6aed31a506"></script>
     <script defer src="./r4-scoped-coach.js?v=154feef8f3767a73"></script>
-  </body>
+  <script src="./pending-member-registration.js?v=d5bfafdd590034f9"></script>
+  <script src="./r4-independent-prod-v2.js?v=c9b85b3d0405c2bb"></script>
+</body>
 </html>
