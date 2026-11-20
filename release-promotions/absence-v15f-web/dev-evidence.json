@@ -1,0 +1,170 @@
+{
+  "status": "POST_FAILURE_DEV_READBACK_VERIFIED",
+  "scope": "coach_changed7_twohosts+admin_metadata_only",
+  "adminAssets": "NOT_VERIFIED",
+  "redirects": "NOT_VERIFIED",
+  "originalRun": {
+    "id": 44721962328,
+    "conclusion": "failure"
+  },
+  "source": "5d48655379d18fdaed28bb18e498c0a4dfbd28fb",
+  "execution": "061ee3afe151d0a42b24ca3b1596ed83ecf2d964",
+  "receiptCommit": "800648a6eec1067c195f236f8c3f06d5cf546b1b",
+  "artifact": 14622740498,
+  "artifactSealSha256PriorEvidence": "723365c8b6d96b700c4c8ecaf9c95bab830216e5479f134eb8450fd2d06890f1",
+  "controls": "NOT_VERIFIED",
+  "actualDevice": "NOT_VERIFIED",
+  "observations": [
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/actions/schedule.js",
+      "httpStatus": 200,
+      "expectedSha256": "74d535b9daa73096a0370550258d0a69d1c84dec07ce928bbeede7cc613fb31d",
+      "actualSha256": "74d535b9daa73096a0370550258d0a69d1c84dec07ce928bbeede7cc613fb31d",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/data/sync.js",
+      "httpStatus": 200,
+      "expectedSha256": "e914614cba062c246417be46cea6e9d54a9544fec737b2fdb8ad0209f8a863d8",
+      "actualSha256": "e914614cba062c246417be46cea6e9d54a9544fec737b2fdb8ad0209f8a863d8",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/domain/lessons.js",
+      "httpStatus": 200,
+      "expectedSha256": "98699ea8a32e0b1314ac96373734ab073c6ff25b37117965734f0941605b30c0",
+      "actualSha256": "98699ea8a32e0b1314ac96373734ab073c6ff25b37117965734f0941605b30c0",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/domain/schedule.js",
+      "httpStatus": 200,
+      "expectedSha256": "600ad13ec56c2229a441a2d4778719257590cbc674c8d7ac3d6a1cc2c6fd103f",
+      "actualSha256": "600ad13ec56c2229a441a2d4778719257590cbc674c8d7ac3d6a1cc2c6fd103f",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/",
+      "httpStatus": 200,
+      "expectedSha256": "a77d1c94ecbf6344fd825971f46db7ca0b681b0748f398df99dc46cdb65a6483",
+      "actualSha256": "a77d1c94ecbf6344fd825971f46db7ca0b681b0748f398df99dc46cdb65a6483",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/service-worker.js",
+      "httpStatus": 200,
+      "expectedSha256": "4ea74045d8f63c746a2604c49c81b222982f7a66a273d4185bae47f9a3facb50",
+      "actualSha256": "4ea74045d8f63c746a2604c49c81b222982f7a66a273d4185bae47f9a3facb50",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_immutable",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/ui/screens.js",
+      "httpStatus": 200,
+      "expectedSha256": "70fe3765e249f2ba8db5317091cc97034a57502f6a44254cc8cf18c0927a032b",
+      "actualSha256": "70fe3765e249f2ba8db5317091cc97034a57502f6a44254cc8cf18c0927a032b",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/actions/schedule.js",
+      "httpStatus": 200,
+      "expectedSha256": "74d535b9daa73096a0370550258d0a69d1c84dec07ce928bbeede7cc613fb31d",
+      "actualSha256": "74d535b9daa73096a0370550258d0a69d1c84dec07ce928bbeede7cc613fb31d",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/data/sync.js",
+      "httpStatus": 200,
+      "expectedSha256": "e914614cba062c246417be46cea6e9d54a9544fec737b2fdb8ad0209f8a863d8",
+      "actualSha256": "e914614cba062c246417be46cea6e9d54a9544fec737b2fdb8ad0209f8a863d8",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/domain/lessons.js",
+      "httpStatus": 200,
+      "expectedSha256": "98699ea8a32e0b1314ac96373734ab073c6ff25b37117965734f0941605b30c0",
+      "actualSha256": "98699ea8a32e0b1314ac96373734ab073c6ff25b37117965734f0941605b30c0",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/domain/schedule.js",
+      "httpStatus": 200,
+      "expectedSha256": "600ad13ec56c2229a441a2d4778719257590cbc674c8d7ac3d6a1cc2c6fd103f",
+      "actualSha256": "600ad13ec56c2229a441a2d4778719257590cbc674c8d7ac3d6a1cc2c6fd103f",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/",
+      "httpStatus": 200,
+      "expectedSha256": "a77d1c94ecbf6344fd825971f46db7ca0b681b0748f398df99dc46cdb65a6483",
+      "actualSha256": "a77d1c94ecbf6344fd825971f46db7ca0b681b0748f398df99dc46cdb65a6483",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/service-worker.js",
+      "httpStatus": 200,
+      "expectedSha256": "4ea74045d8f63c746a2604c49c81b222982f7a66a273d4185bae47f9a3facb50",
+      "actualSha256": "4ea74045d8f63c746a2604c49c81b222982f7a66a273d4185bae47f9a3facb50",
+      "match": true
+    },
+    {
+      "hostLabel": "coach_alias",
+      "deploymentId": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "pathname": "/tennis-note-coach-app/ui/screens.js",
+      "httpStatus": 200,
+      "expectedSha256": "70fe3765e249f2ba8db5317091cc97034a57502f6a44254cc8cf18c0927a032b",
+      "actualSha256": "70fe3765e249f2ba8db5317091cc97034a57502f6a44254cc8cf18c0927a032b",
+      "match": true
+    }
+  ],
+  "startedAt": "2026-11-20T11:13:52.708Z",
+  "deployments": {
+    "coach": {
+      "project": "tennisnote-app-dev",
+      "canonical": "035ade34-d322-42f0-8b17-5c66b57dd59d",
+      "canonicalStatus": "success",
+      "aliasCount": 1,
+      "id": "ac7ab685-907b-4a3a-a8c8-68950d7c4682",
+      "status": "success",
+      "branch": "r4-absence-group-qa",
+      "commit": "061ee3afe151d0a42b24ca3b1596ed83ecf2d964"
+    },
+    "admin": {
+      "project": "tennisnote-admin-dev",
+      "canonical": "6053d5a1-fe01-4867-a933-8f6dea4aedda",
+      "canonicalStatus": "success",
+      "aliasCount": 1,
+      "id": "83aef268-0c37-42c6-8c5d-aeb0ab1bab04",
+      "status": "success",
+      "branch": "r4-absence-group-qa",
+      "commit": "508f9cf90c922c1036bbcd052d6deb2f1e000ded"
+    }
+  },
+  "runtime": "NOT_VERIFIED",
+  "finishedAt": "2026-11-20T11:14:05.694Z"
+}

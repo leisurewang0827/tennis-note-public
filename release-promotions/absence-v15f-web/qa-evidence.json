@@ -1,0 +1,10 @@
+{
+  "status": "COACH_TO_ADMIN_READ_ONLY_HANDOFF_REVIEWED",
+  "source": "5d48655379d18fdaed28bb18e498c0a4dfbd28fb",
+  "execution": "061ee3afe151d0a42b24ca3b1596ed83ecf2d964",
+  "reportSha256": "122825b1ba6a0247345d49dd5d753c61905e6a7b16e3e303d7d4983ec22d428d",
+  "strictHarness": "FALSE_BACKGROUND_BLOCKS_UNRESOLVED",
+  "businessWrites": 0,
+  "actualSave": "NOT_VERIFIED",
+  "device": "NOT_VERIFIED"
+}

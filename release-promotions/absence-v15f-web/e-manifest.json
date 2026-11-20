@@ -1,0 +1,56 @@
+{
+  "status": "LOCAL_FROZEN_UNREVIEWED_NO_DEPLOY",
+  "basePublic": "b88ad08187446f786e22b100c6dd8c280472224a",
+  "basePrivate": "d38abe24f8a2e8268cb61b16b9dac5b6d7b3aa45",
+  "privateSource": "private-local-candidate-v6",
+  "publicSource": "dev-full-ui-local-v6",
+  "rights": "READ_ONLY_CLOSED_HISTORY_SEPARATE",
+  "files": [
+    {
+      "path": "public/tennis-note-coach-app/data/sync.js",
+      "beforeSha256": "a5b9153643fa8e653b15a6ea684c469006866a0e3098f13f55ad8d673db9f67e",
+      "afterSha256": "e914614cba062c246417be46cea6e9d54a9544fec737b2fdb8ad0209f8a863d8"
+    },
+    {
+      "path": "public/tennis-note-coach-app/actions/schedule.js",
+      "beforeSha256": "1a9da4069b304366d3c1c7af283ecc4b782747ca9fb7d94680eb474518e07ce6",
+      "afterSha256": "74d535b9daa73096a0370550258d0a69d1c84dec07ce928bbeede7cc613fb31d"
+    },
+    {
+      "path": "public/tennis-note-coach-app/domain/lessons.js",
+      "beforeSha256": "1ae3d9b6116dbdf00bad5a40489da9500f5303103bd6c1219d009f5b86b79f31",
+      "afterSha256": "d367dec2c3e2f3b57046e6e86aacf82529f296b92426ad800db1ea6521b84cb8"
+    },
+    {
+      "path": "public/tennis-note-coach-app/domain/schedule.js",
+      "beforeSha256": "e4f9aa8ef02d6d43f87e052620b91b370a2332b27c9428c6d23d5ed143fabd4f",
+      "afterSha256": "5a1f7835c79a999f8a2a1516f9ed70c4ac7a2cd9b6b68015e8cc969d3f84e9c9"
+    },
+    {
+      "path": "public/tennis-note-coach-app/ui/screens.js",
+      "beforeSha256": "ee679cef4e191d879272ebf67f41d5a7e46e3b88f501490657817de4fd04ce4e",
+      "afterSha256": "c40bf917633a0abd57d711cb057fea177ff47846b06a8fee0a8823d308415b87"
+    },
+    {
+      "path": "private/90-Dashboard/tennis-note-coach-app/app.js",
+      "beforeSha256": "0368d8150ca203732a4c1b99dd6f0264986b0d0b348a9ebebb3acc0ed85baef3",
+      "afterSha256": "2f129f16a8379fd7ca0eed27fc358d7ebc82c5ede1d0f1485f88e4ec7181793c"
+    },
+    {
+      "path": "public/tennis-note-coach-app/index.html",
+      "beforeSha256": "b9a376ae8f3a95e2b6ad2916de93bf8a084ac578f5ac635511d9b58bc6fbe736",
+      "afterSha256": "54b8d778d3fbc42370bec1e2b13019184dcedf82caefe6a39091f275d03e82fe"
+    },
+    {
+      "path": "public/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "06248dc6e9b8f5d735b9fdfa615c6b53e4496a7c8026cc7ead844c0e76598595",
+      "afterSha256": "8ca338b8eb40ac6790bdf9020f45e761750657d35a43dabfe5614ec57ba21085"
+    },
+    {
+      "path": "private/90-Dashboard/tennis-note-coach-app/index.html",
+      "beforeSha256": "700caa48e6068997e034348fd423d7a03eb67b9222d4ecfde837b539d4715463",
+      "afterSha256": "1b846498d270fc6f1b1c9c3a32ae24192e515f4400b286bc14d0675b7ac2a489"
+    }
+  ],
+  "databaseWrites": 0
+}

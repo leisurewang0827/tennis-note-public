@@ -1,0 +1,73 @@
+{
+  "status": "LOCAL_ONLY_NOT_REVIEWED",
+  "publicProductSource": "71b0854eb0dfb216c0bd320e10a5fd77a7abfd08",
+  "adminExecutionAsset": "8f327fd54f5cd9d713e269e453ccc86aaaab404e2b3347c09b5a7bce06ad7b6b",
+  "files": [
+    {
+      "name": "admin/actions/settings.js",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/baseline/admin/site/actions/settings.js",
+      "beforeSha256": "52d50b167e8d8b78579537aecd5968d72b23778c25af3bfe9f7b0f679eae2032",
+      "afterSha256": "0bc7b436d5f8f497c04c913b7b31ac46ab43557c1abcf4807cdc51f6c846c381"
+    },
+    {
+      "name": "admin/schedule-v2-admin.js",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/baseline/admin/site/schedule-v2-admin.js",
+      "beforeSha256": "8f327fd54f5cd9d713e269e453ccc86aaaab404e2b3347c09b5a7bce06ad7b6b",
+      "afterSha256": "272990bda78f50e7695bfea0a708d6ba521490bde66c422577e76e6ecab01c13"
+    },
+    {
+      "name": "admin/views/members.js",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/baseline/admin/site/views/members.js",
+      "beforeSha256": "5b76ab063e4a5b2cacc98ec1b0738a439d16f1b7ccbd8bd9114bf234a35889cb",
+      "afterSha256": "6b0e4df1918cf12ae66bffc942188dd1c15c8cf6e386c4f6a81f873586f6e406"
+    },
+    {
+      "name": "admin/styles.css",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/admin/styles.css",
+      "beforeSha256": "060385175914ba61453b7ad78767f5fc51fbe2c0db6b4d6730162b8293f47797",
+      "afterSha256": "b47781372642df2e648ae417c7e40dbd4f0be656242bda87d7561caeb327137d"
+    },
+    {
+      "name": "admin/index.html",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/admin/index.html",
+      "beforeSha256": "13b339789b304e72dfe5682011b8dcd8820358f7ad8ba59d6ebd6213515b1ef4",
+      "afterSha256": "cb14e06089540b15ef7c9ac17521d40055def33a90e458236ba940df33b1666e"
+    },
+    {
+      "name": "coach/tennis-note-coach-app/ui/screens.js",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/coach/tennis-note-coach-app/ui/screens.js",
+      "beforeSha256": "e50aacbf7ad21a780e73304f3c571eab81ced162d529323f2b1434f3fc2dbabd",
+      "afterSha256": "ee679cef4e191d879272ebf67f41d5a7e46e3b88f501490657817de4fd04ce4e"
+    },
+    {
+      "name": "coach/tennis-note-coach-app/styles.css",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/coach/tennis-note-coach-app/styles.css",
+      "beforeSha256": "39bf8b9d45f5e78b7268a2c790053c3926438b7637aac25553e4aa9d4c49d53e",
+      "afterSha256": "83bea1050b481cf0d36a4ea701ee6adcda6b18cd7f300d24689e008bdf796f3d"
+    },
+    {
+      "name": "coach/tennis-note-coach-app/index.html",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/coach/tennis-note-coach-app/index.html",
+      "beforeSha256": "3a9e74d831089d737b14c909cb31545353c8abeab5b7540dd5ccb66e4b2524f0",
+      "afterSha256": "b9a376ae8f3a95e2b6ad2916de93bf8a084ac578f5ac635511d9b58bc6fbe736"
+    },
+    {
+      "name": "coach/tennis-note-coach-app/service-worker.js",
+      "sourcePath": "C:/Users/user/Documents/ChatGPT/테니스노트/outputs/2026-11-20-web-readability-release/candidate-assets/coach/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "c54a4b90b34d3c9e19c0713a216c1c0b973a50f935df2d997cadf969d92b9aee",
+      "afterSha256": "06248dc6e9b8f5d735b9fdfa615c6b53e4496a7c8026cc7ead844c0e76598595"
+    },
+    {
+      "name": "admin/shared/tennisnote-absence-handoff.js",
+      "sourcePath": "local-candidate",
+      "beforeSha256": null,
+      "afterSha256": "88da03b025fea67b05625d7316a0a24f30367c04e14dbd0d5062aea63461a3c2"
+    },
+    {
+      "name": "coach/shared/tennisnote-absence-handoff.js",
+      "sourcePath": "local-candidate",
+      "beforeSha256": null,
+      "afterSha256": "88da03b025fea67b05625d7316a0a24f30367c04e14dbd0d5062aea63461a3c2"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+// Local pure overlay proof only. This is not a production publisher.
+import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {verifyV14Overlay} from './overlay.mjs';
+const sha=b=>createHash('sha256').update(b).digest('hex');
+export const F_SOURCE='5d48655379d18fdaed28bb18e498c0a4dfbd28fb';
+const seven=['tennis-note-coach-app/data/sync.js','tennis-note-coach-app/actions/schedule.js','tennis-note-coach-app/domain/lessons.js','tennis-note-coach-app/domain/schedule.js','tennis-note-coach-app/ui/screens.js','tennis-note-coach-app/index.html','tennis-note-coach-app/service-worker.js'].sort();
+export function verifyFOverlay({mode,v14Args,eManifestBytes,fManifestBytes,fBytes,fSourceBytes}){
+ const old=verifyV14Overlay({mode,...v14Args});assert.equal(sha(eManifestBytes),'67b7e72c423ceb8819c7ede46a00454002986e5a76fd225f650ec7c94e6885c7');assert.equal(sha(fManifestBytes),'73a91c722560443f634dc7c9eb3aa8bf1544e4e995dc1006287523b36c65def3');const e=JSON.parse(eManifestBytes),f=JSON.parse(fManifestBytes);assert.equal(f.baseManifestSha256,sha(eManifestBytes));assert.equal(f.stylesChanged,false);assert.equal(f.rightsChanged,false);assert.equal(f.publicSource,'b88ad08187446f786e22b100c6dd8c280472224a');
+ if(mode==='admin'){assert.deepEqual(Object.keys(fBytes),[]);assert.deepEqual(Object.keys(fSourceBytes),[]);return {...old,source:F_SOURCE}}
+ assert.deepEqual(Object.keys(fBytes).sort(),seven);assert.deepEqual(Object.keys(fSourceBytes).sort(),seven);const after={...old.files};for(const n of seven){const a=e.files.find(x=>x.path==='public/'+n),b=f.files.find(x=>x.path==='public/'+n);assert(a&&b,'MANIFEST_PATH');assert.equal(after[n],a.beforeSha256,'V14_PREIMAGE '+n);assert.equal(a.afterSha256,b.beforeSha256,'E_TO_F '+n);assert.equal(sha(fBytes[n]),b.afterSha256,'F_BYTES '+n);assert.equal(sha(fSourceBytes[n]),b.afterSha256,'SOURCE_BYTES '+n);after[n]=b.afterSha256}assert.equal(Object.keys(after).length,253);for(const n of ['shared/config.local.js','_headers','_redirects','_worker.js'])assert.equal(after[n],old.files[n],'CONTROL '+n);return {mode,files:after,total:253,source:F_SOURCE};
+}
