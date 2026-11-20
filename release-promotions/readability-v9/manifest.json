@@ -520,5 +520,12 @@
     "release-promotions/readability-v9/readiness-coach.mjs",
     "release-promotions/readability-v9/runner.mjs",
     "release-promotions/readability-v9/transport.mjs"
+  ],
+  "executionBase": "cd765d1269d70d07ee390e126a295ee1d41eac14",
+  "executionFixPaths": [
+    ".github/workflows/readability-v9-web.yml",
+    "release-promotions/readability-v9/check.mjs",
+    "release-promotions/readability-v9/manifest.json",
+    "release-promotions/readability-v9/runner.mjs"
   ]
 }

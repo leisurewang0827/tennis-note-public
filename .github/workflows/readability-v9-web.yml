@@ -1,4 +1,5 @@
 name: Exact readability v9 web promotion
+# New execution only: admit two inherited legacy files only with identical Git bytes.
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
