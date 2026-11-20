@@ -1,0 +1,33 @@
+name: Absence V15F read-only receipt
+on:
+  push:
+    branches: [codex/tennisnote-r4-admin-prod-candidate]
+    paths: ['.github/workflows/absence-v15f-readback.yml']
+permissions: {contents: read, actions: read}
+jobs:
+  readback:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.ref == 'refs/heads/codex/tennisnote-r4-admin-prod-candidate' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    environment: {name: development, deployment: false}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Focused offline contract
+        run: node --test release-sources/absence-simple-preview/v15f-receipt-test.mjs
+      - name: Read-only deployment receipt
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node release-sources/absence-simple-preview/v15f-receipt.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: 'absence-v15f-readback-${{ github.run_id }}'
+          path: v15f-readback-receipt.json
+          if-no-files-found: warn
+          retention-days: 7
