@@ -41,6 +41,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       ])),
     );
     jobs.push(loadAdminMemberDirectoryPage());
+    jobs.push(loadAdminDiscountLedger());
   }
 
   if (view === "billing") {
@@ -597,6 +598,10 @@ async function refreshAdminImportAuthState(options = {}) {
           setView(state.view, { skipLock: true });
         }
       }
+    }
+    if (role === "admin" && options.resumeAbsenceHandoff !== false) {
+      try { if (window.TennisNoteAbsenceHandoff?.hasPending(window.sessionStorage)) await resumeAdminAbsenceHandoff(); }
+      catch { showToast("수업 연결을 이어가지 못했습니다. 코치 화면에서 다시 선택해 주세요."); }
     }
     return ["admin", "coach"].includes(role);
   } catch (error) {

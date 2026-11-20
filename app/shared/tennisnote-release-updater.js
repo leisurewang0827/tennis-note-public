@@ -14,6 +14,22 @@
   let shouldDeferUpdate = null;
   let nativeAppInfoPromise = null;
   let activeNativeUpdate = null;
+  let dismissedUpdateKey = "";
+  let releaseCheckVersion = 0;
+
+  function updateDismissalKey(candidate, decision) {
+    if (!candidate?.releaseId) return "";
+    const target = decision?.policy;
+    const suffix = target ? `:${decision.platform}:${target.latestVersion}:${target.latestBuild}` : "";
+    return `tennis-note-update-dismissed:${candidate.releaseId}${suffix}`;
+  }
+
+  function updateWasDismissed(key) {
+    if (!key) return false;
+    if (dismissedUpdateKey === key) return true;
+    try { return sessionStorage.getItem(key) === "done"; }
+    catch { return false; }
+  }
 
   function currentRelease() {
     return window.TENNIS_NOTE_RELEASE || {};
@@ -166,9 +182,11 @@
       void applyUpdate(remoteRelease, { manual: true, remoteAppUrl: activeRemoteAppUrl });
     });
     notice.querySelector("[data-tennisnote-update-dismiss]")?.addEventListener("click", () => {
-      if (remoteRelease?.releaseId) {
-        sessionStorage.setItem(`tennis-note-update-dismissed:${remoteRelease.releaseId}`, "done");
-      }
+      if (activeNativeUpdate?.status === "required") return;
+      const key = updateDismissalKey(remoteRelease, activeNativeUpdate);
+      dismissedUpdateKey = key;
+      try { if (key) sessionStorage.setItem(key, "done"); }
+      catch { /* 저장소를 쓸 수 없어도 현재 화면의 나중에 선택은 유지한다. */ }
       hideUpdateNotice();
     });
     document.body.appendChild(notice);
@@ -177,16 +195,15 @@
 
   function showUpdateNotice(candidate, options = {}) {
     if (candidate) remoteRelease = candidate;
-    const releaseId = remoteRelease?.releaseId;
-    if (!options.force && releaseId && sessionStorage.getItem(`tennis-note-update-dismissed:${releaseId}`) === "done") {
+    const nativeDecision = options.nativeDecision || activeNativeUpdate;
+    const required = nativeDecision?.status === "required";
+    if (!options.force && !required && updateWasDismissed(updateDismissalKey(remoteRelease, nativeDecision))) {
       hideUpdateNotice();
       return;
     }
     const notice = ensureUpdateNotice();
     const deferred = options.deferred === true || hasUnsavedChanges();
-    const nativeDecision = options.nativeDecision || activeNativeUpdate;
     const nativeStoreUpdate = nativeDecision?.status === "required" || nativeDecision?.status === "optional";
-    const required = nativeDecision?.status === "required";
     notice.dataset.updateKind = nativeStoreUpdate ? "native-store" : "web";
     notice.dataset.updateRequired = required ? "true" : "false";
     const title = notice.querySelector("strong");
@@ -423,13 +440,16 @@
     const now = Date.now();
     if (!options.force && now - lastCheckAt < 30_000) return remoteRelease;
     lastCheckAt = now;
+    const requestVersion = ++releaseCheckVersion;
     try {
       const candidate = await fetchRelease(manifestUrl);
+      if (requestVersion !== releaseCheckVersion) return remoteRelease;
       lastSuccessfulCheckAt = Date.now();
       hideReleaseCheckFailure();
       remoteRelease = candidate;
       if (isNativeWebView()) {
         const installed = await installedNativeAppInfo();
+        if (requestVersion !== releaseCheckVersion) return remoteRelease;
         activeNativeUpdate = evaluateNativeUpdate(candidate, installed);
         if (activeNativeUpdate.status === "required" || activeNativeUpdate.status === "optional") {
           showUpdateNotice(candidate, { nativeDecision: activeNativeUpdate });
@@ -450,6 +470,7 @@
       return candidate;
     } catch {
       // Offline and temporary release endpoint failures keep the current cached app.
+      if (requestVersion !== releaseCheckVersion) return remoteRelease;
       showReleaseCheckFailure(navigator.onLine ? "server" : "offline");
       return null;
     }
@@ -498,7 +519,7 @@
     // 등록하면 고친 파일이 캐시에 가려 화면이 안 바뀌고, releaseId 가
     // 달라질 때마다 페이지가 새로고침돼 작업이 끊긴다.
     // 이미 등록돼 있던 워커와 캐시도 여기서 정리한다.
-    if (isLocalDevHost()) {
+    if (!isNativeWebView() && isLocalDevHost()) {
       void unregisterLocalServiceWorkers();
       return;
     }

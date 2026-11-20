@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-history-group-a77d1c94ecbf6344";
+const CACHE_NAME = "tennis-note-coach-mode-history-group-3a27bd7946fb5395";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./r4-ui-finish.css?v=7423d1e2d58a3c03",
@@ -64,7 +64,7 @@ const APP_SHELL = [
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-curriculum-search.js?v=1.0.566",
   "../shared/tennisnote-release.js?v=1.0.566",
-  "../shared/tennisnote-release-updater.js?v=1.0.566",
+  "../shared/tennisnote-release-updater.js?v=v16-4c4fb51c1238f2a0",
   "../shared/tennisnote-issue-reporter.js?v=issue-reporter-4",
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",
   "../shared/tennisnote-ui-language.js?v=1.0.566",

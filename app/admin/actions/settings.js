@@ -611,10 +611,112 @@ async function saveAdminLayoutSettings() {
   }
 }
 
+let adminAbsenceHandoffRequestVersion = 0;
+let adminAbsenceHandoffResumePromise = null;
+
+async function receiveAdminAbsenceHandoff() {
+  const version = ++adminAbsenceHandoffRequestVersion;
+  const handoff = window.TennisNoteAbsenceHandoff;
+  const client = window.TennisNoteDataClient;
+  const origin = await handoff?.runtime?.(client, "admin");
+  const isRequestCurrent = () => version === adminAbsenceHandoffRequestVersion && window.TennisNoteDataClient === client;
+  if (!handoff || !origin || !isRequestCurrent()) return;
+  let storage;
+  try { storage = window.sessionStorage; }
+  catch {
+    showToast("수업 전달을 보관할 수 없습니다. 관리자 시간표에서 수업을 확인해 주세요.");
+    return;
+  }
+  if (window.location.hash.startsWith("#tn-absence=")) {
+    const captured = handoff.capture(window.location, window.history, storage, origin);
+    if (captured === "invalid" || captured === "unavailable") {
+      showToast("수업 전달이 만료됐거나 보관할 수 없습니다. 코치 화면에서 다시 선택해 주세요.");
+      return;
+    }
+  }
+  if (!handoff.hasPending(storage)) return;
+  if (adminHasUnsavedChanges()) {
+    showToast("작성 중인 내용을 저장한 뒤 코치 화면의 수업을 다시 선택해 주세요.");
+    return;
+  }
+  const verified = await refreshAdminImportAuthState({ syncLiveData: false, resumeAbsenceHandoff: false });
+  if (verified !== true || !isRequestCurrent()) return;
+  await resumeAdminAbsenceHandoff({ isRequestCurrent });
+}
+
+async function resumeAdminAbsenceHandoff({ isRequestCurrent = () => true } = {}) {
+  const previous = adminAbsenceHandoffResumePromise;
+  const pending = (async () => {
+    if (previous) await previous.catch(() => undefined);
+    if (isRequestCurrent()) await performAdminAbsenceHandoff({ isRequestCurrent });
+  })();
+  adminAbsenceHandoffResumePromise = pending;
+  try { await pending; }
+  finally { if (adminAbsenceHandoffResumePromise === pending) adminAbsenceHandoffResumePromise = null; }
+}
+
+async function performAdminAbsenceHandoff({ isRequestCurrent = () => true } = {}) {
+  const handoff = window.TennisNoteAbsenceHandoff;
+  const client = window.TennisNoteDataClient;
+  const origin = await handoff?.runtime?.(client, "admin");
+  if (!handoff || !origin || !isRequestCurrent() || !handoff.hasPending(window.sessionStorage)) return;
+  if (adminHasUnsavedChanges()) {
+    showToast("작성 중인 내용을 저장한 뒤 코치 화면의 수업을 다시 선택해 주세요.");
+    return;
+  }
+  if (!operationsAccessReady() || operationsRole() !== "admin") {
+    adminImportAuthState.message = "해당 불참 정정은 기존 관리자 계정으로 로그인한 뒤 새로고침해 주세요.";
+    renderOperationsLoginGate();
+    if (operationsAccessReady()) showToast("이 불참 정정은 관리자만 열 수 있습니다.");
+    return;
+  }
+  if (!requestAdminUnlock("schedule", () => resumeAdminAbsenceHandoff({ isRequestCurrent }))) {
+    showToast("관리자 잠금을 해제한 뒤 새로고침해 주세요.");
+    return;
+  }
+  setView("schedule");
+  if (state.view !== "schedule") return;
+  const token = client?.getSession?.()?.access_token;
+  const actor = String(adminImportAuthState.profile?.id || "");
+  const branch = String(activeOperationBranchId() || "");
+  const config = client?.loadConfig?.() || {};
+  const isCurrent = () => {
+    const current = client?.loadConfig?.() || {};
+    return Boolean(isRequestCurrent() && token && actor && window.TennisNoteDataClient === client && client?.getSession?.()?.access_token === token
+      && String(adminImportAuthState.profile?.id || "") === actor && operationsRole() === "admin"
+      && operationsAccessReady() && String(activeOperationBranchId() || "") === branch && state.view === "schedule"
+      && window.location.origin === origin && current.environment === config.environment
+      && current.projectFingerprint === config.projectFingerprint && current.supabaseUrl === config.supabaseUrl
+      && (!isAdminLockActive() || !adminLockSettings.lockedViews.includes("schedule") || (!adminPinNeedsSetup() && isAdminUnlocked())));
+  };
+  const result = await handoff.resume({storage: window.sessionStorage, origin: window.location.origin,
+    expectedOrigin: origin, role: operationsRole(), authenticated: operationsAccessReady(), unlocked: true,
+    selectedBranch: branch, isCurrent,
+    openLesson: (scope) => window.TennisNoteScheduleV2Admin?.openLesson?.(scope) || false});
+  if (result !== "opened" && result !== "none") showToast(result === "opened_unsealed"
+    ? "수업 상세는 열렸지만 전달 상태를 저장하지 못했습니다. 새로고침하면 다시 열릴 수 있습니다." : result === "invalid_or_expired"
+    ? "수업 전달 시간이 만료됐습니다. 코치 화면에서 다시 선택해 주세요." : result === "branch_mismatch"
+    ? "선택한 지점이 수업 지점과 다릅니다. 지점을 확인한 뒤 새로고침해 주세요."
+    : "해당 수업을 정확히 확인하지 못했습니다. 그룹 수업은 관리자 시간표에서 회원을 직접 확인해 주세요.");
+}
+
 async function bootstrapAdminOperationsSession() {
   const client = window.TennisNoteDataClient;
+  let handoffCaptureBlocked = false;
+  let handoffIdentityVerified = false;
+  const handoffNamespace = window.location.hash.startsWith("#tn-absence=");
+  if (handoffNamespace) {
+    try {
+      const origin = await window.TennisNoteAbsenceHandoff?.runtime?.(client, "admin");
+      if (origin) {
+        const captured = window.TennisNoteAbsenceHandoff.capture(window.location, window.history, window.sessionStorage, origin);
+        if (captured === "unavailable" || captured === "invalid") handoffCaptureBlocked = true;
+      } else handoffCaptureBlocked = true;
+    } catch (_) { handoffCaptureBlocked = true; }
+  }
+
   try {
-    await client?.consumeOAuthRedirect?.();
+    if (!handoffNamespace) await client?.consumeOAuthRedirect?.();
   } catch (error) {
     const canRetry = client?.isTransientConnectionError?.(error) || client?.isOnline?.() === false;
     adminImportAuthState.message = canRetry
@@ -628,9 +730,13 @@ async function bootstrapAdminOperationsSession() {
   }
   renderOperationsLoginGate();
   try {
-    const verified = await refreshAdminImportAuthState();
+    const verified = await refreshAdminImportAuthState({ resumeAbsenceHandoff: false });
+    handoffIdentityVerified = verified === true;
     if (verified && operationsRole() === "admin" && !window.TennisNoteR4ExistingAccount?.isWorkspaceMode?.()) await refreshAdminPendingUsers();
   } finally {
     hideAdminBrandSplash();
   }
+  if (handoffCaptureBlocked) showToast("수업 전달이 만료됐거나 보관할 수 없습니다. 코치 화면에서 다시 선택해 주세요.");
+  else if (handoffIdentityVerified) await resumeAdminAbsenceHandoff();
+  else if (window.TennisNoteAbsenceHandoff?.hasPending(window.sessionStorage)) showToast("관리자 권한을 서버에서 확인한 뒤 새로고침해 주세요.");
 }

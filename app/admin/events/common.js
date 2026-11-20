@@ -6,7 +6,16 @@
 // (같은 요소에 두 번 등록되는 건 document 뿐이고, 그건 delegated.js 에서
 //  원래 순서 그대로 유지한다. stopImmediatePropagation 은 쓰이지 않는다.)
 
+function bindAdminAbsenceHandoffEvents() {
+  const receive = () => {
+    if (window.location.hash.startsWith("#tn-absence=")) void receiveAdminAbsenceHandoff();
+  };
+  window.addEventListener("hashchange", receive);
+  window.addEventListener("pageshow", receive);
+}
+
 function bindCommonEvents() {
+  bindAdminAbsenceHandoffEvents();
   $$(".nav-item[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $("#globalSearch").addEventListener("focus", renderGlobalSearchResults);
   $("#globalSearch").addEventListener("keydown", (event) => {
