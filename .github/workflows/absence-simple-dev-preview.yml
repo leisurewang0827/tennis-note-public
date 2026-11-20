@@ -47,7 +47,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: 'absence-simple-preview-${{ github.run_id }}'
-          path: '${{ runner.temp }}/absence-full-v10/'
+          path: '${{ runner.temp }}/absence-full-v15/'
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: 'absence-simple-preview-${{ github.run_id }}'
-          path: '${{ runner.temp }}/absence-full-v10'
+          path: '${{ runner.temp }}/absence-full-v15'
       - name: Install pinned existing transport
         run: |
           set -euo pipefail
