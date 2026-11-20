@@ -6346,3 +6346,8 @@ body.modal-open {
 #coachReleasedAbsenceActions .coach-absence-manage > summary::-webkit-details-marker { display:none; }
 #coachReleasedAbsenceActions .coach-absence-manage > summary::after { content:'⌄'; }
 #coachReleasedAbsenceActions .coach-absence-manage[open] > summary::after { content:'⌃'; }
+#coachReleasedAbsenceActions:has(.coach-absence-manage[open]) [data-absence-new] { display:none; }
+#coachReleasedAbsenceActions .coach-absence-manage[open] { border:1px solid var(--line,GrayText); border-radius:10px; }
+#coachReleasedAbsenceActions .coach-absence-manage[open] > summary { border:0; }
+#coachReleasedAbsenceActions .coach-absence-restore-note { margin:8px 12px; color:var(--muted,var(--ink)); font-size:14px; line-height:1.5; }
+#coachReleasedAbsenceActions [data-absence-restore] { box-sizing:border-box; min-height:48px !important; font-family:inherit; font-size:16px; line-height:24px; }

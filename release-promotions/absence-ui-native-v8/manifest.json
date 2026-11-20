@@ -1,0 +1,21 @@
+{
+  "kind": "ABSENCE_UI_NATIVE_V8",
+  "parent": "d4a025560b434e069639d281df421178674a3ac8",
+  "repo": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-admin-prod-candidate",
+  "baselineProduct": "64a045e676aa4816f0d974a1a3f63eeb57c4fdae",
+  "changed": {
+    "app/tennis-note-coach-app/ui/screens.js": "20549e8d2da38cd95c2107e2a559ccad51667cede99b05af35e6abc118beff46",
+    "app/tennis-note-coach-app/styles.css": "57ecd1133922e8be72cfbfbf4943062dbf9f3d665e6dd0518d478074260ec926",
+    "app/tennis-note-coach-app/events/delegated.js": "fbb1bdad6a578d91d0a49e3443dd116e5facd9cf7b3ec1e222768cc0556da40b",
+    "app/tennis-note-coach-app/index.html": "20cc14da2d871793df3f9f31566c316d2abd8757392c875350f69d880afe63ae",
+    "app/tennis-note-coach-app/service-worker.js": "83fe28ab0833a94d148c86c458e23db5b7ba42a325c206da31460daad4bcb06d"
+  },
+  "sourceCount": 203,
+  "sourceContentSha256": "99836614830558fe1435cdeaa75c813fc404c3b889d40953e17385b65814cd40",
+  "releaseSha256": "2a0f978204c9b1a7fdd9b5bd7ba5cd00ee6313a0a63740b38a87129243d19901",
+  "dbWrites": 0,
+  "conditionsChanged": 0,
+  "actualDeduction": 0,
+  "publicRelease": false
+}

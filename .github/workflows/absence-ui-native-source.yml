@@ -1,4 +1,4 @@
-name: Freeze verified coach UI for native builds
+name: Exact absence V8 source only
 on:
   push:
     branches: [codex/tennisnote-r4-admin-prod-candidate]
@@ -6,11 +6,19 @@ on:
 permissions: {contents: read}
 jobs:
   verify-native-source:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {ref: '${{ github.sha }}', fetch-depth: 2, persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '24'}
-      - run: node release-promotions/absence-ui-native-v7/check.mjs
+      - name: Verify only new V8 source, cache, exact delta and native fingerprint
+        run: node release-promotions/absence-ui-native-v8/check.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 'absence-v8-source-${{ github.run_id }}'
+          path: '${{ runner.temp }}/absence-v8-source.json'
+          if-no-files-found: error
+          retention-days: 7

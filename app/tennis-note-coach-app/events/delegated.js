@@ -112,6 +112,11 @@ function bindDelegatedEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const emptyScheduleButton = event.target.closest('.tn-empty-state button[data-view="fullScheduleView"]');
+    if (emptyScheduleButton && !emptyScheduleButton.disabled && !emptyScheduleButton.classList.contains("tab")) {
+      navigateCoachView("fullScheduleView");
+      return;
+    }
     const sameDayAbsenceReviewButton = event.target.closest("[data-review-same-day-absence]");
     if (sameDayAbsenceReviewButton) {
       void reviewMemberSameDayAbsence(

@@ -264,7 +264,8 @@ function openCoachReleasedAbsenceActions(id, trigger) {
     ${start.canAdd ? '<button type="button" class="approve-button" data-absence-new aria-describedby="coachReleasedAbsenceReason" style="min-height:44px;width:100%">다른 회원 수업 등록</button>' : '<p id="coachReleasedAbsenceReason" role="status">이 시간에는 다른 회원의 수업을 등록할 수 없습니다.</p>'}
     ${start.canAdd ? '<span id="coachReleasedAbsenceReason" hidden></span>' : ''}
     <details class="coach-absence-manage"><summary>원래 수업 변경</summary>
-      <button type="button" data-absence-restore style="min-height:44px;width:100%">다시 참석</button></details><p data-absence-status role="status"></p>`;
+      <p class="coach-absence-restore-note">수업 시작 전입니다.</p>
+      <button type="button" class="approve-button" data-absence-restore style="min-height:44px;width:100%">다시 참석으로 변경</button></details><p data-absence-status role="status"></p>`;
   const message = dialog.querySelector("[data-absence-status]");
   dialog.addEventListener("close",()=>{dialog.remove();if (trigger?.isConnected) trigger.focus();},{once:true});
   dialog.querySelector("[data-absence-close]").onclick=()=>dialog.close();
