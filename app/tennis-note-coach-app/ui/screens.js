@@ -302,6 +302,47 @@ function openCoachPastAbsenceDetail(id, trigger) {
     <p><strong>${escapeHtml(context.slot.member || "회원")}</strong><br>${escapeHtml(context.date)} · ${escapeHtml(context.time)} · 불참</p>
     <p id="coachPastAbsenceReason">이미 시작했거나 지난 수업입니다.</p>
     <p>보강: ${escapeHtml(makeup)}</p>`;
+  const correction = dialog.querySelector("details") || document.createElement("details");
+  correction.className = "coach-absence-manage";
+  correction.innerHTML = `<summary>원래 수업 변경</summary><p>지난 불참 정정은 관리자 웹에서 기존 관리자 로그인·지점 권한을 확인한 뒤 진행합니다.</p><button type="button" data-open-absence-admin hidden style="min-height:44px;width:100%">관리자 웹에서 정정</button><p data-absence-admin-message role="status"></p>`;
+  if (!correction.isConnected) dialog.append(correction);
+  const correctionButton = correction.querySelector("[data-open-absence-admin]");
+  const correctionMessage = correction.querySelector("[data-absence-admin-message]");
+  const handoffRole = String(state.coach?.role || "");
+  correctionButton.hidden = !["admin", "coach"].includes(handoffRole);
+  if (correctionButton.hidden) correctionMessage.textContent = "정정은 권한이 있는 관리자에게 요청해 주세요.";
+  const handoffClient = window.TennisNoteDataClient;
+  const handoffToken = handoffClient?.getSession?.()?.access_token || "";
+  const handoffConfig = handoffClient?.loadConfig?.() || {};
+  const handoffActor = String(state.liveProfileId || "");
+  const handoffBranch = String(state.coach?.branchId || "");
+  const handoffCoachRole = String(state.coach?.coachRoleId || "");
+  let handoffOrigin = "";
+  correctionButton.disabled = true;
+  void window.TennisNoteAbsenceHandoff?.runtime?.(handoffClient, "coach").then((origin) => {
+    handoffOrigin = origin;
+    correctionButton.disabled = !origin || !handoffToken || !["admin", "coach"].includes(handoffRole) || state.coach?.role !== handoffRole;
+  });
+  correctionButton.onclick = () => {
+    const current = coachPastAbsenceDetailContext(id);
+    const resolvedPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("admin");
+    const portal = handoffOrigin === "https://r4-absence-group-qa.tennisnote-admin-dev.pages.dev"
+      && resolvedPortal?.ok === true && resolvedPortal.url === "https://tennisnote-admin-dev.pages.dev/"
+      ? {ok: true, url: `${handoffOrigin}/`} : resolvedPortal;
+    const config = handoffClient?.loadConfig?.() || {};
+    if (!current || !["admin", "coach"].includes(handoffRole) || state.coach?.role !== handoffRole || window.TennisNoteDataClient !== handoffClient
+      || !handoffToken || handoffClient?.getSession?.()?.access_token !== handoffToken || !handoffOrigin
+      || !handoffActor || String(state.liveProfileId || "") !== handoffActor || !handoffBranch
+      || String(state.coach?.branchId || "") !== handoffBranch || !handoffCoachRole || String(state.coach?.coachRoleId || "") !== handoffCoachRole
+      || config.environment !== handoffConfig.environment || config.projectFingerprint !== handoffConfig.projectFingerprint || config.supabaseUrl !== handoffConfig.supabaseUrl) {
+      correctionMessage.textContent = "현재 로그인과 원래 수업을 다시 확인해 주세요."; return;
+    }
+    try {
+      const href = window.TennisNoteAbsenceHandoff.link(portal, {branchId: String(state.coach.branchId || ""), lessonId: String(current.slot.sourceLessonId || ""), date: current.date}, handoffOrigin);
+      window.open(href, "_blank", "noopener,noreferrer");
+      correctionMessage.textContent = "관리자 웹에서 기존 로그인·지점·잠금을 확인해 주세요.";
+    } catch (_) { correctionMessage.textContent = "관리자 화면을 안전하게 열 수 없습니다. 원래 수업을 다시 확인해 주세요."; }
+  };
   const closeButton = dialog.querySelector("[data-coach-past-absence-close]");
   dialog.addEventListener("close", () => {
     dialog.remove();

@@ -5204,6 +5204,17 @@ button .schedule-member-lines > span {
   line-height: 1.05;
 }
 
+/* 두 줄 이름은 카드 높이를 바꾸지 않고 이름 행의 공간만 늘린다. */
+@media (max-width: 1024px) {
+  .coach-mobile-lesson:has(.schedule-member-lines) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(25px, auto);
+    & > strong { grid-column: 1 / -1; }
+    padding-block: 1px;
+    gap: 0;
+  }
+}
+
 /* Tennis Note athletic visual system: presentation only, no coach workflow changes. */
 :root {
   --ink: #12231f;

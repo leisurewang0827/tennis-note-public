@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-readability-3a9e74d831089d73";
+const CACHE_NAME = "tennis-note-coach-mode-absence-b9a376ae8f3a95e2";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./r4-ui-finish.css?v=7423d1e2d58a3c03",
@@ -9,7 +9,7 @@ const APP_SHELL = [
   "./r4-scoped-workspace.css?v=01f658a88968b11c",
   "./",
   "./index.html",
-  "./styles.css?v=readability-39bf8b9d45f5e78b",
+  "./styles.css?v=83bea1050b481cf0",
   "../shared/tennisnote-app-common.js?v=1.0.566",
   "./settings.js?v=1.0.566",
   "./catalog.js?v=1.0.566",
@@ -41,7 +41,7 @@ const APP_SHELL = [
   "./data/push.js?v=1.0.566",
   "./data/records.js?v=pair-412f4162d9809089",
   "./ui/sheet.js?v=readability-c425feb279ab78f4",
-  "./ui/screens.js?v=readability-e50aacbf7ad21a78",
+  "./ui/screens.js?v=ee679cef4e191d87",
   "./actions/records.js?v=pair-c253c985210fffb4",
   "./actions/schedule.js?v=absence-v7-1a9da4069b304366",
   "./actions/profile.js?v=1.0.566",
@@ -56,6 +56,7 @@ const APP_SHELL = [
   "./assets/app-icon.svg",
   "../release.json",
   "../shared/tennisnote-runtime-environment.js?v=1.0.566",
+  "../shared/tennisnote-absence-handoff.js?v=88da03b025fea67b",
   "../shared/tennisnote-escape-html.js?v=1.0.566",
   "../shared/tennisnote-data-client.js?v=1.0.566",
   "../shared/tennisnote-schedule-revision.js?v=1.0.566",

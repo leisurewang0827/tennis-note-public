@@ -7,6 +7,28 @@ for(const n of ['_headers','_redirects','_worker.js'])assert.equal(hash(fs.readF
 assert(!fs.existsSync(path.join(root,'assets/coach/shared/config.local.js')));assert(!fs.existsSync(path.join(root,'assets/admin/shared/config.local.js')));
 console.log('PASS: exact preview target, 13 sealed assets, admin control hashes, no committed runtime config');
 
+// V10: keep the original DEV baseline checks intact; separately seal the new full UI.
+{
+ const bytes=fs.readFileSync(path.join(root,'full-manifest.json'));
+ assert.equal(hash(bytes),'61828532f10804e4fc85e9984c23b8fd5ad30021af2fed1d0ae549045eb92fe6');
+ const f=JSON.parse(bytes);assert.equal(f.status,'LOCAL_SOURCE_ONLY_NO_RUNTIME_NO_DEPLOY');
+ assert.equal(f.sites.admin.assetCountWithoutRuntime,181);assert.equal(f.sites.coach.assetCountWithoutRuntime,252);
+ const expected={admin:['_redirects','actions/settings.js','index.html','schedule-v2-admin.js','shared/tennisnote-absence-handoff.js','styles.css','views/members.js'],coach:['shared/tennisnote-absence-handoff.js','tennis-note-coach-app/index.html','tennis-note-coach-app/service-worker.js','tennis-note-coach-app/styles.css','tennis-note-coach-app/ui/screens.js']};
+ const walk=(dir,prefix='')=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name),prefix+e.name+'/'):[prefix+e.name]);
+ for(const mode of ['admin','coach']){
+  assert.equal(Object.keys(f.sites[mode].files).length,mode==='admin'?181:252);
+  assert.equal(Object.hasOwn(f.sites[mode].files,'shared/config.local.js'),false);
+  assert.deepEqual(walk(path.join(root,'v10-assets',mode)).sort(),expected[mode].slice().sort());
+  for(const name of expected[mode])assert.equal(hash(fs.readFileSync(path.join(root,'v10-assets',mode,name))),f.sites[mode].files[name],mode+'/'+name);
+ }
+ assert.equal(f.sites.admin.files['shared/tennisnote-absence-handoff.js'],f.sites.coach.files['shared/tennisnote-absence-handoff.js']);
+ for(const name of expected.coach){
+  const product='app/'+name;
+  assert.equal(hash(fs.readFileSync(product)),f.sites.coach.files[name],'coach product parity '+name);
+ }
+ console.log('PASS: exact full UI manifest 433 non-runtime assets, two shared modules and DEV route control');
+}
+
 // New v7 adapter/identity/cache guard checks only.
 {
 const vm=require("node:vm");const read=p=>fs.readFileSync(path.join(root,"assets/coach/tennis-note-coach-app",p),"utf8");const sync=read("data/sync.js"),schedule=read("actions/schedule.js"),screens=read("ui/screens.js"),domain=read("domain/lessons.js");const fn=(s,n)=>{const m=s.match(new RegExp("^(?:async )?function "+n+"\\([^]*?^}","m"));assert(m,n);return m[0]};
@@ -29,3 +51,4 @@ assert(schedule.includes('coachFutureLegacyEntitlements(workspace, workspace.fut
 
 console.log(JSON.stringify({newFutureAdapterCases:cases,status:"PASS"}));
 }
+
