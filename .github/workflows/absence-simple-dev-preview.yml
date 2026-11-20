@@ -34,6 +34,12 @@ jobs:
         with: {node-version: '24'}
       - uses: actions/setup-python@v7
         with: {python-version: '3.12'}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: readability-v9-44669723933
+          run-id: 44669723933
+          github-token: '${{ github.token }}'
+          path: '${{ runner.temp }}/readability-v9-artifact'
       - run: node release-sources/absence-simple-preview/check.cjs
       - name: Generate protected development runtime
         run: python -c "from pathlib import Path; from scripts.build_cloudflare_pages import write_browser_config; import os; write_browser_config(Path(os.environ['RUNNER_TEMP']) / 'absence-runtime')"
@@ -41,7 +47,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: 'absence-simple-preview-${{ github.run_id }}'
-          path: '${{ runner.temp }}/absence-simple-preview/'
+          path: '${{ runner.temp }}/absence-full-v10/'
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -58,7 +64,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: 'absence-simple-preview-${{ github.run_id }}'
-          path: '${{ runner.temp }}/absence-simple-preview'
+          path: '${{ runner.temp }}/absence-full-v10'
       - name: Install pinned existing transport
         run: |
           set -euo pipefail
@@ -74,3 +80,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
           EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
         run: node release-sources/absence-simple-preview/publish.mjs
+
