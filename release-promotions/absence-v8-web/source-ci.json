@@ -1,0 +1,19 @@
+{
+  "conclusion": "success",
+  "created_at": "2026-11-20T01:49:20Z",
+  "event": "push",
+  "head_branch": "codex/tennisnote-r4-admin-prod-candidate",
+  "head_sha": "144c95b216fdd137c59dcbb2ec2fa08fd46f4bbe",
+  "id": 44656378421,
+  "path": ".github/workflows/absence-ui-native-source.yml",
+  "run_attempt": 1,
+  "status": "completed",
+  "updated_at": "2026-11-20T01:49:31Z",
+  "sourceJob": {
+    "conclusion": "success",
+    "id": 136023507402,
+    "name": "verify-native-source",
+    "run_id": 44656378421,
+    "status": "completed"
+  }
+}

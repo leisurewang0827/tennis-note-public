@@ -1,0 +1,21 @@
+// New connection-only guards. The previously passed UI/readiness/completion suites are not replayed.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {dirname,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {assertIdentity,validateReview,validateSourceEvidence,validateCheckout,safePath} from './runner.mjs';
+const here=dirname(fileURLToPath(import.meta.url)),root=resolve(here,'../..'),m=JSON.parse(readFileSync(join(here,'manifest.json'))),sha=b=>createHash('sha256').update(b).digest('hex');
+assert.equal(m.paths.length,19);assert.equal(new Set(m.paths).size,19);for(const p of m.paths)readFileSync(join(root,p));
+for(const[n,h]of Object.entries(m.moduleHashes))assert.equal(sha(readFileSync(join(here,n))),h);
+for(const[surface,p]of Object.entries(m.projects))for(const[n,h]of Object.entries(p.changed))assert.equal(sha(readFileSync(join(here,'assets',surface,n))),h);
+assert.equal(sha(readFileSync(join(here,'source-attestation.json'))),m.attestationHash);assert.equal(sha(readFileSync(join(here,'source-ci.json'))),m.ciEvidenceHash);
+let checks=0;const ok=f=>{f();checks++;},deny=f=>{assert.throws(f);checks++;};
+const review={state:'approved',user:{id:294703475},environments:[{id:26219323796}],comment:'ABSENCE-V8-WEB '+'a'.repeat(40)+' exact-assets no-db'};
+ok(()=>validateReview([review],'a'.repeat(40)));ok(()=>validateReview([review,review],'a'.repeat(40)));deny(()=>validateReview([],'a'.repeat(40)));deny(()=>validateReview([review,review,review],'a'.repeat(40)));
+for(const d of [{state:'rejected'},{user:{id:1}},{environments:[{id:1}]},{comment:'another source'}])deny(()=>validateReview([{...review,...d}],'a'.repeat(40)));
+const identity={project:'tennisnote-admin',id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',source:'a'.repeat(40),branch:'main',environment:'production'};ok(()=>assertIdentity({...identity,status:'success'},identity));for(const d of [{project:'another'},{id:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'},{source:'b'.repeat(40)},{branch:'preview'},{environment:'preview'},{status:'failure'}])deny(()=>assertIdentity({...identity,status:'success',...d},identity));
+const run={id:m.sourceCi.run,head_sha:m.productSource,head_branch:m.branch,path:m.sourceCi.path,event:'push',run_attempt:1,status:'completed',conclusion:'success',repository:{full_name:m.repo},head_repository:{full_name:m.repo}},job={id:m.sourceCi.job,run_id:m.sourceCi.run,name:'verify-native-source',conclusion:'success'};ok(()=>validateSourceEvidence(run,job));for(const d of [{head_sha:'b'.repeat(40)},{run_attempt:2},{conclusion:'failure'},{head_branch:'main'},{repository:{full_name:'other/repo'}}])deny(()=>validateSourceEvidence({...run,...d},job));deny(()=>validateSourceEvidence(run,{...job,run_id:1}));
+const oldPath='release-promotions/admin-absence-v6/assets/styles.css',ownPath=m.paths.find(p=>p.endsWith('/runner.mjs')),raw=Buffer.from([255,13,10,233]);ok(()=>validateCheckout([oldPath,ownPath],{read:()=>raw,blob:()=>Buffer.from(raw)}));deny(()=>validateCheckout([oldPath],{read:()=>Buffer.from([255,10,233]),blob:()=>raw}));deny(()=>validateCheckout(['outside.txt'],{read:()=>raw,blob:()=>raw}));
+ok(()=>safePath('tennis-note-coach-app/ui/screens.js'));for(const p of ['../x','/x','x\\y','x?key=1','x//y','x/#hash'])deny(()=>safePath(p));
+console.log(JSON.stringify({status:'NEW_PROMOTION_CONNECTIONS_PASS',checks,source:process.env.GITHUB_SHA||null,productSource:m.productSource,files:19,adminChanges:3,coachChanges:5,network:0,dbWrites:0,oldSuitesReplayed:0}));

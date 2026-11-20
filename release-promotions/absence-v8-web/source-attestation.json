@@ -1,0 +1,40 @@
+{
+  "status": "SOURCE_GO",
+  "reviewDate": "2026-11-20",
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-admin-prod-candidate",
+  "source": "144c95b216fdd137c59dcbb2ec2fa08fd46f4bbe",
+  "tree": "6b4f687d5216bfeefdaa23c08cc71a8bf6079b02",
+  "parent": "30dabe299cfbbc70be94d32560aee78564720bfb",
+  "method": "Read-only local commit metadata and exact eight Git blob bytes compared with reviewed frozen products and source-fix metadata",
+  "sourceCount": 203,
+  "sourceContentSha256": "99836614830558fe1435cdeaa75c813fc404c3b889d40953e17385b65814cd40",
+  "releaseSha256": "2a0f978204c9b1a7fdd9b5bd7ba5cd00ee6313a0a63740b38a87129243d19901",
+  "files": {
+    "app/tennis-note-coach-app/ui/screens.js": "20549e8d2da38cd95c2107e2a559ccad51667cede99b05af35e6abc118beff46",
+    "app/tennis-note-coach-app/styles.css": "57ecd1133922e8be72cfbfbf4943062dbf9f3d665e6dd0518d478074260ec926",
+    "app/tennis-note-coach-app/events/delegated.js": "fbb1bdad6a578d91d0a49e3443dd116e5facd9cf7b3ec1e222768cc0556da40b",
+    "app/tennis-note-coach-app/index.html": "20cc14da2d871793df3f9f31566c316d2abd8757392c875350f69d880afe63ae",
+    "app/tennis-note-coach-app/service-worker.js": "83fe28ab0833a94d148c86c458e23db5b7ba42a325c206da31460daad4bcb06d",
+    ".github/workflows/absence-ui-native-source.yml": "3360fc476744d5b331844551f0585eb09c586ffc2c966bff917418f5a44fbf1b",
+    "release-promotions/absence-ui-native-v8/check.mjs": "d3151c3b7c705330b8b323b740f4c9abd2c8c3829118bb03206bdd1c314ce960",
+    "release-promotions/absence-ui-native-v8/manifest.json": "3f289a10d77f1a4a7ca06cbdb8c7e56a9f5d1b4e76518f2b7c87eb4222e4b602"
+  },
+  "ciEvidence": {
+    "origin": "Coordinator-collected source-ci.json; reviewed locally without a remote query",
+    "fileSha256": "eb71190110155c571d14f4df031c7b4f0c7b61201e08c3b3f789650a468cb9c1",
+    "runId": 44656378421,
+    "headSha": "144c95b216fdd137c59dcbb2ec2fa08fd46f4bbe",
+    "event": "push",
+    "attempt": 1,
+    "workflowPath": ".github/workflows/absence-ui-native-source.yml",
+    "status": "completed",
+    "conclusion": "success",
+    "jobId": 136023507402,
+    "jobName": "verify-native-source",
+    "jobRunId": 44656378421,
+    "jobStatus": "completed",
+    "jobConclusion": "success"
+  },
+  "scope": "Source identity and supplied CI evidence only; no runtime, signed artifact, device or store attestation"
+}
