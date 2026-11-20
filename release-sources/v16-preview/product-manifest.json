@@ -1,0 +1,61 @@
+{
+  "status": "LOCAL_ASSEMBLY_UNREVIEWED_NOT_EXECUTABLE",
+  "publicBase": "5d48655379d18fdaed28bb18e498c0a4dfbd28fb",
+  "privateBase": "3b4dc6c7e7e48c1ed6063ed76459fe22b473452b",
+  "adminProductionDeployment": "13e71df1-e067-463f-9750-70f85e14fee3",
+  "coachProductionDeployment": "7e8849d7-2268-4d30-bc82-e518f5611e2f",
+  "files": [
+    {
+      "path": "private/90-Dashboard/shared/tennisnote-release-updater.js",
+      "sha256": "4c4fb51c1238f2a0819c465aba829846d3bb140c9b858e17ebe6453061504567"
+    },
+    {
+      "path": "private/90-Dashboard/tennis-note-prototype/app.js",
+      "sha256": "dd678a3f0096e4d9a4bcedd38d473a1d383db89c3853443b3e066d770db61dce"
+    },
+    {
+      "path": "public/app/admin/actions/settings.js",
+      "sha256": "ac7261ccf58242697aa41d6d398e7073aa11cafe96041f574e0ce7c37738f83a"
+    },
+    {
+      "path": "public/app/admin/data/common.js",
+      "sha256": "b856dde5b3b84123af3cbea6165010ce51453564d2a37db6f23c98990bdbf09e"
+    },
+    {
+      "path": "public/app/admin/events/common.js",
+      "sha256": "ccd94e1a6fbe853f375ca8f7db29ea268fcb46775315167f9609e6b011a388a0"
+    },
+    {
+      "path": "public/app/admin/index.html",
+      "sha256": "cc3b9b5d6f5e0766471060e71043df358c1523c0c04398cded7dad8d7295407c"
+    },
+    {
+      "path": "public/app/shared/tennisnote-release-updater.js",
+      "sha256": "4c4fb51c1238f2a0819c465aba829846d3bb140c9b858e17ebe6453061504567"
+    },
+    {
+      "path": "public/app/tennis-note-coach-app/index.html",
+      "sha256": "3a27bd7946fb53954f2dd1d2794941281a061a4ea80e72104c6c1659ea7d492a"
+    },
+    {
+      "path": "public/app/tennis-note-coach-app/service-worker.js",
+      "sha256": "da23ec3d01219879d47739beae734f56997d5434e5c370fb40a938224af93e3c"
+    },
+    {
+      "path": "public/app/tennis-note-member-app/index.html",
+      "sha256": "81ee101b0498a2b5755eff11f46d3eeae8b7d1327b4ef2b30a38a32c2c7426d4"
+    },
+    {
+      "path": "public/app/tennis-note-member-app/service-worker.js",
+      "sha256": "6a47bcfb760aa6cdad83eb51b9c75e77d17b3246703623f51d853d8aa17e9dd5"
+    }
+  ],
+  "nativeSourceCount": 204,
+  "nativeNormalizedAggregate": "fedfe25fce647cb0bfe3d00b91d384ae66c68e0a23411ff002f631085e8ff92f",
+  "publicCommit": "PENDING",
+  "nativeBuildVersions": "PENDING_STORE_CHECK",
+  "cloudflareCurrentTokenValidity": "NOT_VERIFIED",
+  "oldWorkspaceGuardPreserved": true,
+  "commit": false,
+  "remoteWrite": false
+}
