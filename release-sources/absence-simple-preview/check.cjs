@@ -24,7 +24,7 @@ console.log('PASS: exact preview target, 13 sealed assets, admin control hashes,
  assert.equal(f.sites.admin.files['shared/tennisnote-absence-handoff.js'],f.sites.coach.files['shared/tennisnote-absence-handoff.js']);
  for(const name of expected.coach){
   const product='app/'+name;
-  assert.equal(hash(fs.readFileSync(product)),f.sites.coach.files[name],'coach product parity '+name);
+  assert.equal(hash(require('node:child_process').execFileSync('git',['show','508f9cf90c922c1036bbcd052d6deb2f1e000ded:'+product])),f.sites.coach.files[name],'V14 parent product parity '+name);
  }
  console.log('PASS: exact full UI manifest 433 non-runtime assets, two shared modules and DEV route control');
 }
@@ -52,3 +52,6 @@ assert(schedule.includes('coachFutureLegacyEntitlements(workspace, workspace.fut
 console.log(JSON.stringify({newFutureAdapterCases:cases,status:"PASS"}));
 }
 
+
+// V15: exact seven product files and sealed new DEV map only.
+{ const bytes=fs.readFileSync(path.join(root,'v15-full-manifest.json'));assert.equal(hash(bytes),'99a5a11d703303ae72a6ce7163944874666c21c4dd03e716aa8b84f74ac62ed9');const f=JSON.parse(bytes),names=["tennis-note-coach-app/actions/schedule.js","tennis-note-coach-app/data/sync.js","tennis-note-coach-app/domain/lessons.js","tennis-note-coach-app/domain/schedule.js","tennis-note-coach-app/index.html","tennis-note-coach-app/service-worker.js","tennis-note-coach-app/ui/screens.js"];for(const n of names){const b=fs.readFileSync(path.join(root,'v15-assets/coach',n));assert.equal(hash(b),f.sites.coach.files[n],n);assert.equal(hash(fs.readFileSync('app/'+n)),f.sites.coach.files[n],'source '+n)}console.log('PASS: V15 source/asset parity') }

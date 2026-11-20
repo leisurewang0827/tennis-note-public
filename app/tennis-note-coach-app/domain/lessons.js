@@ -247,9 +247,62 @@ function coachPastAbsenceProofCurrent(proof, entitlement, slot) {
     && slot.pastAbsenceProof === proof && slot.userId === proof.userId && slot.ticketId === proof.ticketId;
 }
 
+// Display-only grouping; underlying rights, history and booking arrays are unchanged.
+function coachPastGroupTuple(item) {
+  const fields=[item?.sourceLessonId,item?.branchId || item?.pastAbsenceProof?.branch,item?.coachRoleId,item?.lessonDate,String(item?.time || "").slice(0,5),Number(item?.durationMinutes)];
+  if (fields.some(x => !x) || !Number.isSafeInteger(fields[5]) || fields[5]<=0) return "";
+  return JSON.stringify(fields.map(String));
+}
+function coachPastGroupContext(id, expectedSlot) {
+  const source=String(id || "").startsWith("past-group:") ? String(id).slice(11) : "";
+  if (!source) return null;
+  const rows=[...(state.releasedMakeupSlots || []).filter(x => x?.releasedMakeupSlot===true && x?.historicalReleasedSlot===true),...(state.pastReadOnlyHistory || [])]
+    .filter(x => String(x?.sourceLessonId || "")===source);
+  if (rows.length!==2) return null;
+  const tuple=coachPastGroupTuple(rows[0]);if (!tuple || rows.some(x => coachPastGroupTuple(x)!==tuple)) return null;
+  const contexts=rows.map(x => coachPastAbsenceDetailContext(x.pastReadOnlyHistory===true ? x.id : x.entitlementId,x));
+  if (contexts.some(x => !x) || new Set(contexts.map(x => String(x.slot.userId || ""))).size!==2
+    || contexts.some(x => !x.slot.userId || !x.slot.ticketId || !x.slot.member)) return null;
+  const [lessonId,branch,role,date,time,duration]=JSON.parse(tuple);
+  if (expectedSlot && (expectedSlot.pastAbsenceGroup!==true || String(expectedSlot.id || "")!==String(id)
+    || coachPastGroupTuple(expectedSlot)!==tuple)) return null;
+  const members=contexts.map(x => ({name:x.slot.member, status:x.historyOnly
+    ? (x.closedStatus==="expired" ? "보강권 만료" : "보강권 취소")
+    : (x.entitlement.status==="booked" ? "보강 예약됨" : "보강 대기")}));
+  return {groupOnly:true,slot:{sourceLessonId:lessonId,branchId:branch,coachRoleId:role,lessonDate:date,time,durationMinutes:Number(duration),member:members.map(x=>x.name).join(" · ")},members,date,time};
+}
+function coachProjectPastAbsenceGroups(items) {
+  const selected=Array.isArray(items)?items:[],groups=new Map();
+  for(const item of selected){if (!(item?.pastReadOnlyHistory===true || (item?.releasedMakeupSlot===true && item?.historicalReleasedSlot===true))) continue;
+    const tuple=coachPastGroupTuple(item);if (!tuple) continue;const list=groups.get(tuple)||[];list.push(item);groups.set(tuple,list);}
+  const used=new Set(),result=[];
+  for(const item of selected){const history=item?.pastReadOnlyHistory===true,eligible=history || (item?.releasedMakeupSlot===true && item?.historicalReleasedSlot===true),tuple=eligible?coachPastGroupTuple(item):"",group=tuple?groups.get(tuple):null;
+    if (!group || group.length<2){if (!history || coachPastAbsenceProofCurrent(item.pastAbsenceProof,item,item)) result.push(item);continue;}
+    if (used.has(tuple)) continue;used.add(tuple);
+    const id='past-group:'+String(item.sourceLessonId || ''),context=coachPastGroupContext(id),parts=JSON.parse(tuple);
+    result.push({id,pastAbsenceGroup:true,sourceLessonId:parts[0],branchId:parts[1],coachRoleId:parts[2],lessonDate:parts[3],time:parts[4],durationMinutes:Number(parts[5]),day:item.day,coach:item.coach,
+      member:context ? context.slot.member : "불참 이력 확인 필요",type:"불참 수업",task:"보강 상태 확인",lessonSource:"regular",status:"cancelled",serverStatus:"cancelled"});
+  }
+  return result;
+}
+
 function coachPastAbsenceDetailContext(entitlementId, expectedSlot) {
   const id = String(entitlementId || "");
   if (!id) return null;
+  if (id.startsWith("past-group:")) return coachPastGroupContext(id, expectedSlot);
+  if (id.startsWith("history:")) {
+    const matches=(state.pastReadOnlyHistory || []).filter(x => String(x.id || "")===id);
+    if (matches.length!==1) return null;
+    const h=matches[0],proof=h.pastAbsenceProof,date=String(h.lessonDate || ""),time=String(h.time || "").slice(0,5);
+    if (h.pastReadOnlyHistory!==true || !["cancelled","expired"].includes(h.closedStatus)
+      || !coachPastAbsenceProofCurrent(proof,h,h) || (!canProcessLesson(h) && !canRescheduleLesson(h))
+      || String(state.coach?.branchId || "")!==proof.branch || String(h.branchId || "")!==proof.branch) return null;
+    const start=/^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(date+"T"+time+":00+09:00") : NaN;
+    if (!Number.isFinite(start) || start>=Date.now() || new Date(start+9*60*60*1000).toISOString().slice(0,16)!==date+"T"+time) return null;
+    if (expectedSlot && (expectedSlot.pastReadOnlyHistory!==true || ["id","sourceLessonId","coachRoleId","userId","ticketId","lessonDate","time"].some(k => String(expectedSlot[k] || "")!==String(h[k] || "")))) return null;
+    return {slot:{...h,member:proof.memberName},date,time,historyOnly:true,closedStatus:h.closedStatus};
+  }
+
   const slots = (state.releasedMakeupSlots || []).filter((item) => String(item.entitlementId || "") === id);
   const entitlements = [...(state.makeupEntitlements || []), ...(state.pastLegacyAbsenceEntitlements || [])]
     .filter((item) => String(item.id || "") === id);
@@ -285,6 +338,16 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
   }
   if (!canProcessLesson(lesson) && !canRescheduleLesson(lesson)) {
     return `disabled aria-label="${lesson.member || "회원"} 다른 코치 수업 읽기 전용"`;
+  }
+  if (lesson.pastAbsenceGroup === true) {
+    return coachPastAbsenceDetailContext(lesson.id,lesson)
+      ? `data-coach-past-absence-id="${escapeHtml(lesson.id)}" aria-label="그룹 불참 수업 상세"`
+      : 'disabled aria-label="그룹 불참 수업의 최신 상태를 확인해 주세요."';
+  }
+  if (lesson.pastReadOnlyHistory === true) {
+    return coachPastAbsenceDetailContext(lesson.id, lesson)
+      ? `data-coach-past-absence-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lesson.member || "회원")} 과거 불참 수업 상세"`
+      : 'disabled aria-label="불참 수업의 최신 상태와 담당 코치를 확인해 주세요."';
   }
   if (lesson.releasedMakeupSlot) {
     if (lesson.historicalReleasedSlot) {

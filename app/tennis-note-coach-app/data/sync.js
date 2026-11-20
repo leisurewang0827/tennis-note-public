@@ -106,6 +106,65 @@ function coachFutureLegacyEntitlements(workspace, rows, scope, now = Date.now())
   });
 }
 
+// Read-only projection: closed entitlements never enter booking/released-slot state.
+function coachClosedAbsenceHistory(workspace, legacyRows, v2Rows, scope, now = Date.now()) {
+  const value = x => String(x || "");
+  if (!scope || !scope.sameIdentity() || workspace?.branchId !== scope.branch
+    || value(workspace.actor?.coachRoleId) !== scope.role || value(workspace.actor?.userId) !== scope.profile
+    || !Array.isArray(legacyRows) || !Array.isArray(v2Rows) || legacyRows.length >= 300 || v2Rows.length >= 300) return [];
+  const lessons = Array.isArray(workspace.lessons) ? workspace.lessons : [];
+  const all = [...legacyRows.map(row => ({row, kind:"legacy"})), ...v2Rows.map(row => ({row, kind:"v2"}))];
+  const active = Array.isArray(workspace.makeupEntitlements) ? workspace.makeupEntitlements : [];
+  return all.flatMap(({row,kind}) => {
+    const id=value(row?.id), source=value(row?.source_lesson_id), ticket=value(row?.ticket_id), status=value(row?.status);
+    if (!id || !source || !ticket || !["cancelled","expired"].includes(status)
+      || value(row.branch_id)!==scope.branch || value(row.coach_role_id)!==scope.role) return [];
+    if (all.filter(x => value(x.row?.id)===id || (value(x.row?.source_lesson_id)===source && (
+      (kind==="v2" && x.kind==="v2" && value(row.user_id) && value(x.row?.user_id)===value(row.user_id))
+      || (value(x.row?.ticket_id)===ticket && (kind==="legacy" || x.kind==="legacy" || !value(row.user_id) || !value(x.row?.user_id)))))).length!==1
+      || active.some(x => value(x.sourceLessonId)===source && !["cancelled","expired"].includes(value(x.status)) && (
+        (kind==="v2" && value(row.user_id) && value(x.userId)===value(row.user_id))
+        || (value(x.ticketId)===ticket && (kind==="legacy" || !value(row.user_id) || !value(x.userId)))))) return [];
+    const matches=lessons.filter(x => value(x.id)===source);
+    if (matches.length!==1) return [];
+    const lesson=matches[0],date=value(lesson.lessonDate),time=value(lesson.startTime).slice(0,5),duration=Number(row.duration_minutes);
+    const start=/^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) ? Date.parse(`${date}T${time}:00+09:00`) : NaN;
+    if (lesson.status!=="cancelled" || value(lesson.coachRoleId)!==scope.role || !Number.isFinite(start) || start>=now
+      || new Date(start+9*60*60*1000).toISOString().slice(0,16)!==`${date}T${time}`
+      || !Number.isSafeInteger(duration) || duration<=0 || duration!==Number(lesson.durationMinutes)) return [];
+    const participants=Array.isArray(lesson.participants) ? lesson.participants : [];
+    if (participants.some(p => !value(p?.userId) || !value(p?.ticketId))) return [];
+    const found=participants.filter(p => value(p.ticketId)===ticket && (kind!=="v2" || value(p.userId)===value(row.user_id)));
+    if (found.length!==1 || !value(found[0].name) || (kind==="v2" && !value(row.user_id))) return [];
+    const proof=coachPastAbsenceProof(scope,workspace.branchId,source,scope.role,value(found[0].userId),ticket,lessons,participants,value(found[0].name));
+    if (!proof) return [];
+    return [{id:`history:${kind}:${id}`,pastReadOnlyHistory:true,sourceLessonId:source,userId:proof.userId,ticketId:ticket,
+      coachRoleId:scope.role,branchId:scope.branch,pastAbsenceProof:proof,member:proof.memberName,
+      lessonDate:date,time,durationMinutes:duration,closedStatus:status}];
+  });
+}
+
+async function coachLoadClosedAbsenceHistory(client, workspace, scope) {
+  if (!scope || !scope.sameIdentity() || workspace?.branchId !== scope.branch) return null;
+  const ids=[...new Set((workspace.lessons || []).filter(x => x?.status==="cancelled"
+    && String(x.coachRoleId || "")===scope.role && x.id).map(x => String(x.id)))];
+  if (!ids.length || ids.length>300) return null;
+  const legacy=[],v2=[];
+  try {
+    for(let i=0;i<ids.length;i+=75) {
+      const filters={branch_id:scope.branch,source_lesson_id:{in:ids.slice(i,i+75)}};
+      const [a,b]=await Promise.all([
+        client.selectRows("tn_makeup_entitlements",{select:"id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status",filters,limit:300}),
+        client.selectRows("tn_makeup_entitlements_v2",{select:"id,source_lesson_id,user_id,ticket_id,branch_id,coach_role_id,duration_minutes,status",filters,limit:300}),
+      ]);
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length>=300 || b.length>=300 || !scope.sameIdentity()) return null;
+      legacy.push(...a);v2.push(...b);
+    }
+    if (legacy.length>=300 || v2.length>=300) return null;
+    return {legacy,v2};
+  } catch (_) { return null; }
+}
+
 async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = ++coachScheduleV2RequestSequence;
@@ -167,6 +226,8 @@ async function syncCoachScheduleV2(options = {}) {
         workspace.futureLegacyAbsenceRows = Array.isArray(legacyRows) ? legacyRows : [];
       }
     }
+    workspace.closedHistoryRows = verifiedPastScope ? await coachLoadClosedAbsenceHistory(client, workspace, pastAbsenceScope) : null;
+    if (requestId !== coachScheduleV2RequestSequence) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,

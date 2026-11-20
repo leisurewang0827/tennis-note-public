@@ -72,10 +72,10 @@ function weekLessons() {
   const week = activeWeekIndex();
   if (state.liveLessonsLoaded || state.dataMode === "live") {
     const selectedWeek = activeScheduleWeek();
-    return [...state.liveLessons, ...(state.releasedMakeupSlots || [])].filter((lesson) => (
+    return coachProjectPastAbsenceGroups([...state.liveLessons, ...(state.releasedMakeupSlots || []), ...(state.pastReadOnlyHistory || [])].filter((lesson) => (
       !lesson.lessonDate
       || (lesson.lessonDate >= selectedWeek.startDate && lesson.lessonDate <= selectedWeek.endDate)
-    ));
+    )));
   }
   const adminLessons = adminLessonsForCoachApp();
   const baseLessons = adminLessons.length
@@ -200,6 +200,7 @@ function coachFutureRoundLabel(lesson = {}) {
 }
 
 function coachScheduleRoundLabel(lesson = {}) {
+  if (lesson.pastAbsenceGroup === true || lesson.pastReadOnlyHistory === true) return "불참 이력";
   const finalRecords = (Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [])
     .filter((record) => String(record.recordStatus || record.record_status || "").toLowerCase() === "final");
   const sessionStates = finalRecords.map(coachTicketSessionSnapshot).filter((state) => state.confirmed);
@@ -221,6 +222,8 @@ function coachScheduleRoundLabel(lesson = {}) {
 }
 
 function coachScheduleExceptionLabel(lesson = {}) {
+  if (lesson.pastAbsenceGroup === true) return "회원별 보강 상태";
+  if (lesson.pastReadOnlyHistory === true) return "보강권 종료";
   if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   let detail = "";

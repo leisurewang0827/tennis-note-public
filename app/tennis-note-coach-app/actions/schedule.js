@@ -162,6 +162,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   });
   const todayIso = localDateKey();
   state.releasedMakeupSlots = state.makeupEntitlements.flatMap((entitlement) => {
+    if (!["open", "booked"].includes(entitlement.status)) return [];
     if (!entitlement.originalDate || !entitlement.originalTime) return [];
     const releasedStart = minutesFromTime(entitlement.originalTime);
     const releasedEnd = releasedStart + entitlement.durationMinutes;
@@ -224,6 +225,12 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       pastAbsenceProof: entitlement.pastAbsenceProof, pastAbsenceOnly: true, type: `정규 · 불참 ${entitlement.durationMinutes}분`,
       lessonSource: "makeup", durationMinutes: entitlement.durationMinutes, status: "available", task: "보강 가능" };
   }));
+
+  state.pastReadOnlyHistory = coachClosedAbsenceHistory(workspace, workspace.closedHistoryRows?.legacy, workspace.closedHistoryRows?.v2, pastAbsenceScope).map(item => {
+    const dayIndex = new Date(item.lessonDate + "T00:00:00").getDay();
+    return {...item,day:scheduleDays[dayIndex===0?6:dayIndex-1],coach:coachesByRoleId.get(item.coachRoleId)?.name || "담당 코치",
+      type:"불참 수업",task:"보강권 종료",lessonSource:"regular",status:"cancelled",serverStatus:"cancelled"};
+  });
 
   const latestLessonByUserId = new Map();
   [...mappedLessons]

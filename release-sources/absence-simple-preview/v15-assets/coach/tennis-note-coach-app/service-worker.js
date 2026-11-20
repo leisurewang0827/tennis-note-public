@@ -1,0 +1,140 @@
+const CACHE_NAME = "tennis-note-coach-mode-history-group-a77d1c94ecbf6344";
+const CACHE_PREFIX = "tennis-note-coach-mode-";
+const APP_SHELL = [
+  "./r4-ui-finish.css?v=7423d1e2d58a3c03",
+  "./r4-ui-finish.js?v=7423d1e2d58a3c03",
+  "../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1",
+  "./data/r4-workflows.js?v=r4-entry-4aced5016d566ea1",
+  "./data/r4-scoped-workspace.js?v=r4-entry-4aced5016d566ea1",
+  "./r4-scoped-workspace.css?v=01f658a88968b11c",
+  "./",
+  "./index.html",
+  "./styles.css?v=83bea1050b481cf0",
+  "../shared/tennisnote-app-common.js?v=1.0.566",
+  "./settings.js?v=1.0.566",
+  "./catalog.js?v=1.0.566",
+  "./domain/values.js?v=1.0.566",
+  "./domain/schedule.js?v=absence-history-group-600ad13ec56c2229",
+  "./domain/policy.js?v=1.0.566",
+  "./domain/coaches.js?v=1.0.566",
+  "./domain/lessons.js?v=absence-history-group-98699ea8a32e0b13",
+  "./domain/records.js?v=pair-94fe09bb9370960d",
+  "./domain/members.js?v=1.0.566",
+  "./domain/schedule-v2.js?v=1.0.566",
+  "./domain/notices.js?v=1.0.566",
+  "./domain/curriculum.js?v=1.0.566",
+  "./domain/settlement.js?v=1.0.566",
+  "./domain/makeup.js?v=1.0.566",
+  "./domain/shared-data.js?v=1.0.566",
+  "./domain/tasks.js?v=1.0.566",
+  "./views/home.js?v=1.0.566",
+  "./views/schedule.js?v=absence-v7-c02d9388f7c96528",
+  "./views/members.js?v=1.0.566",
+  "./views/records.js?v=1.0.566",
+  "./views/curriculum.js?v=1.0.566",
+  "./views/settlement.js?v=1.0.566",
+  "./views/profile.js?v=1.0.566",
+  "./events/account.js?v=1.0.566",
+  "./events/delegated.js?v=v8-fbb1bdad6a578d91",
+  "./data/auth.js?v=r4-entry-4aced5016d566ea1",
+  "./data/sync.js?v=absence-history-e914614cba062c24",
+  "./data/push.js?v=1.0.566",
+  "./data/records.js?v=pair-412f4162d9809089",
+  "./ui/sheet.js?v=readability-c425feb279ab78f4",
+  "./ui/screens.js?v=absence-history-group-70fe3765e249f2ba",
+  "./actions/records.js?v=pair-c253c985210fffb4",
+  "./actions/schedule.js?v=absence-history-74d535b9daa73096",
+  "./actions/profile.js?v=1.0.566",
+  "./actions/session.js?v=1.0.566",
+  "./storage.js?v=1.0.566",
+  "./domain/common.js?v=1.0.566",
+  "./views/common.js?v=1.0.566",
+  "./forms/coaches.js?v=1.0.566",
+  "./forms/common.js?v=1.0.566",
+  "./ui/common.js?v=1.0.566",
+  "./app.js?v=pair-5c0156a63d77a647",
+  "./assets/app-icon.svg",
+  "../release.json",
+  "../shared/tennisnote-runtime-environment.js?v=1.0.566",
+  "../shared/tennisnote-absence-handoff.js?v=88da03b025fea67b",
+  "../shared/tennisnote-escape-html.js?v=1.0.566",
+  "../shared/tennisnote-data-client.js?v=1.0.566",
+  "../shared/tennisnote-schedule-revision.js?v=1.0.566",
+  "../shared/tennisnote-schedule-lanes.js?v=1.0.566",
+  "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
+  "../shared/tennisnote-curriculum-search.js?v=1.0.566",
+  "../shared/tennisnote-release.js?v=1.0.566",
+  "../shared/tennisnote-release-updater.js?v=1.0.566",
+  "../shared/tennisnote-issue-reporter.js?v=issue-reporter-4",
+  "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",
+  "../shared/tennisnote-ui-language.js?v=1.0.566",
+  "../shared/tennisnote-ticket-state.js?v=1.0.566",
+  "../shared/tennisnote-settlement-adjustment.js?v=1.0.566",
+  "../shared/tennisnote-mode-transition.js?v=1.0.566",
+  "../shared/tennisnote-comment-draft.js?v=1.0.566",
+  "../shared/tennisnote-input-guard.js?v=1.0.566",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.566",
+];
+
+function deleteOldCaches() {
+  return caches.keys().then((keys) =>
+    Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)),
+    ),
+  );
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    Promise.all([
+      deleteOldCaches(),
+      caches.open(CACHE_NAME).then((cache) =>
+        Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
+      ),
+    ]).then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(Promise.all([deleteOldCaches(), self.clients.claim()]));
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  // Same-script re-registration can skip install/activate, so navigation also
+  // removes only obsolete app caches without touching login or local data.
+  if (event.request.mode === "navigate") event.waitUntil(deleteOldCaches());
+
+  const isReleaseManifest = url.pathname.endsWith("/release.json");
+  const cacheKey = isReleaseManifest ? `${url.origin}${url.pathname}` : event.request;
+  const networkFirst = event.request.mode === "navigate"
+    || ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
+    || url.pathname.endsWith("/config.local.js")
+    || isReleaseManifest;
+
+  event.respondWith(
+    fetch(event.request, networkFirst ? { cache: "no-store" } : undefined)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => undefined));
+        }
+        return response;
+      })
+      .catch(async () => {
+        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(cacheKey, isReleaseManifest ? { ignoreSearch: true } : undefined));
+        if (cached) return cached;
+        if (event.request.mode === "navigate") return caches.match("./index.html");
+        return Response.error();
+      }),
+  );
+});

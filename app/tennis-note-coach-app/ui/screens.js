@@ -297,11 +297,11 @@ function openCoachPastAbsenceDetail(id, trigger) {
   dialog.setAttribute("aria-labelledby", "coachPastAbsenceDetailTitle");
   dialog.setAttribute("aria-describedby", "coachPastAbsenceReason");
   dialog.style.cssText = "width:min(calc(100% - 24px),28rem);border:1px solid var(--line,GrayText);box-sizing:border-box;padding:16px 16px calc(12px + env(safe-area-inset-bottom));margin:auto auto 0;border-radius:16px 16px 0 0;color:var(--ink,CanvasText);background:var(--paper,Canvas);color-scheme:inherit;max-height:85vh;overflow:auto";
-  const makeup = context.entitlement.status === "booked" ? "보강 예약됨" : "보강 대기";
+  const makeup = context.groupOnly ? "" : context.historyOnly ? (context.closedStatus === "expired" ? "보강권 만료" : "보강권 취소") : context.entitlement.status === "booked" ? "보강 예약됨" : "보강 대기";
   dialog.innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 id="coachPastAbsenceDetailTitle" style="margin:0;font-size:1.2rem">불참 수업 상세</h2><button type="button" data-coach-past-absence-close style="min-height:44px;min-width:44px">닫기</button></header>
-    <p><strong>${escapeHtml(context.slot.member || "회원")}</strong><br>${escapeHtml(context.date)} · ${escapeHtml(context.time)} · 불참</p>
+    <p><strong>${escapeHtml(context.groupOnly ? "그룹 수업" : context.slot.member || "회원")}</strong><br>${escapeHtml(context.date)} · ${escapeHtml(context.time)} · 불참</p>
     <p id="coachPastAbsenceReason">이미 시작했거나 지난 수업입니다.</p>
-    <p>보강: ${escapeHtml(makeup)}</p>`;
+    ${context.groupOnly ? `<ul>${context.members.map(member => `<li>${escapeHtml(member.name)} · ${escapeHtml(member.status)}</li>`).join("")}</ul>` : `<p>보강: ${escapeHtml(makeup)}</p>`}`;
   const correction = dialog.querySelector("details") || document.createElement("details");
   correction.className = "coach-absence-manage";
   correction.innerHTML = `<summary>원래 수업 변경</summary><p>지난 불참 정정은 관리자 웹에서 기존 관리자 로그인·지점 권한을 확인한 뒤 진행합니다.</p><button type="button" data-open-absence-admin hidden style="min-height:44px;width:100%">관리자 웹에서 정정</button><p data-absence-admin-message role="status"></p>`;
