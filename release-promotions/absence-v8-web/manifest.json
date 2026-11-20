@@ -2,7 +2,7 @@
   "kind": "ABSENCE_V8_WEB",
   "repo": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-admin-prod-candidate",
-  "parent": "144c95b216fdd137c59dcbb2ec2fa08fd46f4bbe",
+  "parent": "78bacd4b5ca5e54d386f18c7e3daeb772a9d8c77",
   "productSource": "144c95b216fdd137c59dcbb2ec2fa08fd46f4bbe",
   "sourceFingerprint": "99836614830558fe1435cdeaa75c813fc404c3b889d40953e17385b65814cd40",
   "sourceCi": {
@@ -513,5 +513,14 @@
     "release-promotions/absence-v8-web/source-attestation.json",
     "release-promotions/absence-v8-web/source-ci.json",
     "release-promotions/absence-v8-web/transport.mjs"
-  ]
+  ],
+  "reuse": {
+    "run": 44659413366,
+    "artifact": 14594149146,
+    "name": "absence-v8-44659413366",
+    "size": 110950543,
+    "digest": "sha256:98f15214e39c984e486984db190e2d8dbf2e342d58e43005ad3d2629486493e9",
+    "oldSource": "78bacd4b5ca5e54d386f18c7e3daeb772a9d8c77",
+    "oldManifest": "5e7fabd45d232e950518d7951d0e8fb358779bf2a0458e87f998d4878abd97fe"
+  }
 }
