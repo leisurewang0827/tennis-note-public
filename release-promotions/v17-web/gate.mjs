@@ -1,0 +1,15 @@
+/* Pure guards for a future protected deployment. No network and no mutations. */
+import assert from 'node:assert/strict';
+export const SOURCE='9de2626e14d38b4a7918ee95c6b44c792de5681b';
+export const SOURCE_PARENT='9937a3757e1f2f96d6d98978cf323584a3637976';
+export const BASE_SOURCE='dee0ee6347496ca900abc5ad95da8dccacd3ebc3';
+export const EXECUTION_PARENT='001547b75b0ec49b663b7460ac13b9d375d4db94';
+export const BRANCH='codex/tennisnote-r4-admin-prod-candidate';
+export const REPO='leisurewang0827/tennis-note-public';
+export const SOURCE_PATHS=Object.freeze(['app/admin/domain/common.js','app/admin/index.html','app/admin/schedule-v2-admin.css','app/shared/tennisnote-release.js','app/tennis-note-coach-app/index.html','app/tennis-note-coach-app/service-worker.js','app/tennis-note-member-app/index.html','app/tennis-note-member-app/service-worker.js']);
+export const EXECUTION_PATHS=Object.freeze(['.github/workflows/v17-admin-polish-prod.yml','release-promotions/v17-web/manifest.json','release-promotions/v17-web/runner.mjs','release-promotions/v17-web/overlay.mjs','release-promotions/v17-web/gate.mjs','release-promotions/v17-web/journal.mjs','release-promotions/v17-web/overlay.test.mjs','release-promotions/v17-web/gate.test.mjs','release-promotions/v17-web/journal.test.mjs','release-promotions/v17-web/safe-unpack.py','release-promotions/v17-web/safe-unpack-test.py','release-promotions/v17-web/assets/admin/domain/common.js','release-promotions/v17-web/assets/admin/shared/tennisnote-release.js','release-promotions/v17-web/assets/admin/index.html','release-promotions/v17-web/assets/admin/schedule-v2-admin.css']);
+export const PREVIOUS=Object.freeze({admin:{project:'tennisnote-admin',id:'c672b7a0-ecd8-4487-87bf-2a920ece22dc'},coach:{project:'tennisnote-app',id:'c4c30100-4bac-491d-9532-8126b37f48c8'}});
+export function assertSource({head,parent,grandparent,paths,correctionPaths}){assert.equal(head,SOURCE);assert.equal(parent,SOURCE_PARENT);assert.equal(grandparent,BASE_SOURCE);assert.deepEqual([...paths].sort(),[...SOURCE_PATHS].sort());assert.deepEqual(correctionPaths,['app/tennis-note-coach-app/service-worker.js']);}
+export function assertExecution({head,parent,branch,repo,paths,attempt,event}){assert.match(head,/^[a-f0-9]{40}$/);assert.equal(parent,EXECUTION_PARENT);assert.equal(branch,BRANCH);assert.equal(repo,REPO);assert.equal(attempt,1);assert.equal(event,'push');assert.deepEqual([...paths].sort(),[...EXECUTION_PATHS].sort());}
+export function assertDeployment(actual,surface,{id=PREVIOUS[surface].id,source=EXECUTION_PARENT}={}){assert.deepEqual(actual,{project:PREVIOUS[surface].project,id,source,branch:'main',environment:'production',status:'success'});}
+export function assertReview(rows,sha){assert.match(sha,/^[a-f0-9]{40}$/);assert.ok(Array.isArray(rows)&&rows.length>=1&&rows.length<=2);for(const r of rows){assert.equal(r.state,'approved');assert.equal(r.user?.id,294703475);assert.deepEqual(r.environments.map(x=>x.id),[26219323796]);assert.equal(r.comment,'V17-WEB '+sha+' exact-assets no-db');}}

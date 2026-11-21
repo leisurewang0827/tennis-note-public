@@ -1,0 +1,9 @@
+import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
+const {SOURCE,SOURCE_PARENT,BASE_SOURCE,EXECUTION_PARENT,BRANCH,REPO,SOURCE_PATHS,EXECUTION_PATHS,PREVIOUS,assertSource,assertExecution,assertDeployment,assertReview}=await import(existsSync(new URL('./gate.mjs',import.meta.url))?'./gate.mjs':'./v17-execution-gate.mjs');
+let checks=0;const pass=f=>{f();checks++},deny=f=>{assert.throws(f);checks++};
+const source={head:SOURCE,parent:SOURCE_PARENT,grandparent:BASE_SOURCE,paths:SOURCE_PATHS,correctionPaths:['app/tennis-note-coach-app/service-worker.js']};pass(()=>assertSource(source));deny(()=>assertSource({...source,head:'0'.repeat(40)}));deny(()=>assertSource({...source,paths:[...SOURCE_PATHS,'extra']}));deny(()=>assertSource({...source,correctionPaths:['unexpected']}));
+const x={head:'1'.repeat(40),parent:EXECUTION_PARENT,branch:BRANCH,repo:REPO,paths:EXECUTION_PATHS,attempt:1,event:'push'};pass(()=>assertExecution(x));deny(()=>assertExecution({...x,parent:'2'.repeat(40)}));deny(()=>assertExecution({...x,attempt:2}));deny(()=>assertExecution({...x,paths:[...EXECUTION_PATHS,'extra']}));
+for(const name of ['admin','coach']){const d={project:PREVIOUS[name].project,id:PREVIOUS[name].id,source:EXECUTION_PARENT,branch:'main',environment:'production',status:'success'};pass(()=>assertDeployment(d,name));deny(()=>assertDeployment({...d,id:'bad'},name));}
+const sha='a'.repeat(40),row={state:'approved',user:{id:294703475},environments:[{id:26219323796}],comment:'V17-WEB '+sha+' exact-assets no-db'};pass(()=>assertReview([row],sha));deny(()=>assertReview([{...row,comment:'wrong'}],sha));deny(()=>assertReview([],sha));
+console.log(JSON.stringify({status:'PASS_SYNTHETIC_EXECUTION_GATES',checks,network:0,deployments:0}));
