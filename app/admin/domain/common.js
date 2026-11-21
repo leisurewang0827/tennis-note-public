@@ -2726,9 +2726,13 @@ function managementDriveReportMetric(id) {
 
 function managementDriveSourceDetail() {
   const source = adminDriveReportState.snapshot?.source || {};
-  const updatedAt = source.updatedAt ? new Date(source.updatedAt) : null;
+  const rawUpdatedAt = typeof source.updatedAt === "string" ? source.updatedAt : "";
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawUpdatedAt);
+  const updatedAt = rawUpdatedAt ? new Date(rawUpdatedAt) : null;
   const updatedLabel = updatedAt && !Number.isNaN(updatedAt.getTime())
-    ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(updatedAt)
+    ? dateOnly
+      ? `장부 갱신일 ${new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "UTC" }).format(updatedAt)} · 시각 미기록`
+      : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(updatedAt)
     : "갱신시각 없음";
   const closeLabels = { closed: "마감", review: "검토 중", draft: "작성 중", error: "오류" };
   const closeLabel = closeLabels[source.closeStatus] || "마감상태 없음";
