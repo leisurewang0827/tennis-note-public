@@ -18,9 +18,10 @@ jobs:
         with: {node-version: '24'}
       - name: Fetch exact source commit
         run: git fetch --no-tags origin 9de2626e14d38b4a7918ee95c6b44c792de5681b
-      - name: Verify checkout correction
+      - name: Verify bounded static observation
         run: |
-          node release-promotions/v17-web/checkout.test.mjs
+          node release-promotions/v17-web/shared-budget.test.mjs
+          node release-promotions/v17-web/api-signal.test.mjs
       - name: Download exact prior artifact
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |

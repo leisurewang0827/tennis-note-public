@@ -1,0 +1,20 @@
+/* Retry only transient 5xx static GET observations; never a deployment/API request. */
+import assert from 'node:assert/strict';
+const DELAYS=Object.freeze([1000,2000,4000,8000,15000]);
+const same=(a,b)=>assert.deepEqual(a,b,'DEPLOYMENT_IDENTITY_CHANGED');
+function defaultPause(ms,signal){return new Promise((resolve,reject)=>{if(signal?.aborted)return reject(Error('STATIC_OBSERVATION_ABORTED'));const timer=setTimeout(done,ms);function done(){signal?.removeEventListener('abort',abort);resolve()}function abort(){clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(Error('STATIC_OBSERVATION_ABORTED'))}signal?.addEventListener('abort',abort,{once:true});});}
+export function createStaticRetry({expected,paths,observe,fetcher=fetch,clock=()=>performance.now(),pause=defaultPause}){
+ assert.ok(expected&&['tennisnote-admin','tennisnote-app'].includes(expected.project));assert.match(expected.id,/^[a-f0-9-]{36}$/);assert.equal(expected.branch,'main');assert.equal(expected.environment,'production');assert.equal(expected.status,'success');assert.match(expected.source,/^[a-f0-9]{40}$/);
+ const hosts=new Set([`https://${expected.id.slice(0,8)}.${expected.project}.pages.dev`,`https://${expected.project}.pages.dev`]),allowed=new Set(paths),events=[],budgets=new Map();let globalStart=null,globalDeadline=null;assert.ok(allowed.size>0);for(const p of allowed)assert.ok(p.startsWith('/')&&!p.includes('?')&&!p.includes('#')&&!p.split('/').includes('..'));
+ async function fetchStatic(url,options={}){
+  const u=new URL(url);assert.ok(hosts.has(u.origin)&&allowed.has(u.pathname)&&!u.search&&!u.hash&&!u.username&&!u.password,'STATIC_TARGET_DENIED');assert.equal((options.method||'GET').toUpperCase(),'GET','STATIC_METHOD_DENIED');assert.ok(!options.body&&!options.headers,'STATIC_REQUEST_DENIED');
+  const key=u.origin+u.pathname;let budget=budgets.get(key);
+  let response=await fetcher(url,options);if(budget)budget.attempt++;
+  if(response.status<500||response.status>599){if(budget)events.push({host:u.origin,path:u.pathname,status:response.status,attempt:budget.attempt,scheduledDelayMs:0,elapsedMs:Math.max(0,Math.round(clock()-globalStart))});return response;}
+  if(globalStart===null){globalStart=clock();globalDeadline=globalStart+30000;}if(!budget){budget={attempt:1,delayIndex:0,last5xx:response};budgets.set(key,budget);}else budget.last5xx=response;
+  if(budget.delayIndex>=DELAYS.length){if(events.length>=2000)throw Error('STATIC_RETRY_EVIDENCE_LIMIT');events.push({host:u.origin,path:u.pathname,status:response.status,attempt:budget.attempt,scheduledDelayMs:0,elapsedMs:Math.max(0,Math.round(clock()-globalStart)),exhausted:true});return response;}
+  while(budget.delayIndex<DELAYS.length){const delay=DELAYS[budget.delayIndex++];if(events.length>=2000)throw Error('STATIC_RETRY_EVIDENCE_LIMIT');const canWait=clock()+delay<globalDeadline;events.push({host:u.origin,path:u.pathname,status:response.status,attempt:budget.attempt,scheduledDelayMs:canWait?delay:0,elapsedMs:Math.max(0,Math.round(clock()-globalStart))});if(options.signal?.aborted)throw Error('STATIC_OBSERVATION_ABORTED');if(!canWait)break;await pause(delay,options.signal);if(options.signal?.aborted)throw Error('STATIC_OBSERVATION_ABORTED');const remaining=Math.floor(globalDeadline-clock());if(remaining<=0)break;const observeLimit=AbortSignal.timeout(remaining),observeSignal=options.signal?AbortSignal.any([options.signal,observeLimit]):observeLimit;same(await observe(observeSignal),expected);if(options.signal?.aborted)throw Error('STATIC_OBSERVATION_ABORTED');const left=Math.floor(globalDeadline-clock());if(left<=0)break;const limit=AbortSignal.timeout(left),signal=options.signal?AbortSignal.any([options.signal,limit]):limit;response=await fetcher(url,{...options,signal});budget.attempt++;if(response.status<500||response.status>599){events.push({host:u.origin,path:u.pathname,status:response.status,attempt:budget.attempt,scheduledDelayMs:0,elapsedMs:Math.max(0,Math.round(clock()-globalStart))});return response;}budget.last5xx=response;}
+  return response;
+ }
+ return Object.freeze({fetchStatic,events});
+}
