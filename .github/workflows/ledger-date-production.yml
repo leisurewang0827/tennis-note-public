@@ -1,0 +1,72 @@
+name: Ledger date-only protected administrator release
+on:
+  push:
+    branches: [codex/tennisnote-r4-admin-prod-candidate]
+    paths: ['.github/workflows/ledger-date-production.yml']
+permissions: {contents: read, actions: read}
+concurrency: {group: cloudflare-pages, cancel-in-progress: false}
+jobs:
+  verify-date-source:
+    name: verify-date-source
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Fetch exact approved source
+        run: git fetch --no-tags origin 5706b9cca20acaa3baa2c281a7bdf7dd1577306a
+      - name: Verify only the new protected release connection
+        run: node --test release-promotions/ledger-date/gate.test.mjs
+      - name: Read exact prior administrator artifact
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          gh api repos/leisurewang0827/tennis-note-public/actions/artifacts/14689577327/zip > "$RUNNER_TEMP/ledger-prior.zip"
+          python -B release-promotions/ledger-date/unpack.py "$RUNNER_TEMP/ledger-prior.zip" "$RUNNER_TEMP/ledger-prior"
+          node release-promotions/ledger-date/runner.mjs build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 'ledger-date-admin-${{ github.run_id }}'
+          path: '${{ runner.temp }}/ledger-date/'
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  publish-date-admin:
+    needs: verify-date-source
+    environment: {name: tennisnote-r4-admin-production, deployment: false}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - run: git fetch --no-tags origin 5706b9cca20acaa3baa2c281a7bdf7dd1577306a
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: {name: 'ledger-date-admin-${{ github.run_id }}', path: '${{ runner.temp }}/ledger-date'}
+      - name: Install unchanged pinned administrator deployment transport
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin b0920a7798b878eaf972ae28870371b89d29b9ed
+          mkdir "$RUNNER_TEMP/r4-wrangler"
+          git show b0920a7798b878eaf972ae28870371b89d29b9ed:release-promotions/r4-first-issue-off-only/publisher/npm-lock.json > "$RUNNER_TEMP/r4-wrangler/package-lock.json"
+          git show b0920a7798b878eaf972ae28870371b89d29b9ed:release-promotions/r4-first-issue-off-only/publisher/npm-manifest.json > "$RUNNER_TEMP/r4-wrangler/package.json"
+          printf '%s  %s\n' f235fcb84bdb03932e0eb942af150feb71190fb8b51674d2e0ec4e119534cd79 "$RUNNER_TEMP/r4-wrangler/package-lock.json" eadb69637534a5837f53a1d23fac02e6586c978034b87f6bc26e48a8895bd159 "$RUNNER_TEMP/r4-wrangler/package.json" | sha256sum -c --status
+          npm ci --prefix "$RUNNER_TEMP/r4-wrangler" --ignore-scripts --no-audit --no-fund
+      - name: Publish only administrator and verify completion evidence
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          CLOUDFLARE_API_TOKEN: '${{ secrets.R4_ADMIN_CLOUDFLARE_API_TOKEN }}'
+          CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: '${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}'
+        run: node release-promotions/ledger-date/runner.mjs deploy
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: 'ledger-date-admin-receipt-${{ github.run_id }}'
+          path: '${{ runner.temp }}/ledger-date-admin-receipt.json'
+          if-no-files-found: error
+          retention-days: 7
