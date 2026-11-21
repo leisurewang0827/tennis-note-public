@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-history-group-3a27bd7946fb5395-v17-a98d38e189eec511";
+const CACHE_NAME = "tennis-note-coach-mode-history-group-8ad1a1110118df2b";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./r4-ui-finish.css?v=7423d1e2d58a3c03",
