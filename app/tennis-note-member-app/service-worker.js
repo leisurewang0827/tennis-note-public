@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v599-entry-4aced5016d566ea1-notifications-38001853652e-v16-81ee101b0498a2b5";
+const CACHE_NAME = "tennis-note-member-pwa-v599-entry-4aced5016d566ea1-notifications-38001853652e-v16-81ee101b0498a2b5-v17-a98d38e189eec511";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "../shared/tennisnote-r4-coach-entry.js?v=4aced5016d566ea1",
@@ -86,7 +86,7 @@ const APP_SHELL = [
   "../shared/tennisnote-product-catalog.js?v=policy-catalog-2",
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.566",
+  "../shared/tennisnote-release.js?v=1.0.566&fix=v17-a98d38e189eec511",
   "../shared/tennisnote-release-updater.js?v=v16-4c4fb51c1238f2a0",
   "../shared/tennisnote-issue-reporter.js?v=issue-reporter-4",
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",

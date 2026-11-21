@@ -83,8 +83,9 @@
 .schedule-v2-head-actions button,
 .schedule-v2-toolbar > button,
 .schedule-v2-toolbar-actions > button,
-.schedule-v2-editor-sheet button {
-  min-height: 36px;
+form.schedule-v2-editor-sheet button {
+  min-height: 44px;
+  min-width: 44px;
   border: 1px solid #c7d8d2;
   border-radius: 6px;
   background: #f6faf8;
@@ -96,7 +97,7 @@
 
 .schedule-v2-head-actions button:first-child,
 .schedule-v2-head-actions button:nth-child(3) {
-  width: 38px;
+  width: 44px;
   padding: 0;
   font-size: 22px;
 }
@@ -1669,7 +1670,7 @@
 }
 
 .schedule-v2-editor-sheet header button {
-  width: 38px;
+  width: 44px;
   padding: 0;
   font-size: 20px;
 }
@@ -2562,7 +2563,7 @@ body.schedule-v2-editor-open {
 
   .schedule-v2-head-actions {
     display: grid;
-    grid-template-columns: 36px 52px 36px;
+    grid-template-columns: 44px 52px 44px;
   }
 
   .schedule-v2-head-actions #scheduleV2RefreshButton {

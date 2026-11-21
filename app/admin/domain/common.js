@@ -685,17 +685,33 @@ function managementReportListMarkup(items = [], emptyMessage = "현재 확인이
 }
 
 function adminDriveReportErrorState(error) {
-  const code = String(error?.payload?.code || error?.message || "drive_report_read_failed");
-  if (code.includes("drive_report_not_configured") || code.includes("drive_report_sources_invalid")) {
-    return { status: "not_configured", message: "서버의 Drive 읽기 전용 연결값이 아직 없습니다." };
-  }
+  const code = String(error?.payload?.code || error?.code || error?.payload?.error_code || error?.message || "drive_report_read_failed");
+  const status = Number(error?.status || 0);
   if (code.includes("drive_report_source_not_found")) {
     return { status: "unavailable", message: "선택한 지점과 월의 Drive 집계 설정이 없습니다." };
   }
-  if (error?.status === 401 || error?.status === 403) {
-    return { status: "error", message: "대표 관리자 권한으로 다시 로그인해 주세요." };
+  if (status === 404 && /^(?:NOT_FOUND|FUNCTION_NOT_FOUND)$/i.test(code)) {
+    return { status: "not_configured", message: "장부 조회 기능의 서버 연결 준비가 필요합니다. 운영 담당자가 배포 경로를 확인해야 합니다." };
   }
-  return { status: "error", message: "Drive 원본 권한, 집계 셀 또는 서버 연결을 확인해 주세요." };
+  if (/drive_report_exact_cell_required|drive_report_metric/.test(code)) {
+    return { status: "not_configured", message: "서버의 장부 집계 셀 설정을 확인해야 합니다. 원본 장부는 변경하지 않았습니다." };
+  }
+  if (/drive_report_not_configured|drive_report_sources_invalid|tennisnote_.*_invalid|google_service_account_.*invalid|supabase_server_config_missing|drive_report_spreadsheet_id_invalid/.test(code)) {
+    return { status: "not_configured", message: "서버의 장부 읽기 전용 연결 설정을 확인해야 합니다. 재로그인이나 원본 수정은 필요하지 않습니다." };
+  }
+  if (/google_token_request_failed|google_sheets_read_failed/.test(code)) {
+    return { status: "error", message: "Google 원본 장부 조회에 실패했습니다. 운영 담당자가 서버 연결과 원본 공유 권한을 확인해야 합니다." };
+  }
+  if (status === 401) {
+    return { status: "error", message: "관리자 로그인 상태를 확인한 뒤 장부를 다시 조회해 주세요." };
+  }
+  if (status === 403) {
+    return { status: "error", message: "현재 계정의 장부 조회 권한을 확인해야 합니다. 기존 관리자에게 문의해 주세요." };
+  }
+  if (!status && /failed to fetch|network|load failed|abort|timeout|timed out/i.test(`${error?.name || ""} ${code}`)) {
+    return { status: "error", message: "장부 서버에 연결하지 못했습니다. 운영 담당자가 서버 경로와 연결 상태를 확인해야 합니다. 기존 로그인은 유지됩니다." };
+  }
+  return { status: "error", message: "장부 조회 결과를 확인하지 못했습니다. 잠시 후 다시 조회하고, 계속되면 운영 담당자에게 문의해 주세요." };
 }
 
 function favoriteBreakFromRule(rule) {
