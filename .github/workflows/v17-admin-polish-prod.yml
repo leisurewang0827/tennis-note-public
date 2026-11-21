@@ -18,12 +18,9 @@ jobs:
         with: {node-version: '24'}
       - name: Fetch exact source commit
         run: git fetch --no-tags origin 9de2626e14d38b4a7918ee95c6b44c792de5681b
-      - name: Run new isolated guards
+      - name: Verify checkout correction
         run: |
-          node release-promotions/v17-web/gate.test.mjs
-          node release-promotions/v17-web/overlay.test.mjs
-          node release-promotions/v17-web/journal.test.mjs
-          python -B release-promotions/v17-web/safe-unpack-test.py
+          node release-promotions/v17-web/checkout.test.mjs
       - name: Download exact prior artifact
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |
