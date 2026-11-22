@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "082dd5b6bc0c6e98b1010b587b7602e36a2c1790",
+  "project": "cnympiwrwgouuvhaivbc",
+  "productSource": "166633ee86fcd0bdfbe9900ddc667e3d8e8ab14b",
+  "developmentWriteProof": "HOSTED_DEV_WRITE_SEAMS_PASS_CLOSED",
+  "payload": {
+    "compose-web.mjs": "0df0f864c340b1d94527f5a15cd45ccd38a7a1e3d07d197032f9af597fc8893d",
+    "gate.mjs": "608baea40d85d259e2385d279166d3ddd6215ab0cff9dcbb463ac8d43e5b834d",
+    "gate.test.mjs": "2b7c451197df6c64a82ade998b546284ef9fb429d3886e5d95efb982d50fec9a",
+    "operator.mjs": "6cbcd8b2d1b61970c00dab7aaddc6e88da6acdd3dcab8f98fc5539142b747fda",
+    "owner-prod-install.sql": "5c0230d62ccd6421e27f40552821638274da076b0bc327732d90e5c080820ece",
+    "owner-prod-off.sql": "69b34d1a50c5d0978bffb7e992cc0e2a917ace9eb6f732fac6c9afb23530b3db",
+    "owner-prod-postread.sql": "13eaddcaff2e647343ed55ba996437abc3a330c68f37455f3bbba61296f78e44",
+    "owner-prod-rollback.sql": "9d03f47c0e0184d86e4d59ab1e00a408895371dcfa93793126260c469834af9f",
+    "preimages.json": "eb38fd243ebe9db3ea4ee179507b3756055c3e84115181a449685f07c27722e3",
+    "runner.mjs": "c3f556c9dcbddd3d326e0f8cb9af610c6f2c4f31619fc736be1913170ab4206e"
+  },
+  "catalog": [
+    {
+      "signature": "private.tn_r4_branch_paid_read_allowed(uuid)",
+      "sha256": "5c283db246720558a25843fab52520bb11ab1cce5f8368bf7d382c61ef8583d9",
+      "devBaselineMatches": false,
+      "oid": "33646",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "s"
+    },
+    {
+      "signature": "public.tn_r4_branch_list_manual_paid(uuid)",
+      "sha256": "13bd295c6bd4ebcdb626c109c52cb95809371a17299f9210c86d343a33dccbad",
+      "devBaselineMatches": false,
+      "oid": "33666",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "v"
+    },
+    {
+      "signature": "public.tn_r4_branch_manual_paid_options(uuid)",
+      "sha256": "6a60f1ac1963103bc569c3583d29d8663f8718083fbb5789380eff78fdfa5966",
+      "devBaselineMatches": true,
+      "oid": "33647",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "s"
+    },
+    {
+      "signature": "public.tn_r4_branch_read_manual_paid(uuid,uuid)",
+      "sha256": "68089279d2083025e22caf9290cbcf842e5cefa84b4ff1cfc667e78815f840b3",
+      "devBaselineMatches": true,
+      "oid": "33648",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "s"
+    },
+    {
+      "signature": "public.tn_r4_branch_register_manual_paid(uuid,uuid,uuid,uuid,text,date,uuid,integer)",
+      "sha256": "e60e6672d8042ed625d2d375b794281f0ca8f94e0be5851546672b466adc068c",
+      "devBaselineMatches": false,
+      "oid": "33644",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "v"
+    },
+    {
+      "signature": "public.tn_r4_branch_settlement_term(uuid,uuid,text,uuid,text,integer,numeric,date)",
+      "sha256": "3f577c040338f20403b15c830f3e382d1f87fed3eaf4330c3446efbe5c079214",
+      "devBaselineMatches": false,
+      "oid": "33587",
+      "ownerOid": "16388",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "volatility": "v"
+    }
+  ],
+  "protectedFunctions": {
+    "private.tn_r4_finance_canary_admitted(uuid,text[],text,uuid)": "c8765e46c2d14c97439c9f7dc14d7c1e0a11009799016433e74e514b0bb2cd04",
+    "private.tn_r4_finance_canary_assert(uuid,text[],text,uuid)": "c4d52929581991f8c4e7d2549802d83015e7f22e94df2f803fb5a642b288b635",
+    "private.tn_r4_finance_canary_check_commit()": "217a22397f4f9f72cb96126746d880bcc13de26d4e638831fd5f8046b66b787a",
+    "private.tn_r4_finance_canary_note_activation()": "93ae872710f751565cb72db71c1ce338476a8d9742abedbeebc48cf4c8285602",
+    "private.tn_capture_manual_purchase(uuid,uuid,text,text)": "2d04624fee9328acc64aba0a639b7cb25428a117f1c702b32a76fbd0408e592b",
+    "private.tn_r4_capture_branch_manual_purchase(uuid,uuid,text,text)": "d4925d3b0837d4151393affef28c8a4a205b3552d2a4d59d6b2124ebba69cc02",
+    "private.tn_r3_manual_purchase_context(uuid)": "8a256fdc3c1f4b1b77f1c66e1d47329be69f5437f42d178ae8520c1334a18719"
+  },
+  "dbExecutor": "existing local Supabase CLI after same-SHA protected admission",
+  "dbReceipt": "operator-independent read-only state attestation, not a direct CI database query",
+  "openedBranches": 0,
+  "commitPaths": [
+    ".github/workflows/r4-finance-owner-prod.yml",
+    "release-sources/r4-finance-owner-prod/compose-web.mjs",
+    "release-sources/r4-finance-owner-prod/gate.mjs",
+    "release-sources/r4-finance-owner-prod/gate.test.mjs",
+    "release-sources/r4-finance-owner-prod/manifest.json",
+    "release-sources/r4-finance-owner-prod/operator.mjs",
+    "release-sources/r4-finance-owner-prod/owner-prod-install.sql",
+    "release-sources/r4-finance-owner-prod/owner-prod-off.sql",
+    "release-sources/r4-finance-owner-prod/owner-prod-postread.sql",
+    "release-sources/r4-finance-owner-prod/owner-prod-rollback.sql",
+    "release-sources/r4-finance-owner-prod/preimages.json",
+    "release-sources/r4-finance-owner-prod/runner.mjs"
+  ]
+}
