@@ -1,0 +1,53 @@
+name: R4 finance owner exact DEV preview publication
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-finance-owner-dev-publish.yml'
+      - 'release-sources/r4-finance-owner-dev-publish/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  publish-exact-preview:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check only the new publication connection
+        run: node release-sources/r4-finance-owner-dev-publish/check-publish.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-finance-owner-dev-entry-44997731601
+          run-id: 44997731601
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Prepare pinned single-publication transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-owner-transport" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0 > "$RUNNER_TEMP/r4-owner-install.log" 2>&1
+          node release-sources/r4-finance-owner-dev-publish/publish.mjs prepare
+      - name: Admit and publish only the sealed DEV preview once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-finance-owner-dev-publish/publish.mjs publish
+      - name: Preserve the publication outcome, including holds
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r4-finance-owner-publication-${{ github.run_id }}
+          path: publication-result.json
+          if-no-files-found: warn
+          retention-days: 7
