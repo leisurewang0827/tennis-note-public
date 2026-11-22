@@ -51,25 +51,33 @@ export function walk(dir,p='') {
     return e.isDirectory()?Object.entries(walk(path,p+e.name+'/')):[[p+e.name,hash(read(path))]];
   }));
 }
+export function executionParent(m) {
+  const parent=m.executionParent||source;
+  assert.ok([source,'a17a4ab2aaaf1907aa59315b95f952da52b7ecf9'].includes(parent),'EXECUTION_PARENT_DENIED');return parent;
+}
 function scope(m) {
   validateManifest(m);assert.equal(process.env.GITHUB_REPOSITORY,repo);
   assert.equal(process.env.GITHUB_REF,'refs/heads/'+branch);assert.equal(process.env.GITHUB_EVENT_NAME,'push');assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
   const sha=process.env.GITHUB_SHA;assert.match(sha||'',/^[a-f0-9]{40}$/);
   const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
-  assert.equal(git('rev-list','--parents','-n','1',sha),sha+' '+source);
+  assert.equal(git('rev-list','--parents','-n','1',sha),sha+' '+executionParent(m));
   assert.deepEqual(git('diff','--name-only',source,sha).split('\n').sort(),paths);
   assert.equal(hash(read('scripts/r4_internal_registration_dev.mjs')),m.transportSourceSha256);
   return sha;
 }
 export async function getJson(url,token,fetcher=fetch) {
   const response=await fetcher(url,{method:'GET',headers:{Authorization:'Bearer '+token,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});
-  if(response.status!==200)throw Error('READ_FAILED '+new URL(url).pathname+' HTTP_'+response.status);
+  if(response.status!==200){let codes=[];try{codes=(await response.json()).errors?.map(e=>e.code).filter(Number.isSafeInteger)||[];}catch{}
+    throw Error('READ_FAILED '+new URL(url).pathname+new URL(url).search+' HTTP_'+response.status+' CF_CODES_'+codes.join(','));}
   return response.json();
+}
+export function deploymentListUrl(base,page) {
+  assert.ok(Number.isSafeInteger(page)&&page>0);return base+'/deployments?page='+page;
 }
 export async function allDeployments(base,token,get=getJson) {
   const rows=[],seen=new Set();let totalPages,totalCount;
   for(let page=1;page<=1000;page++){
-    const response=await get(base+'/deployments?per_page=100&page='+page,token);
+    const response=await get(deploymentListUrl(base,page),token);
     assert.equal(response.success,true);assert.ok(Array.isArray(response.result));
     const meta=response.result_info;assert.equal(meta?.page,page,'DEPLOYMENT_PAGE_UNVERIFIED');
     assert.ok(Number.isSafeInteger(meta.total_pages)&&meta.total_pages>=1&&meta.total_pages<=1000,'DEPLOYMENT_PAGINATION_UNVERIFIED');

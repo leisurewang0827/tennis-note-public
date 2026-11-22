@@ -2,9 +2,19 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {validateManifest,validateOff,validateTarget,exactBody,publishedUrl,getJson,allDeployments,idleTarget,validateAlias,paths} from './publish.mjs';
+import {validateManifest,validateOff,validateTarget,exactBody,publishedUrl,getJson,allDeployments,idleTarget,validateAlias,paths,deploymentListUrl,executionParent} from './publish.mjs';
 const root='release-sources/r4-finance-owner-dev-publish/';
 const m=JSON.parse(readFileSync(root+'manifest.json')),o=JSON.parse(readFileSync(root+'off.json'));
+if(process.argv.includes('--query-delta')){
+  assert.equal(deploymentListUrl('https://test.invalid/project',1),'https://test.invalid/project/deployments?page=1');
+  assert.ok(!deploymentListUrl('https://test.invalid/project',2).includes('per_page'));
+  assert.throws(()=>deploymentListUrl('https://test.invalid/project',0));
+  assert.equal(executionParent(m),'a17a4ab2aaaf1907aa59315b95f952da52b7ecf9');
+  assert.throws(()=>executionParent({...m,executionParent:'0'.repeat(40)}));
+  const workflow=readFileSync('.github/workflows/r4-finance-owner-dev-publish.yml','utf8');assert.ok(workflow.includes('fetch-depth: 3'));
+  await assert.rejects(()=>getJson('https://test.invalid/project/deployments?page=1','unused',async()=>({status:400,json:async()=>({errors:[{code:1001,message:'not logged'}]})})),/\?page=1 HTTP_400 CF_CODES_1001/);
+  console.log(JSON.stringify({status:'NEW_QUERY_REVISION_CHECK_PASS',cases:7,oldPassingTestsRepeated:0,networkWrites:0}));
+}else{
 validateManifest(m);validateOff(o,Date.parse(o.at));let count=2;
 const bad=(fn)=>{assert.throws(fn);count++;};
 for(const delta of [{project:'tennisnote-admin'},{preview:'dev'},{source:'0'.repeat(40)},{paymentEnabled:true},{maximumPublications:2},{files:{}}])bad(()=>validateManifest({...m,...delta}));
@@ -35,3 +45,4 @@ for(const s of ['environment: development','cancel-in-progress: false','44997731
 for(const s of ['workflow_dispatch:','tennisnote-r4-admin-production','SUPABASE_SERVICE','pages deploy','git push'])assert.ok(!wf.includes(s));
 assert.equal(paths.length,5);count++;
 console.log(JSON.stringify({status:'NEW_PUBLICATION_CONNECTION_CHECK_PASS',cases:count,networkWrites:0,productTestsRepeated:0}));
+}
