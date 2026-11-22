@@ -1,0 +1,41 @@
+name: R4 finance owner DEV entry delta
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-finance-owner-dev-entry.yml'
+      - 'release-sources/r4-finance-owner-dev-entry/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  connect-entry:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-finance-owner-dev-44976901161
+          run-id: 44976901161
+          github-token: ${{ github.token }}
+          path: owner-base
+      - name: Check only new DEV entry guard and composition
+        run: |
+          node release-sources/r4-finance-owner-dev-entry/check-entry.mjs
+          node release-sources/r4-finance-owner-dev-entry/connect-entry.mjs owner-base entry-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-finance-owner-dev-entry-${{ github.run_id }}
+          path: entry-artifact/
+          if-no-files-found: error
+          retention-days: 7
