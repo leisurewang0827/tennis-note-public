@@ -1,0 +1,17 @@
+{
+  "project": "udjmiezroipctytmztwz",
+  "fingerprint": "63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba",
+  "preview": "https://r4-finance-owner-qa.tennisnote-admin-dev.pages.dev",
+  "paymentEnabled": false,
+  "baselineRun": 44760665736,
+  "baselineSourceJob": 136371999221,
+  "files": {
+    "owner-candidate.sql": "7bb17d2e2ada965793287dac0483a218fca77268d62c1459fe31f6ae79c597c3",
+    "owner-off.sql": "e9c85b766bed8b526008d5493dd23b0c4c982597e57646af312ad91597e61695",
+    "owner-rollback.sql": "3199b6fcdf743fa744b7e08ee9e81140210c70bc150a0035273b86883ae531aa",
+    "README.md": "ca4b015526e3b8ea0161093cb65742a8e1e34fac15e77bb172ab169fbedccb43",
+    "r4-branch-finance-paid.js": "e88d3188506c8d9b23b814f50107e81d050f9c9147594daa4605622a80601b08",
+    "r4-branch-finance-settlement.js": "f6326899a9ea38bbb286109c7e29cd92c9f36d073139eb97d2f23814199a7600",
+    "compose.mjs": "c7111311cf097fd18b3aa24d414417d690200a14c95c4d63a7cb7c1b59c5c579"
+  }
+}

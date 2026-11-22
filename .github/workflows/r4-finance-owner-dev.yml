@@ -1,0 +1,48 @@
+name: R4 finance owner DEV delta
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-finance-owner-dev.yml'
+      - 'release-sources/r4-finance-owner-dev/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  compose:
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Confirm pinned source verification job (not failed publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/leisurewang0827/tennis-note-public/actions/jobs/136371999221 > source-job.json
+          node -e 'const j=require("./source-job.json");if(j.run_id!==44760665736||j.name!=="verify-source"||j.conclusion!=="success")throw Error("BASE_SOURCE_NOT_VERIFIED");'
+      - uses: actions/download-artifact@v4
+        with:
+          name: v16-dev-sites-44760665736
+          run-id: 44760665736
+          github-token: ${{ github.token }}
+          path: dev-base
+      - name: Check only approved new modules and exact DEV composition
+        run: |
+          node --check release-sources/r4-finance-owner-dev/r4-branch-finance-paid.js
+          node --check release-sources/r4-finance-owner-dev/r4-branch-finance-settlement.js
+          node release-sources/r4-finance-owner-dev/compose.mjs dev-base owner-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-finance-owner-dev-${{ github.run_id }}
+          path: owner-artifact/
+          if-no-files-found: error
+          retention-days: 7
