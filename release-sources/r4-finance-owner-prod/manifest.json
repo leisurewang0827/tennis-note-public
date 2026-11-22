@@ -2,7 +2,7 @@
   "version": 1,
   "repository": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
-  "parent": "082dd5b6bc0c6e98b1010b587b7602e36a2c1790",
+  "parent": "2f60f913f1a67bb47ee0a79dc65fad6b8c8f88f8",
   "project": "cnympiwrwgouuvhaivbc",
   "productSource": "166633ee86fcd0bdfbe9900ddc667e3d8e8ab14b",
   "developmentWriteProof": "HOSTED_DEV_WRITE_SEAMS_PASS_CLOSED",
@@ -10,7 +10,7 @@
     "compose-web.mjs": "0df0f864c340b1d94527f5a15cd45ccd38a7a1e3d07d197032f9af597fc8893d",
     "gate.mjs": "608baea40d85d259e2385d279166d3ddd6215ab0cff9dcbb463ac8d43e5b834d",
     "gate.test.mjs": "2b7c451197df6c64a82ade998b546284ef9fb429d3886e5d95efb982d50fec9a",
-    "operator.mjs": "6cbcd8b2d1b61970c00dab7aaddc6e88da6acdd3dcab8f98fc5539142b747fda",
+    "operator.mjs": "168c83894aba96467ac20d9273150c89fd14aceec021cc23f004e9999c8ab4ad",
     "owner-prod-install.sql": "5c0230d62ccd6421e27f40552821638274da076b0bc327732d90e5c080820ece",
     "owner-prod-off.sql": "69b34d1a50c5d0978bffb7e992cc0e2a917ace9eb6f732fac6c9afb23530b3db",
     "owner-prod-postread.sql": "13eaddcaff2e647343ed55ba996437abc3a330c68f37455f3bbba61296f78e44",
@@ -106,16 +106,7 @@
   "openedBranches": 0,
   "commitPaths": [
     ".github/workflows/r4-finance-owner-prod.yml",
-    "release-sources/r4-finance-owner-prod/compose-web.mjs",
-    "release-sources/r4-finance-owner-prod/gate.mjs",
-    "release-sources/r4-finance-owner-prod/gate.test.mjs",
     "release-sources/r4-finance-owner-prod/manifest.json",
-    "release-sources/r4-finance-owner-prod/operator.mjs",
-    "release-sources/r4-finance-owner-prod/owner-prod-install.sql",
-    "release-sources/r4-finance-owner-prod/owner-prod-off.sql",
-    "release-sources/r4-finance-owner-prod/owner-prod-postread.sql",
-    "release-sources/r4-finance-owner-prod/owner-prod-rollback.sql",
-    "release-sources/r4-finance-owner-prod/preimages.json",
-    "release-sources/r4-finance-owner-prod/runner.mjs"
+    "release-sources/r4-finance-owner-prod/operator.mjs"
   ]
 }

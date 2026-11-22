@@ -14,6 +14,7 @@ const cli='C:/Codex/tennisnote-dev-20260815/.codex-temp/supabase-cli/supabase.ex
 const ref='cnympiwrwgouuvhaivbc',q=x=>"'"+String(x).replaceAll("'","''")+"'";
 const api=path=>JSON.parse(execFileSync(gh,['api',path],{encoding:'utf8',windowsHide:true,maxBuffer:2e6}));
 const base='repos/'+repo;
+export const sourcePayloadPath=sha=>'/contents/release-sources/r4-finance-owner-prod?ref='+sha;
 const query=(sql,file=false)=>{
  const args=['db','query','--yes','--linked','--project-ref',ref,'--output','json',...(file?['--file',sql]:['--',sql])];
  const r=spawnSync(cli,args,{encoding:'utf8',windowsHide:true,maxBuffer:2e6,timeout:35000});
@@ -24,7 +25,7 @@ const ro=sql=>query("begin read only;set local statement_timeout='8s';"+sql+";ro
 function payload(sha){
  for(const [p,h]of Object.entries(m.payload))assert.equal(hash(readFileSync(new URL(p,here))),h,p);
  const prefix='release-sources/r4-finance-owner-prod/';
- const remote=api(base+'/contents/'+prefix+'?ref='+sha);
+ const remote=api(base+sourcePayloadPath(sha));
  assert(Array.isArray(remote));
  assert.deepEqual(remote.map(x=>x.name).sort(),[...Object.keys(m.payload),'manifest.json'].sort());
  for(const x of remote){

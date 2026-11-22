@@ -25,10 +25,10 @@ jobs:
           run-id: 44921413585
           github-token: '${{ github.token }}'
           path: '${{ runner.temp }}/base'
-      - name: Check only new execution gates and frozen SQL payloads
+      - name: Check corrected approval-commit source path only; inherit prior passed gates
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |
-          node --test release-sources/r4-finance-owner-prod/gate.test.mjs
+          node --input-type=module -e "import assert from 'node:assert/strict';import{execFileSync}from'node:child_process';import{sourcePayloadPath}from'./release-sources/r4-finance-owner-prod/operator.mjs';const get=p=>JSON.parse(execFileSync('gh',['api','repos/leisurewang0827/tennis-note-public'+p],{encoding:'utf8'}));const prior=get('/actions/runs/45045101174');assert.equal(prior.head_sha,'2f60f913f1a67bb47ee0a79dc65fad6b8c8f88f8');const jobs=get('/actions/runs/45045101174/jobs');for(const n of ['verify','admit'])assert.equal(jobs.jobs.filter(j=>j.name===n&&j.conclusion==='success').length,1);const p=sourcePayloadPath(process.env.GITHUB_SHA);assert(!p.includes('/?'));const rows=get(p);assert.equal(rows.length,11);assert(rows.some(x=>x.name==='manifest.json'));console.log('CORRECTED_SOURCE_PAYLOAD_READ_PASS_PRIOR_GATES_REUSED');"
           node --check release-sources/r4-finance-owner-prod/runner.mjs
           node --check release-sources/r4-finance-owner-prod/operator.mjs
           node release-sources/r4-finance-owner-prod/runner.mjs verify
