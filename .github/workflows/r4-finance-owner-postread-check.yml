@@ -1,0 +1,29 @@
+name: R4 finance owner postread checker only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-finance-owner-postread-check.yml'
+      - 'release-sources/r4-finance-owner-prod/postread-policy.mjs'
+      - 'release-sources/r4-finance-owner-prod/postread-policy.test.mjs'
+      - 'release-sources/r4-finance-owner-prod/runner.mjs'
+      - 'release-sources/r4-finance-owner-prod/manifest.json'
+permissions:
+  contents: read
+concurrency:
+  group: r4-finance-owner-postread-check
+  cancel-in-progress: false
+jobs:
+  check-postread:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 1, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - name: Check only synthetic postread responses without credentials or external services
+        run: |
+          node --check release-sources/r4-finance-owner-prod/runner.mjs
+          node --test release-sources/r4-finance-owner-prod/postread-policy.test.mjs

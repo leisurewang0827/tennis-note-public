@@ -7,6 +7,7 @@ import {execFileSync,spawn} from 'node:child_process';
 import {composeWeb,hash,walk} from './compose-web.mjs';
 import {repo,branch,workflow,validateRun,validateReview,validateOffStatus,contextName,previous,deployment,rollbackAllowed} from './gate.mjs';
 import {patchProductionWrangler} from '../../scripts/r4_internal_registration_prod_promotion.mjs';
+import {createPostreadPlan,classifyPostread} from './postread-policy.mjs';
 const e=process.env,api='https://api.github.com/repos/'+repo,here=new URL('./',import.meta.url);
 const m=JSON.parse(readFileSync(new URL('manifest.json',here),'utf8'));
 const git=(...a)=>execFileSync('git',a,{encoding:'utf8',env:{...e,GIT_NO_LAZY_FETCH:'1'}}).trim();
@@ -69,18 +70,19 @@ async function artifactSource(){
 }
 async function readAfter(current,seal){
  const origins=['https://'+current.id.slice(0,8)+'.tennisnote-admin.pages.dev','https://tennisnote-admin.pages.dev'];
- const paths=Object.keys(seal.files).filter(x=>!['_headers','_redirects','_worker.js'].includes(x));
+ const plan=createPostreadPlan(seal,readFileSync(join(e.RUNNER_TEMP,'candidate/site/_redirects')));
+ const paths=plan.paths;
+ let staticResponses=0,redirectResponses=0;
  for(const origin of origins){
   let index=0;await Promise.all(Array.from({length:8},async()=>{
    while(index<paths.length){
     const path=paths[index++],route=path.endsWith('index.html')?path.slice(0,-10):path.replace(/\.html$/,'');
     let okay=false;
     for(let attempt=0;attempt<6;attempt++){
-     const r=await fetch(origin+'/'+route,{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000)});
-     if(r.status===200){
-      const h=hash(Buffer.from(await r.arrayBuffer()));if(h===seal.files[path]){okay=true;break;}
-      assert.equal(h,seal.prior[path],'UNRECOGNIZED_ASSET '+path);
-     }else assert.equal(r.status,404,'POSTREAD_HTTP_'+r.status+' '+path);
+     const r=await fetch(origin+'/'+route,{method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(15000)});
+     const verdict=await classifyPostread(plan,path,r);
+     if(verdict==='static'){staticResponses++;okay=true;break;}
+     if(verdict==='redirect'){redirectResponses++;okay=true;break;}
      deployment((await project()).canonical_deployment,{id:current.id,source:e.GITHUB_SHA});
      await new Promise(resolve=>setTimeout(resolve,2000));
     }
@@ -88,7 +90,7 @@ async function readAfter(current,seal){
    }
   }));
  }
- return {responses:paths.length*2};
+ return {responses:paths.length*2,staticResponses,redirectResponses};
 }
 async function offReceipt(run,wait=false){
  let s;

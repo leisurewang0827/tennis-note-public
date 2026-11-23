@@ -2,7 +2,7 @@
   "version": 1,
   "repository": "leisurewang0827/tennis-note-public",
   "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
-  "parent": "2f60f913f1a67bb47ee0a79dc65fad6b8c8f88f8",
+  "parent": "feec05c9543542d082ea4d94be306b9a829bcfe9",
   "project": "cnympiwrwgouuvhaivbc",
   "productSource": "166633ee86fcd0bdfbe9900ddc667e3d8e8ab14b",
   "developmentWriteProof": "HOSTED_DEV_WRITE_SEAMS_PASS_CLOSED",
@@ -16,7 +16,9 @@
     "owner-prod-postread.sql": "13eaddcaff2e647343ed55ba996437abc3a330c68f37455f3bbba61296f78e44",
     "owner-prod-rollback.sql": "9d03f47c0e0184d86e4d59ab1e00a408895371dcfa93793126260c469834af9f",
     "preimages.json": "eb38fd243ebe9db3ea4ee179507b3756055c3e84115181a449685f07c27722e3",
-    "runner.mjs": "c3f556c9dcbddd3d326e0f8cb9af610c6f2c4f31619fc736be1913170ab4206e"
+    "runner.mjs": "e68b27f24db100af4c5db37cb013d20eea3a7b35702ec97624cee8ca4f357b4d",
+    "postread-policy.mjs": "d6e27824ba0a7e5f6007e7bd3bbc9f05f313bb8e314d3568dd50a777c2b2dc1c",
+    "postread-policy.test.mjs": "04de98349b1142dfb18b66eb74c2be761a6df7405dbb72490cd11f062845e173"
   },
   "catalog": [
     {
@@ -105,8 +107,10 @@
   "dbReceipt": "operator-independent read-only state attestation, not a direct CI database query",
   "openedBranches": 0,
   "commitPaths": [
-    ".github/workflows/r4-finance-owner-prod.yml",
+    ".github/workflows/r4-finance-owner-postread-check.yml",
     "release-sources/r4-finance-owner-prod/manifest.json",
-    "release-sources/r4-finance-owner-prod/operator.mjs"
+    "release-sources/r4-finance-owner-prod/postread-policy.mjs",
+    "release-sources/r4-finance-owner-prod/postread-policy.test.mjs",
+    "release-sources/r4-finance-owner-prod/runner.mjs"
   ]
 }
