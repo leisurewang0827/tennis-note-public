@@ -1,0 +1,29 @@
+#r4FinancePlatformPanel {
+  box-sizing: border-box;
+  max-width: 44rem;
+  padding: 20px;
+  margin: 16px auto;
+  border: 1px solid var(--line, #d0d5dd);
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  color: var(--ink, #182230);
+  font-size: 16px;
+}
+#r4FinancePlatformPanel[hidden] { display: none; }
+#r4FinancePlatformPanel h2 { font-size: 22px; margin: 0 0 12px; }
+#r4FinancePlatformPanel p { line-height: 1.6; overflow-wrap: anywhere; }
+#r4FinancePlatformPanel label { display: grid; gap: 8px; margin: 16px 0; }
+#r4FinancePlatformPanel select, #r4FinancePlatformPanel button {
+  box-sizing: border-box; min-height: 44px; width: 100%; min-width: 0;
+  font: inherit; border-radius: 8px; padding: 10px 12px;
+}
+#r4FinancePlatformPanel select { color: inherit; background: transparent; border: 1px solid var(--line, #d0d5dd); }
+#r4FinancePlatformPanel button { cursor: pointer; }
+#r4FinancePlatformPanel .primary-button { background: var(--green, #157a5b); color: white; border: 1px solid transparent; }
+#r4FinancePlatformPanel .ghost-button { color: inherit; background: transparent; border: 1px solid var(--line, #d0d5dd); }
+#r4FinancePlatformPanel button:disabled { opacity: .5; cursor: default; }
+#r4FinancePlatformPanel .finance-admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (prefers-color-scheme: dark) {
+  #r4FinancePlatformPanel { background: #182230; color: #f2f4f7; border-color: #667085; }
+  #r4FinancePlatformPanel select { background: #182230; }
+}

@@ -1,0 +1,48 @@
+{
+  "repository": "leisurewang0827/tennis-note-public",
+  "branch": "codex/tennisnote-r4-ui-finish-dev-20261108",
+  "parent": "117237441bd023c9ca6ee693363c5418fd0d890b",
+  "privateSource": "825925c8e78cc9973019a03e8a3bfbbb8c7baede",
+  "project": "tennisnote-admin-dev",
+  "preview": "r4-finance-owner-qa",
+  "devProject": "udjmiezroipctytmztwz",
+  "paymentEnabled": false,
+  "accountFingerprint": "fd57258a013e5a429b7b44b17393b83b4e0a8abe4427ed32fdabdd244f80f244",
+  "recoveryId": "afa184a8-a2b3-44f8-aa4c-ca0234d92c09",
+  "base": {
+    "run": 44997731601,
+    "artifactId": 14744806617,
+    "artifactName": "r4-finance-owner-dev-entry-44997731601",
+    "artifactDigest": "sha256:a3a3bda1e129244125f2bdaf9106139c0863e99a62f4e6c83583dd144cf8d9a7",
+    "compositionSha256": "e7eb0840d650bb24225889e45d1696357246af6b39db2c21a1945683eb40d23b",
+    "source": "166633ee86fcd0bdfbe9900ddc667e3d8e8ab14b"
+  },
+  "payload": {
+    "r4-finance-admin-control.js": "ab6820a30307565120abeeb06cd7261f80cd10325a7e183cf831a17674257acd",
+    "r4-finance-admin-control.css": "2f1f09b9a640e1de20163634ecdac181b76abb62cb895fb12be9d2c7f0ba717c"
+  },
+  "files": {
+    ".github/workflows/r4-finance-admin-dev.yml": "e5f7f2ae6e4bddc74a651a8b15a66512fef66acabadb013d4154ce58ed958217",
+    "release-sources/r4-finance-admin-dev/compose.mjs": "67aa4a9ace795fdd311120016881bb8b4d0206a1205cc4b21dcc28f1d27887d1",
+    "release-sources/r4-finance-admin-dev/check.mjs": "3e2211a86d5db5d288598f88cc228d90c889d29ee4f3acff8ac8b5a30cfbdf11",
+    "release-sources/r4-finance-admin-dev/publish.mjs": "ad593b470609d3c3aa6f959dcca66df25ddc6f6e3da2345c11c536abcddfb246",
+    "release-sources/r4-finance-admin-dev/r4-finance-admin-control.js": "ab6820a30307565120abeeb06cd7261f80cd10325a7e183cf831a17674257acd",
+    "release-sources/r4-finance-admin-dev/r4-finance-admin-control.css": "2f1f09b9a640e1de20163634ecdac181b76abb62cb895fb12be9d2c7f0ba717c"
+  },
+  "commitPaths": [
+    ".github/workflows/r4-finance-admin-dev.yml",
+    "release-sources/r4-finance-admin-dev/check.mjs",
+    "release-sources/r4-finance-admin-dev/compose.mjs",
+    "release-sources/r4-finance-admin-dev/manifest.json",
+    "release-sources/r4-finance-admin-dev/publish.mjs",
+    "release-sources/r4-finance-admin-dev/r4-finance-admin-control.css",
+    "release-sources/r4-finance-admin-dev/r4-finance-admin-control.js"
+  ],
+  "off": {
+    "grants": 0,
+    "opened": 0,
+    "operators": 0,
+    "project": "udjmiezroipctytmztwz",
+    "at": "2026-11-23T04:38:00.667Z"
+  }
+}

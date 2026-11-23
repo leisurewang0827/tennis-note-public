@@ -1,0 +1,78 @@
+name: R4 finance platform admin DEV preview only
+on:
+  push:
+    branches: [codex/tennisnote-r4-ui-finish-dev-20261108]
+    paths:
+      - '.github/workflows/r4-finance-admin-dev.yml'
+      - 'release-sources/r4-finance-admin-dev/**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  check-new-connection:
+    if: github.repository == 'leisurewang0827/tennis-note-public' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - run: node release-sources/r4-finance-admin-dev/check.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-finance-owner-dev-entry-44997731601
+          run-id: 44997731601
+          github-token: ${{ github.token }}
+          path: base
+      - name: Compose only the new panel over the sealed DEV artifact
+        run: |
+          node release-sources/r4-finance-admin-dev/compose.mjs base candidate
+          node release-sources/r4-finance-admin-dev/check.mjs --composed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r4-finance-admin-candidate-${{ github.run_id }}
+          path: candidate
+          if-no-files-found: error
+          retention-days: 7
+  publish-designated-preview:
+    needs: check-new-connection
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-finance-admin-candidate-${{ github.run_id }}
+          path: candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r4-finance-owner-dev-entry-44997731601
+          run-id: 44997731601
+          github-token: ${{ github.token }}
+          path: base
+      - name: Prepare pinned one-publication transport
+        run: |
+          npm install --prefix "$RUNNER_TEMP/r4-finance-admin-transport" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0 > "$RUNNER_TEMP/r4-admin-install.log" 2>&1
+          node release-sources/r4-finance-admin-dev/publish.mjs prepare
+      - name: Publish the exact designated DEV preview once
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: node release-sources/r4-finance-admin-dev/publish.mjs publish
+      - name: Preserve exact publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r4-finance-admin-publication-${{ github.run_id }}
+          path: publication-result.json
+          if-no-files-found: error
+          retention-days: 7
