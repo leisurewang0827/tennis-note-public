@@ -23,7 +23,7 @@
   const actions = el("div"); actions.className = "finance-admin-actions"; actions.append(open, close);
   panel.append(title, note, field("지점", branch), field("기존 지점장", manager), state, actions, refresh);
   const host = doc.getElementById("adminApp") || doc.querySelector("main") || doc.body;
-  host.prepend(panel);
+  if (host === doc.body) host.prepend(panel); else host.before(panel);
   let subject = "", epoch = 0, rows = [], busy = false, uncertain = false;
   const selected = () => rows.find(x => x.branchId === branch.value);
   const anyOn = row => row?.paidEnabled || row?.termsEnabled || row?.historyEnabled;

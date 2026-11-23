@@ -38,7 +38,7 @@ async function main(){
  assert(!before.some(d=>d.deployment_trigger?.metadata?.branch===m.preview&&d.deployment_trigger?.metadata?.commit_hash===process.env.GITHUB_SHA),'ALREADY_PUBLISHED_RECONCILE');
  const preserved={};for(const p of ['index.html','shared/config.local.js'])preserved[p]=await body('https://tennisnote-admin-dev.pages.dev',p);
  const critical=['index.html','r4-finance-admin-control.js','r4-finance-admin-control.css','shared/config.local.js'];
- const old=json('base/composition.json');for(const p of ['index.html','shared/config.local.js'])assert.deepEqual(await body(origin,p),{status:200,hash:old.files[p]},'RECOVERY_ASSET_DRIFT '+p);
+ const old=json('base/composition.json'),recoveryFiles=m.recoveryFiles||old.files;for(const p of ['index.html','shared/config.local.js'])assert.deepEqual(await body(origin,p),{status:200,hash:recoveryFiles[p]},'RECOVERY_ASSET_DRIFT '+p);
  const last=await read('');assert.equal(last.canonical_deployment?.id,project.canonical_deployment?.id);
  const lastList=await allDeployments(base,token);assert.deepEqual(lastList.map(d=>[d.id,d.latest_stage?.status]).sort(),before.map(d=>[d.id,d.latest_stage?.status]).sort(),'PUBLICATION_LIST_DRIFT');validateOff(m.off);
  writeFileSync('publication-result.json',JSON.stringify({status:'ADMITTED',source:c.source,recoveryId:previous[0].id,canonicalId:project.canonical_deployment?.id,postingAttempted:false})+'\n');
@@ -52,7 +52,7 @@ async function main(){
  for(const b of [immutable,origin])for(const p of critical){
   let response;for(let attempt=0;attempt<6;attempt++){
    response=await body(b,p);if(response.status===200&&response.hash===c.files[p])break;
-   if(!(response.status===404||(response.status===200&&response.hash===old.files[p])))break;
+   if(!(response.status===404||(response.status===200&&response.hash===recoveryFiles[p])))break;
    if(attempt<5)await new Promise(r=>setTimeout(r,3000));
   }
   assert.deepEqual(response,{status:200,hash:c.files[p]},'POSTREAD_FILE '+p+' HTTP_'+response?.status);
