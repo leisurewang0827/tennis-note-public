@@ -1,4 +1,5 @@
 name: R4 platform administrator production OFF and web
+# Panel mount correction only; reuse installed DB without reinstalling.
 on:
   push:
     branches: [codex/tennisnote-r4-ui-finish-dev-20261108]

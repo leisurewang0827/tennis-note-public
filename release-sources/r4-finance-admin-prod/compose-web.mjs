@@ -14,7 +14,7 @@ export function composeWeb(base,out){
  files['index.html']=Buffer.from(old.slice(0,end)+tags+old.slice(end));
  const changes=['index.html','r4-finance-admin-control.css','r4-finance-admin-control.js'];
  for(const p of changes)writeFileSync(join(out,'site',p),files[p]);
- const result={baseline:{deployment:'392c69af-ab47-4ff3-91c2-2b9173050e17'},changes,prior:before.files,files:Object.fromEntries(Object.entries(files).map(([p,b])=>[p,hash(b)]))};
+ const result={baseline:{deployment:'24ac9b9c-6a5d-4bf1-9800-4d04a858b830'},changes,prior:m.currentFiles,files:Object.fromEntries(Object.entries(files).map(([p,b])=>[p,hash(b)]))};
  assert.equal(Object.keys(result.files).length,184);assert.equal(result.files['shared/config.local.js'],before.files['shared/config.local.js']);
  writeFileSync(join(out,'seal.json'),JSON.stringify(result,null,2)+'\n');return result;
 }

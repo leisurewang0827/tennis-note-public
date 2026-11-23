@@ -55,7 +55,9 @@ async function main(){
   const status=gh('repos/'+repo+'/statuses/'+sha,{state:'success',context:contextName,description:offDescription(run,m.payload['admin-prod-install.sql'])});assert.equal(status.creator.id,reviewerId);
   console.log(JSON.stringify({installed:true,designatedAdmins:1,opened:0,existingSessions:before.sessions,preserved:true,offAttestation:true}));return;
  }
- if(mode==='read'){check(post(),1);console.log(JSON.stringify({opened:0,designatedAdmins:1,identity:identity()}));return;}
+ if(mode==='read'||mode==='attest'){check(post(),1);const current=identity();
+  if(mode==='attest'){writeFileSync(join(out,'UI-ONLY-OFF-READ.json'),JSON.stringify({source:sha,run,opened:0,designatedAdmins:1,identity:current,noDbWrites:true})+'\n',{flag:'wx'});gh('repos/'+repo+'/statuses/'+sha,{state:'success',context:contextName,description:offDescription(run,m.payload['admin-prod-install.sql'])});}
+  console.log(JSON.stringify({opened:0,designatedAdmins:1,identity:current,noDbWrites:true}));return;}
  if(mode==='rollback'){db(settings+readFileSync(new URL('admin-prod-off.sql',here),'utf8'));db(settings+readFileSync(new URL('admin-prod-rollback.sql',here),'utf8'));console.log('NEW_MANAGEMENT_OFF_AND_EXACT_HELPER_RESTORED');return;}
  throw Error('mode denied');
 }

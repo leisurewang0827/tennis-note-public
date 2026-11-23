@@ -42,10 +42,10 @@ async function project(){
 async function baseRead(){
  const p=await project();deployment(p.canonical_deployment);
  const d=await request(cf()+'/deployments/'+previous.id,e.CLOUDFLARE_API_TOKEN);assert.equal(d.success,true);deployment(d.result);
- assert.equal(d.result.url,'https://392c69af.tennisnote-admin.pages.dev');
- const files=m.baselineFiles;
+ assert.equal(d.result.url,'https://24ac9b9c.tennisnote-admin.pages.dev');
+ const files=m.currentFiles;
  for(const path of ['index.html','r4-branch-finance-paid.js','r4-branch-finance-settlement.js','shared/config.local.js'])
- for(const origin of ['https://tennisnote-admin.pages.dev','https://392c69af.tennisnote-admin.pages.dev']){
+ for(const origin of ['https://tennisnote-admin.pages.dev','https://24ac9b9c.tennisnote-admin.pages.dev']){
   const r=await fetch(origin+'/'+(path==='index.html'?'':path),{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000)});
   assert.equal(r.status,200);assert.equal(hash(Buffer.from(await r.arrayBuffer())),files[path],'BASE_ASSET_DRIFT '+path);
  }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 export const repo='leisurewang0827/tennis-note-public',branch='codex/tennisnote-r4-ui-finish-dev-20261108';
 export const workflow='.github/workflows/r4-finance-admin-prod.yml';
 export const environmentId=26219323796,reviewerId=294703475;
-export const previous={id:'392c69af-ab47-4ff3-91c2-2b9173050e17',source:'feec05c9543542d082ea4d94be306b9a829bcfe9'};
+export const previous={id:'24ac9b9c-6a5d-4bf1-9800-4d04a858b830',source:'155374d9748bc7fddfb62503b084da5b386c584b'};
 export const contextName='tennisnote/r4-finance-admin-prod-off';
 export function validateRun(r,sha,id){
  assert.equal(String(r.id),String(id));assert.equal(r.head_sha,sha);assert.equal(r.head_branch,branch);assert.equal(r.repository.full_name,repo);

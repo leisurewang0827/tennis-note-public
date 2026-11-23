@@ -10,7 +10,8 @@ assert.equal(m.project,'cnympiwrwgouuvhaivbc');assert.equal(m.guardHash,'944facf
 for(const h of Object.values(m.target))assert.match(h,/^[a-f0-9]{64}$/);
 for(const[p,h]of Object.entries(m.payload))assert.equal(hash(readFileSync(new URL(p,here))),h,p);
 const js=readFileSync(new URL('r4-finance-admin-control.js',here),'utf8'),dev=readFileSync('release-sources/r4-finance-admin-dev/r4-finance-admin-control.js','utf8');
-assert.equal(js.slice(js.indexOf('  const el =')),dev.slice(dev.indexOf('  const el =')),'Verified UI handlers must be identical');
+const projected=dev.replace('if (host === doc.body) host.prepend(panel); else host.before(panel);','const settings = doc.getElementById("settingsView");\n  if (settings) settings.prepend(panel); else if (host === doc.body) host.prepend(panel); else host.before(panel);');
+assert.equal(js.slice(js.indexOf('  const el =')),projected.slice(projected.indexOf('  const el =')),'Only panel mount may differ; verified UI handlers must be identical');
 assert(js.includes('config?.environment !== "production"')&&!js.includes('udjmiezroipctytmztwz')&&!js.includes('tennisnote-admin-dev.pages.dev'));
 for(const p of ['runner.mjs','operator.mjs','gate.mjs','compose-web.mjs','postread-policy.mjs','r4-finance-admin-control.js'])execFileSync(process.execPath,['--check',new URL(p,here).pathname.replace(/^\/([A-Za-z]:)/,'$1')]);
 if(process.argv.includes('--composed')){
