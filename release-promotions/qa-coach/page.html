@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>서울 개발 · 검증 코치 로그인</title></head>
+<body><main><h1>검증 코치 로그인</h1><p>서울 개발 · 등록된 검증 코치 전용입니다. 운영 계정은 입력하지 마세요.</p>
+<form method="post" action="/qa-coach-login" autocomplete="on"><fieldset disabled>
+<label>검증 이메일 <input name="email" type="email" autocomplete="username" required></label>
+<label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">코치 시간표 열기</button></fieldset></form>
+<p role="status">로그인할 수 있는 개발 환경인지 확인하고 있습니다.</p></main>
+<script defer src="/shared/config.local.js"></script><script defer src="/qa-coach-login-client.js"></script>
+</body></html>

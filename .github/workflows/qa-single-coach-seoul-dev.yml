@@ -1,0 +1,64 @@
+name: Single designated coach on Seoul development app
+on:
+  push:
+    branches: ['codex/dev-single-coach-entry-20261127']
+    paths: ['.github/workflows/qa-single-coach-seoul-dev.yml', 'release-promotions/qa-coach/**']
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      seal: ${{ steps.build.outputs.seal }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: python -B release-promotions/qa-coach/publish.py context
+      - id: build
+        run: python -B release-promotions/qa-coach/build.py
+      - name: Exercise packaged router and normal sign-in with synthetic responses only
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/qa-browser" --ignore-scripts --no-save --package-lock=false playwright-core@1.62.1
+          SYSTEM_CHROME="$(command -v google-chrome)" python -B release-promotions/qa-coach/test.py sealed-app/shared/tennisnote-data-client.js "$RUNNER_TEMP/qa-browser/node_modules/playwright-core/index.mjs" chromium
+  publish-seoul-development:
+    needs: verify
+    environment: development
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Reconstruct exact verified package and prepare single-call publisher
+        run: |
+          set -euo pipefail
+          python -B release-promotions/qa-coach/build.py
+          npm install --prefix "$RUNNER_TEMP/tn-cli" --ignore-scripts --no-save --package-lock=false wrangler@3.90.0
+          node release-promotions/coach-schedule-dev/guard.mjs
+      - name: Compare current project and recovery point then publish once
+        env:
+          VERIFIED_SEAL: ${{ needs.verify.outputs.seal }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: python -B release-promotions/qa-coach/publish.py publish
