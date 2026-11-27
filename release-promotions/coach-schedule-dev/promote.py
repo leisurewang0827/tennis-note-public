@@ -6,6 +6,8 @@ import subprocess
 import sys
 import time
 import urllib.request
+import urllib.parse
+import http.client
 from pathlib import Path
 
 from artifact import BASE, FEATURE, OLD, PAGES, PROJECT, NoRedirect, DigestMismatch, need, origin, policy, public_bytes, served, sha, verify_tree
@@ -19,6 +21,7 @@ SCOPE = {WORKFLOW} | {DIR+n for n in ("artifact.py","manifest.json","promote.py"
 RUN = "45973633771"
 JOB = "140419854111"
 MERGE = "62595be9ee6858bd6d25b4153703dfe88d046bee"
+FIRST = "e46e9f046700cd76881d3dae8859d3c2d1d3d6ac"
 TREE = "82ccdea1c5ca39718cd3fae8b0fca11a0ccb08c0"
 UUID = r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}"
 
@@ -33,11 +36,40 @@ def context():
          and e.get("GITHUB_EVENT_NAME")=="push" and e.get("GITHUB_RUN_ATTEMPT")=="1"
          and e.get("GITHUB_WORKFLOW_REF")==REPO+"/"+WORKFLOW+"@refs/heads/"+BRANCH,"release context")
     head=git("rev-parse","HEAD")
-    need(head==e.get("GITHUB_SHA") and git("show","-s","--format=%P",head)==FEATURE and
+    need(head==e.get("GITHUB_SHA") and git("show","-s","--format=%P",head)==FIRST and
+         git("show","-s","--format=%P",FIRST)==FEATURE and git("diff","--name-status",FIRST,head)=="M\t"+DIR+"promote.py" and
          git("rev-parse",FEATURE+"^{tree}")==TREE,"candidate provenance")
     rows=git("diff","--name-status",FEATURE,head).splitlines()
     need(set(rows)=={"A\t"+p for p in SCOPE},"candidate scope")
     return head
+
+
+def log_address(raw):
+    u=urllib.parse.urlsplit(raw)
+    need(u.scheme=="https" and u.hostname and not u.username and not u.password and u.port in (443,None)
+         and not u.fragment and any(u.hostname.endswith(s) for s in (".blob.core.windows.net",".actions.githubusercontent.com")),
+         "unexpected GitHub log storage origin")
+    return u.hostname,urllib.parse.urlunsplit(("","",u.path,u.query,""))
+
+
+def job_log():
+    # GitHub REST returns a short-lived asset URL. Never log it or forward the GitHub credential.
+    conn=http.client.HTTPSConnection("api.github.com",timeout=25)
+    try:
+        conn.request("GET",f"/repos/{REPO}/actions/jobs/{JOB}/logs",headers={"User-Agent":"TennisNote-release-proof",
+            "Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json"})
+        r=conn.getresponse()
+        need(r.status==302,"GitHub job log redirect unavailable")
+        host,target=log_address(r.getheader("Location",""))
+    finally: conn.close()
+    conn=http.client.HTTPSConnection(host,timeout=25)
+    try:
+        conn.request("GET",target,headers={"User-Agent":"TennisNote-release-proof","Accept-Encoding":"identity"})
+        r=conn.getresponse();need(r.status==200,"GitHub job log download unavailable")
+        raw=r.read(16*1024*1024+1)
+        need(len(raw)<=16*1024*1024,"oversized GitHub job log")
+        return re.sub(r"\x1b\[[0-9;]*m","",raw.decode("utf-8-sig"))
+    finally: conn.close()
 
 
 def github_proof():
@@ -51,7 +83,7 @@ def github_proof():
          and job["conclusion"]=="failure" and merge["tree"]["sha"]==TREE and
          [p["sha"] for p in merge["parents"]]==["d1a22ea5faf60b9fb97d10e5029ec6027351b759",FEATURE],
          "historical check binding")
-    log=api("actions/jobs/"+JOB+"/logs")
+    log=job_log()
     markers=["HEAD is now at 62595be9 Merge "+FEATURE,"# tests 627","# pass 624","# fail 0",
              "▶ 배포본 검사","Public PWA CI passed for 1.0.557 / 2026.10.26.01","✔ 전부 통과했습니다.",
              "##[error]The action 'Verify' has timed out after 4 minutes."]
