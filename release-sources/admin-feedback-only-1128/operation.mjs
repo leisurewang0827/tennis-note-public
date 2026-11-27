@@ -12,7 +12,10 @@ assert(['verify','publish'].includes(mode));assert.equal(e.GITHUB_ACTIONS,'true'
 assert.equal(e.GITHUB_REF,'refs/heads/'+branch);assert.equal(e.GITHUB_EVENT_NAME,'push');assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
 assert.equal(e.GITHUB_WORKFLOW_REF,repo+'/'+wf+'@refs/heads/'+branch);
 const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
-assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+base);
+const isolated='cd12a935786dca7f1633c1c0c19e5eba6cfecbdc';
+assert.equal(git('rev-list','--parents','-n','1','HEAD'),e.GITHUB_SHA+' '+isolated);
+assert.equal(git('rev-list','--parents','-n','1',isolated),isolated+' '+base);
+assert.deepEqual(git('diff-tree','-r','--no-commit-id','--name-status',isolated,'HEAD').split('\n').sort(),[wf,'release-sources/admin-feedback-only-1128/compose.mjs','release-sources/admin-feedback-only-1128/operation.mjs'].sort().map(p=>'M\t'+p));
 assert.deepEqual(git('diff-tree','-r','--no-commit-id','--name-status',base,'HEAD').split('\n').sort(),expected.map(p=>'A\t'+p));
 const get=async(url,token)=>{const r=await fetch(url,{redirect:'error',headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(20000)});assert.equal(r.status,200,'read-only API status '+r.status);return r.json()};
 const api='https://api.github.com/repos/'+repo, gh=p=>get(api+p,e.GH_TOKEN);

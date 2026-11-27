@@ -1,4 +1,5 @@
 name: Administrator two-section feedback only
+# Reconcile the exact prior GitHub artifact seal; the 184 file hashes and two product bytesets are unchanged.
 on:
   push:
     branches: [codex/tennisnote-r4-ui-finish-dev-20261108]

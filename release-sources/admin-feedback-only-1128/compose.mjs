@@ -6,7 +6,9 @@ export const hash=x=>createHash('sha256').update(x).digest('hex');
 export const paths=['index.html','shared/tennisnote-comment-draft.js'];
 export const before=['304157b482226fa92e3d0604c53b12d5389453d4469deec976bda9e25dc594d2','be01c5d237d12374a23e0d5fe98d75c1b9dd1d6bbfccc2f0ae2f8cc92d41e6a0'];
 export const after=['ff68ae0f78d8abb9b4e9de2ab57b8eac9bc972face42ccee08a09e1a73be7c36','1bd370b98ce781f5c6f62ae62c7252ca8bb7a8f3218b567e78a4a994fdb62e11'];
-export const baseSeal='e634bf72f7ea9609050fbd79a70efda9f737b56f4cf5314ceabaac158cd93d48';
+// Raw bytes of the original GitHub run artifact. Local mirror had the same
+// 184 per-file hashes in a different JSON key order; it is not this receipt.
+export const baseSeal='2550c46bb6ddfdafcdfdb2598113142c6fcba0f9f527d50aee885dec58290ff5';
 function walk(dir,p=''){
   const files=[];
   for(const name of readdirSync(join(dir,p)).sort()){
