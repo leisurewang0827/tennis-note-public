@@ -161,7 +161,7 @@ function renderScheduleEditPanel() {
               ${canReschedule ? `<button class="small-button" type="button" data-select-lesson-action="schedule" data-lesson-id="${escapeHtml(lesson.id)}">일정 변경</button>` : ""}
               ${canProcess && lesson.serverLessonId ? `<button class="small-button" type="button" data-select-lesson-action="attendance" data-lesson-id="${escapeHtml(lesson.id)}">불참·노쇼</button>` : ""}
             </div>`}
-            ${selectedLessonAction === "schedule" && canReschedule ? `
+            ${selectedLessonAction === "schedule" && canReschedule ? (normalCoachAssignedMove.panel(lesson) ?? `
             <div class="lesson-edit-mini" data-lesson-action-form="schedule">
               <strong>일정 변경</strong>
               <div class="lesson-edit-grid">
@@ -182,7 +182,7 @@ function renderScheduleEditPanel() {
               <p class="validation-text" data-lesson-action-result>이 수업의 날짜와 시간만 변경됩니다.</p>
               <div class="actions"><button class="small-button" type="button" data-back-lesson-actions="${escapeHtml(lesson.id)}" ${lesson.scheduleEditInFlight ? "disabled" : ""}>돌아가기</button><button class="approve-button" type="button" data-save-schedule-edit="${lesson.id}" ${lesson.scheduleEditInFlight ? "disabled" : ""}>${lesson.scheduleEditInFlight ? "변경 중" : "일정 변경 확인"}</button></div>
             </div>
-            ` : ""}
+            `) : ""}
             ${selectedLessonAction === "attendance" && canProcess && lesson.serverLessonId ? coachAttendanceChoiceMarkup(lesson) : ""}
           </section>`
         : '<p class="permission-note">완료된 수업의 출결 정정은 기존 관리자 경로에서 확인해 주세요. 피드백 수정은 횟수를 다시 차감하지 않습니다.</p>'}
@@ -343,6 +343,7 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
 
 function renderFullSchedule() {
   if (!$("#fullScheduleBoard")) return;
+  normalCoachLease.enter();
   if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
     $("#fullScheduleBoard").innerHTML = `
       <section class="tn-empty-state" role="alert">
