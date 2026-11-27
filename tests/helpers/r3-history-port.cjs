@@ -7,6 +7,7 @@ const manifest=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/r3-coac
 const sha=text=>crypto.createHash("sha256").update(text).digest("hex");
 let validatedRefreshAuthorityHash="";
 function restoreOpenRefresh(file,text,{inputVersion=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version,preserveVersion=false}={}){
+  text=require("./dev-normal-schedule-inverse.cjs").project(file,text);
   const retained=require("./r3-retained-response-port.cjs").restore(file,text);
   if(retained.applied){
     const baseline=restoreOpenRefresh(file,retained.text,{inputVersion:retained.baseVersion,preserveVersion});
@@ -55,6 +56,7 @@ function restoreOpenRefresh(file,text,{inputVersion=JSON.parse(fs.readFileSync(p
   return preserveVersion?restored.replaceAll(authority.baseVersion,inputVersion):restored;
 }
 function restore(file,text,inputVersion=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version){
+  text=require("./dev-normal-schedule-inverse.cjs").project(file,text);
   const outputVersion=inputVersion;
   const retained=require("./r3-retained-response-port.cjs").restore(file,text);
   if(retained.applied){text=retained.text;inputVersion=retained.baseVersion;}

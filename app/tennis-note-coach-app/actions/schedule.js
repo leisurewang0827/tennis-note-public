@@ -551,6 +551,7 @@ async function saveLessonEdit(id) {
   if (!lesson) return;
   if (lesson.scheduleEditInFlight) return;
   if (!canRescheduleLesson(lesson)) return;
+  if (normalCoachAssignedMove.active(lesson) && await normalCoachAssignedMove.save(lesson)) return;
   const targetDay = $("#editLessonDay")?.value || lesson.day;
   const targetTime = $("#editLessonTime")?.value || lesson.time;
   const targetDate = coachWeekDateForDay(targetDay);
@@ -648,3 +649,135 @@ function captureLessonTabInputs(lesson) {
   }
   if ($("#coachAttendanceReason")) lesson.attendanceChoice = { ...(lesson.attendanceChoice || {}), reason: $("#coachAttendanceReason").value };
 }
+
+// Bundled in the normal schedule module. Server authority, not a query parameter or a UI tag.
+// Session/branch eligibility comes from the authenticated product client, not URL values.
+const normalCoachLease = (() => {
+  const goodHost=()=>window.location.origin==="https://tennisnote-app-dev.pages.dev" &&
+    window.TENNISNOTE_CONFIG?.environment==="development" &&
+    window.TENNISNOTE_CONFIG.projectFingerprint==="63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba";
+  const key=()=>[state.liveProfileId,currentCoachRoleId(),state.coach?.branchId].every(Boolean)
+    ?[state.liveProfileId,currentCoachRoleId(),state.coach.branchId].join("/"):"";
+  let last=null;
+  const status=(s)=>{const b=document.querySelector("#fullScheduleBoard");if(b)b.dataset.qaAssignmentStatus=s;};
+  async function inspect(force=false) {
+    if(!goodHost()||!key())return "ordinary";
+    const actor=key();
+    if(last?.actor===actor && (!last.done || (!force && Date.now()<last.until)))return last.promise;
+    const r={actor,done:false,until:Date.now()+15000};last=r;
+    r.promise=(async()=>{
+      try {
+        const rpc=(n,a)=>window.TennisNoteDataClient.rpc(n,a);
+        const w=await rpc("tn_dev_normal_coach_work",{});if(last!==r||key()!==actor)return "blocked";
+        if(w?.eligible===false && w.assigned===false){status("ordinary");return "ordinary";}
+        if(w?.eligible!==true || [w.self?.actorId,w.self?.coachRoleId,w.self?.branchId].join("/")!==actor){
+          status("mismatch");return "blocked";}
+        if(w.assigned===false){status("eligible-unassigned");return "eligible-unassigned";}
+        if(w.assigned!==true||typeof w.observed!=="boolean"||!/^([a-f0-9]{8})-([a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(w.operation))throw Error();
+        if(!w.observed && await rpc("tn_dev_normal_observe_work",{target_operation:w.operation})!==true)throw Error();
+        if(last!==r||key()!==actor)return "blocked";
+        status("eligible-bound");return "assigned";
+      }catch{status("unverified");return "blocked";}
+      finally{r.done=true;}
+    })();
+    return r.promise;
+  }
+  function enter(){if(goodHost() && document.querySelector("#fullScheduleView.is-active"))void inspect();}
+  return Object.freeze({goodHost,inspect,enter});
+})();
+
+const normalCoachAssignedMove = (() => {
+  const enabled=normalCoachLease.goodHost;
+  const uuid = s => typeof s === "string" && /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(s);
+  const day = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const time = s => typeof s === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(s);
+  const cache = new WeakMap();
+  const active = l => enabled() || (!!cache.get(l) && cache.get(l).mode!=="ordinary");
+  const roster = rows => Array.isArray(rows) && rows.length >= 1 && rows.length <= 2
+    && rows.every(p => uuid(p?.userId) && uuid(p?.ticketId))
+    && new Set(rows.map(p=>p.userId)).size===rows.length && new Set(rows.map(p=>p.ticketId)).size===rows.length
+    ? JSON.stringify(rows.map(p=>[p.userId,p.ticketId]).sort()) : "";
+  function matches(l,s) {
+    return enabled() && s?.status === "assigned" && uuid(s.lessonId) && s.lessonId === l.serverLessonId
+      && uuid(s.actorId) && s.actorId === state.liveProfileId && uuid(s.branchId) && s.branchId === state.coach?.branchId
+      && uuid(s.coachRoleId) && s.coachRoleId === currentCoachRoleId() && s.coachRoleId === l.coachRoleId
+      && !l.isSubstitute && !l.substituteCoachRoleId && l.serverStatus === "scheduled"
+      && ["regular","group","coupon"].includes(s.kind) && roster(s.participants) !== ""
+      && s.participants.length === (s.kind==="group"?2:1) && roster(s.participants) === roster(l.v2Participants)
+      && Number.isSafeInteger(s.revision) && s.revision === l.serverRevision
+      && day(s.fromDay) && time(s.fromTime) && l.lessonDate===s.fromDay && l.time===s.fromTime
+      && day(s.toDay) && time(s.toTime) && (s.toDay!==s.fromDay || s.toTime!==s.fromTime)
+      && uuid(s.operationKey) && Number.isFinite(Date.parse(s.expiresAt)) && Date.parse(s.expiresAt)>Date.now();
+  }
+  function paint(l) { if (state.editingLessonId===l.id) renderLessonEditModal(); }
+  async function open(l) {
+    if (!enabled() || !l?.serverLessonId) return;
+    const prev=cache.get(l); if (prev?.busy || prev?.uncertain) return;
+    const rec={mode:"checking"}; cache.set(l,rec);
+    try {
+      const mode=await normalCoachLease.inspect(true);
+      if(cache.get(l)!==rec)return;
+      if(mode==="ordinary"){rec.mode="ordinary";paint(l);return;}
+      if(mode==="blocked"){rec.mode="blocked";paint(l);return;}
+      const s=await window.TennisNoteDataClient.rpc("tn_dev_normal_assigned_time_scope",{target_lesson_id:l.serverLessonId});
+      if(cache.get(l)!==rec)return;
+      if(s?.status==="ordinary" && s.lessonId===l.serverLessonId) rec.mode="ordinary";
+      else if(matches(l,s)){rec.mode="assigned"; rec.s=s;}
+      else rec.mode="blocked";
+    } catch {rec.mode="blocked";}
+    paint(l);
+  }
+  function panel(l) {
+    const rec=cache.get(l);
+    if(!rec || rec.mode==="ordinary")return null;
+    if(rec.mode==="checking")return '<p role="status">시험 수업 배정을 확인하고 있습니다.</p>';
+    if(rec.mode!=="assigned" || (!rec.uncertain && !matches(l,rec.s)))return '<p role="status">배정을 확인할 수 없어 저장하지 않았습니다. 수업 상세를 다시 열어 주세요.</p>';
+    const s=rec.s;
+    // Dates and times must be validated before being rendered; no server labels or member data interpolated.
+    return '<div class="lesson-edit-mini"><strong>일정 변경</strong><p>지정 시험 수업 · '+s.fromDay+' '+s.fromTime+' → '+s.toDay+' '+s.toTime+'</p>'
+      +'<p>수업 시간만 바뀌며, 이 변경으로 회차를 차감하지 않습니다.</p>'
+      +'<label>변경 사유<input id="exactTimeReason" maxlength="200"></label>'
+      +'<label><input type="checkbox" id="exactTimeAgreed">참가 회원 '+s.participants.length+'명 전원과 이 시간에 합의했습니다.</label>'
+      +'<p role="status" id="exactTimeMessage"></p><button type="button" class="small-button" data-back-lesson-actions="'+escapeHtml(l.id)+'">돌아가기</button> '
+      +'<button type="button" class="approve-button" data-save-schedule-edit="'+escapeHtml(l.id)+'" '+(rec.busy?'disabled':'')+'>'
+      +(rec.uncertain?'저장 결과 확인':'일정 변경 확인')+'</button></div>';
+  }
+  async function save(l) {
+    const r=cache.get(l);
+    if(!enabled())return !!r && r.mode!=="ordinary";
+    if(!l?.serverLessonId && !r)return false;
+    if(r?.mode==="ordinary" && enabled())return false;
+    if(!r || r.mode!=="assigned" || !enabled() || r.busy)return true;
+    const s=r.s, rpc=(n,a)=>window.TennisNoteDataClient.rpc(n,a);
+    if(!r.uncertain && !matches(l,s)){r.mode="blocked";paint(l);return true;}
+    if(!r.uncertain) {
+      const reason=($("#exactTimeReason")?.value||"").trim();
+      if($("#exactTimeAgreed")?.checked!==true || reason.length<2 || reason.length>200){
+        l.validationMessage="변경 사유와 참가 회원 전원의 합의를 확인해 주세요.";
+        const msg=$("#exactTimeMessage"); if(msg)msg.textContent=l.validationMessage;return true;
+      }
+      r.reason=reason;
+    }
+    // A lost response can only trigger a read. Never dispatch the ordinary save, even on error.
+    r.busy=true;
+    try {
+      if(!r.uncertain) {
+        r.uncertain=true;
+        await rpc("tn_dev_normal_assigned_time_save",{target_lesson_id:s.lessonId,target_operation_id:s.operationKey,
+          target_lesson_date:s.toDay,target_start_time:s.toTime,target_expected_revision:s.revision,
+          target_reason:r.reason,target_member_agreed:true,target_agreed_participants:s.participants.map(p=>({userId:p.userId,ticketId:p.ticketId}))});
+      }
+      const v=await rpc("tn_lesson_time_change_state",{target_lesson_id:s.lessonId});
+      if(v?.lessonId!==s.lessonId || v.branchId!==s.branchId || v.coachRoleId!==s.coachRoleId || v.status!=="scheduled"
+        || v.lessonDate!==s.toDay || String(v.startTime).slice(0,5)!==s.toTime || !(v.revision>s.revision)
+        || roster(v.participants)!==roster(s.participants) || !v.history?.some(x=>x.id===s.operationKey && x.toDate===s.toDay && String(x.toTime).slice(0,5)===s.toTime))
+        throw Error("unconfirmed");
+      if(await syncCoachScheduleV2({force:true})!==true)throw Error("readback");
+      r.uncertain=false;r.mode="done";l.validationMessage="같은 수업의 변경 결과를 확인했습니다.";
+      if(state.editingLessonId===l.id)closeLessonEditor();renderAll();
+    } catch { l.validationMessage="저장 결과를 확인하지 못했습니다. 다시 저장하지 말고 결과를 조회해 주세요."; }
+    finally {r.busy=false;paint(l);}
+    return true;
+  }
+  return Object.freeze({open,panel,save,active});
+})();

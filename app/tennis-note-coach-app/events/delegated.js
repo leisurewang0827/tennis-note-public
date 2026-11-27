@@ -489,6 +489,7 @@ function bindDelegatedEvents() {
       if (!lesson) return;
       captureLessonTabInputs(lesson);
       lesson.selectedSecondaryAction = lessonActionButton.dataset.selectLessonAction || "";
+      if (lesson.selectedSecondaryAction === "schedule") void normalCoachAssignedMove.open(lesson);
       lesson.validationMessage = "";
       renderLessonEditModal();
       if (lesson.selectedSecondaryAction === "attendance") void selectCoachAttendanceChoice(lesson.id, "contract");

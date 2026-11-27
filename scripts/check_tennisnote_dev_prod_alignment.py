@@ -1707,6 +1707,9 @@ def verify() -> None:
     home = json.loads((ROOT / "tests/fixtures/member-home-source-parity.json").read_text(encoding="utf-8"))
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        if path in {"app/tennis-note-coach-app/actions/schedule.js", "app/tennis-note-coach-app/views/schedule.js", "app/tennis-note-coach-app/events/delegated.js"}:
+            data = subprocess.run(["node", str(ROOT / "tests/helpers/dev-normal-schedule-inverse.cjs"), path],
+                                  cwd=ROOT, input=data, stdout=subprocess.PIPE, check=True).stdout
         try:
             data = restore_auth_dev_prepare_base(path, data.decode("utf-8")).encode("utf-8")
         except UnicodeDecodeError:
