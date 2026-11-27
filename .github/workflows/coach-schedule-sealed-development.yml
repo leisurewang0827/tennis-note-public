@@ -1,0 +1,88 @@
+name: Coach schedule sealed Seoul development app
+on:
+  push:
+    branches: ['codex/dev-normal-app-sealed-20261127']
+    paths: ['.github/workflows/coach-schedule-sealed-development.yml', 'release-promotions/coach-schedule-dev/**']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-pages-development
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      seal: ${{ steps.artifact.outputs.seal }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify parent, exact scope and original complete verifier record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B release-promotions/coach-schedule-dev/promote.py history
+      # Require a clean exit from the exact timed-out tail. These are disposable
+      # CI builds with test placeholders; neither is the package to be published.
+      - name: Finish unchanged public build validator with isolated test values
+        env:
+          TENNISNOTE_SUPABASE_URL: https://example.supabase.co
+          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key-for-ci-only
+          TENNISNOTE_PORTONE_STORE_ID: test-store-id
+          TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: test-tosspay-channel
+          TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: test-kakaopay-channel
+          TENNISNOTE_PAYMENT_MODE: multi
+          TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay,kakaopay
+          TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
+        run: |
+          set -euo pipefail
+          python scripts/build_cloudflare_pages.py --target member --output dist/member
+          python scripts/build_cloudflare_pages.py --target admin --output dist/admin
+          python scripts/check_cloudflare_build.py
+      - name: Verify source, negative cases and real development bundle
+        id: artifact
+        run: |
+          set -euo pipefail
+          python -B release-promotions/coach-schedule-dev/test_scope.py
+          python -B release-promotions/coach-schedule-dev/artifact.py assemble
+          for path in actions/schedule.js views/schedule.js events/delegated.js; do
+            node --check "sealed-app/tennis-note-coach-app/$path"
+            grep -Fq "src=\"./$path?" sealed-app/tennis-note-coach-app/index.html
+          done
+          python -B release-promotions/coach-schedule-dev/artifact.py attest
+  preview-then-development:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify identical immutable app and restrict publisher to one request per site step
+        env:
+          UPSTREAM_SEAL: ${{ needs.verify.outputs.seal }}
+        run: |
+          set -euo pipefail
+          python -B release-promotions/coach-schedule-dev/artifact.py assemble
+          python -B release-promotions/coach-schedule-dev/artifact.py admit
+          npm install --prefix "$RUNNER_TEMP/tn-cli" --no-save --package-lock=false --ignore-scripts wrangler@3.90.0
+          node release-promotions/coach-schedule-dev/guard.mjs
+      - name: Preview, verify, then publish same bits to development app only
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_FINGERPRINT: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_FINGERPRINT }}
+        run: python -B release-promotions/coach-schedule-dev/promote.py publish

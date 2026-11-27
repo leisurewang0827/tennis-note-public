@@ -1,0 +1,20 @@
+// Reuse the repository's audited one-POST transport; change only the exact DEV project.
+import assert from "node:assert/strict";
+import {execFileSync} from "node:child_process";
+import {createHash} from "node:crypto";
+import {readFileSync,writeFileSync} from "node:fs";
+import {join} from "node:path";
+import vm from "node:vm";
+const original=execFileSync("git",["show","5e535c7a518112b948291dfd464685c09e7b86fe:scripts/r4_internal_registration_dev.mjs"],{encoding:"utf8"});
+const start=original.indexOf("const wranglerSha256=");
+const end=original.indexOf("export const requestPath=",start);
+assert.ok(start>0 && end>start);
+let fn=original.slice(start,end).replace("export function patchWrangler","function patchWrangler");
+assert.equal(fn.split("tennisnote-admin-dev/deployments").length,3);
+fn=fn.replaceAll("tennisnote-admin-dev/deployments","tennisnote-app-dev/deployments");
+const hash=b=>createHash("sha256").update(b).digest("hex");
+const dir=join(process.env.RUNNER_TEMP,"tn-cli/node_modules/wrangler");
+assert.equal(JSON.parse(readFileSync(join(dir,"package.json"))).version,"3.90.0");
+const cli=vm.runInNewContext(fn+"\npatchWrangler",{assert,hash})(readFileSync(join(dir,"wrangler-dist/cli.js")));
+assert.ok(cli.includes("R4_DEPLOYMENT_RETRY_DENIED") && cli.includes("tennisnote-app-dev/deployments"));
+writeFileSync(join(dir,"wrangler-dist/cli-tennisnote-single.cjs"),cli,{flag:"wx"});
